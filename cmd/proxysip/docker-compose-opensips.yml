@@ -1,0 +1,29 @@
+version: "2.4"
+
+services:
+  proxy:
+    image: opensips/opensips
+    command: -F -m 1000
+    # command: ls -lah
+    volumes:
+      - ./docker/opensips/opensips.cfg:/etc/opensips/opensips.cfg
+
+    cpus: 4.0
+    cpuset: 0,1,2,3
+    # mem_limit: 4G
+    network_mode: "host"
+
+  uas:
+    image: ctaloi/sipp
+    command: -sn uas -i 127.0.0.2
+    network_mode: "host"
+    cpuset: "4"
+
+  uac:
+    image: ctaloi/sipp
+    command: -sn uac -r 1000 -rp 1000 -i 127.0.0.3 -ras 127.0.0.1:5060 127.0.0.2:5060
+    network_mode: "host"
+    cpuset: "5"
+    depends_on:
+      - proxy
+      - uas
