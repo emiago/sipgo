@@ -23,6 +23,12 @@ srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
 srv.OnCancel(cancelHandler)
 srv.OnBye(byeHandler)
+
+// Add listeners
+srv.Listen("udp", "127.0.0.1:5060")
+...
+// Start serving
+srv.Serve()
 ```
 
 **TODO** more docs  
