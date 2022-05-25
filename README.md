@@ -8,9 +8,9 @@ This unfortunately required many design changes, therefore this libraries are no
 
 ## Examples
 
-As example you can find `cmd/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
+As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
 To find out more about performance check the latest results:  
-[cmd/proxysip](cmd/proxysip) 
+[example/proxysip](example/proxysip) 
 ## Usage (API not stable)
 
 Lib allows you to write easily stateful proxies, registrar or any sip routing.

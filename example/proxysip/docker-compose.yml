@@ -3,14 +3,12 @@ version: "2.4"
 services:
   proxy:
     image: golang:latest
-    # command: go run ./cmd/proxysip -ip=127.0.0.1:5060 -dst 127.0.0.2:5060 -pprof
-    command: go run ./cmd/proxysip -ip=10.5.0.10:5060 -dst 10.5.0.20:5060
+    command: go run ./example/proxysip -ip=10.5.0.10:5060 -dst 10.5.0.20:5060
     # stdin_open: true
     # command: bash
     working_dir: /usr/src/sipgo
     volumes:
       - ../../../sipgo:/usr/src/sipgo
-      - ../../../gosip:/usr/src/gosip
 
     cpus: 4.0
     cpuset: "0,1,2,3"
