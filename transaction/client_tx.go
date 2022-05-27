@@ -8,19 +8,17 @@ import (
 	"github.com/emiraganov/sipgo/transport"
 
 	"github.com/rs/zerolog"
-
-	"github.com/ghettovoice/gosip/timing"
 )
 
 type ClientTx struct {
 	commonTx
 	responses    chan *sip.Response
 	timer_a_time time.Duration // Current duration of timer A.
-	timer_a      timing.Timer
-	timer_b      timing.Timer
+	timer_a      *time.Timer
+	timer_b      *time.Timer
 	timer_d_time time.Duration // Current duration of timer D.
-	timer_d      timing.Timer
-	timer_m      timing.Timer
+	timer_d      *time.Timer
+	timer_m      *time.Timer
 	reliable     bool
 
 	mu        sync.RWMutex
@@ -93,7 +91,7 @@ func (tx *ClientTx) Init() error {
 		tx.mu.Lock()
 		tx.timer_a_time = Timer_A
 
-		tx.timer_a = timing.AfterFunc(tx.timer_a_time, func() {
+		tx.timer_a = time.AfterFunc(tx.timer_a_time, func() {
 			tx.spinFsm(client_input_timer_a)
 		})
 		// Timer D is set to 32 seconds for unreliable transports
@@ -103,7 +101,7 @@ func (tx *ClientTx) Init() error {
 
 	// Timer B - timeout
 	tx.mu.Lock()
-	tx.timer_b = timing.AfterFunc(Timer_B, func() {
+	tx.timer_b = time.AfterFunc(Timer_B, func() {
 		tx.spinFsm(client_input_timer_b)
 	})
 	tx.mu.Unlock()

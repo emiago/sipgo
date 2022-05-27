@@ -2,8 +2,7 @@ package transaction
 
 import (
 	"fmt"
-
-	"github.com/ghettovoice/gosip/timing"
+	"time"
 )
 
 func (tx *ClientTx) inviteStateCalling(s FsmInput) FsmInput {
@@ -270,7 +269,7 @@ func (tx *ClientTx) actInviteFinal() FsmInput {
 
 	// tx.Log().Tracef("timer_d set to %v", tx.timer_d_time)
 
-	tx.timer_d = timing.AfterFunc(tx.timer_d_time, func() {
+	tx.timer_d = time.AfterFunc(tx.timer_d_time, func() {
 		tx.spinFsm(client_input_timer_d)
 	})
 
@@ -297,7 +296,7 @@ func (tx *ClientTx) actFinal() FsmInput {
 
 	// tx.Log().Tracef("timer_d set to %v", tx.timer_d_time)
 
-	tx.timer_d = timing.AfterFunc(tx.timer_d_time, func() {
+	tx.timer_d = time.AfterFunc(tx.timer_d_time, func() {
 		tx.spinFsm(client_input_timer_d)
 	})
 
@@ -325,7 +324,7 @@ func (tx *ClientTx) actCancelTimeout() FsmInput {
 	if tx.timer_b != nil {
 		tx.timer_b.Stop()
 	}
-	tx.timer_b = timing.AfterFunc(Timer_B, func() {
+	tx.timer_b = time.AfterFunc(Timer_B, func() {
 		tx.spinFsm(client_input_timer_b)
 	})
 	tx.mu.Unlock()
@@ -410,7 +409,7 @@ func (tx *ClientTx) actPassupAccept() FsmInput {
 
 	// tx.Log().Tracef("timer_m set to %v", Timer_M)
 
-	tx.timer_m = timing.AfterFunc(Timer_M, func() {
+	tx.timer_m = time.AfterFunc(Timer_M, func() {
 		select {
 		case <-tx.done:
 			return

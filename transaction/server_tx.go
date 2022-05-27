@@ -9,8 +9,6 @@ import (
 	"github.com/emiraganov/sipgo/transport"
 
 	"github.com/rs/zerolog"
-
-	"github.com/ghettovoice/gosip/timing"
 )
 
 type FSMfunc func() FSMfunc
@@ -21,14 +19,14 @@ type ServerTx struct {
 	lastCancel   *sip.Request
 	acks         chan *sip.Request
 	cancels      chan *sip.Request
-	timer_g      timing.Timer
+	timer_g      *time.Timer
 	timer_g_time time.Duration
-	timer_h      timing.Timer
-	timer_i      timing.Timer
+	timer_h      *time.Timer
+	timer_i      *time.Timer
 	timer_i_time time.Duration
-	timer_j      timing.Timer
-	timer_1xx    timing.Timer
-	timer_l      timing.Timer
+	timer_j      *time.Timer
+	timer_1xx    *time.Timer
+	timer_l      *time.Timer
 	reliable     bool
 
 	mu        sync.RWMutex
@@ -68,7 +66,7 @@ func (tx *ServerTx) Init() error {
 	if tx.Origin().IsInvite() {
 		// tx.Log().Tracef("set timer_1xx to %v", Timer_1xx)
 		tx.mu.Lock()
-		tx.timer_1xx = timing.AfterFunc(Timer_1xx, func() {
+		tx.timer_1xx = time.AfterFunc(Timer_1xx, func() {
 			trying := sip.NewResponseFromRequest(
 				tx.Origin(),
 				100,

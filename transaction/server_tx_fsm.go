@@ -4,8 +4,7 @@ package transaction
 
 import (
 	"fmt"
-
-	"github.com/ghettovoice/gosip/timing"
+	"time"
 )
 
 // invite state machine https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
@@ -178,7 +177,7 @@ func (tx *ServerTx) actRespondComplete() FsmInput {
 		if tx.timer_g == nil {
 			// tx.Log().Tracef("timer_g set to %v", tx.timer_g_time)
 
-			tx.timer_g = timing.AfterFunc(tx.timer_g_time, func() {
+			tx.timer_g = time.AfterFunc(tx.timer_g_time, func() {
 				// tx.Log().Trace("timer_g fired")
 				tx.spinFsm(server_input_timer_g)
 			})
@@ -197,7 +196,7 @@ func (tx *ServerTx) actRespondComplete() FsmInput {
 
 	tx.mu.Lock()
 	if tx.timer_h == nil {
-		tx.timer_h = timing.AfterFunc(Timer_H, func() {
+		tx.timer_h = time.AfterFunc(Timer_H, func() {
 			// tx.Log().Trace("timer_h fired")
 			tx.spinFsm(server_input_timer_h)
 		})
@@ -214,7 +213,7 @@ func (tx *ServerTx) actRespondAccept() FsmInput {
 
 	tx.mu.Lock()
 	// tx.Log().Tracef("timer_l set to %v", Timer_L)
-	tx.timer_l = timing.AfterFunc(Timer_L, func() {
+	tx.timer_l = time.AfterFunc(Timer_L, func() {
 		// tx.Log().Trace("timer_l fired")
 		tx.spinFsm(server_input_timer_l)
 	})
@@ -235,7 +234,7 @@ func (tx *ServerTx) actFinal() FsmInput {
 	}
 
 	tx.mu.Lock()
-	tx.timer_j = timing.AfterFunc(Timer_J, func() {
+	tx.timer_j = time.AfterFunc(Timer_J, func() {
 		// tx.Log().Trace("timer_j fired")
 		tx.spinFsm(server_input_timer_j)
 	})
@@ -309,7 +308,7 @@ func (tx *ServerTx) actConfirm() FsmInput {
 
 	// tx.Log().Tracef("timer_i set to %v", Timer_I)
 
-	tx.timer_i = timing.AfterFunc(Timer_I, func() {
+	tx.timer_i = time.AfterFunc(Timer_I, func() {
 		// tx.Log().Trace("timer_i fired")
 		tx.spinFsm(server_input_timer_i)
 	})
