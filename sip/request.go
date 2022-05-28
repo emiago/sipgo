@@ -244,21 +244,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	} else {
 		hdrs := inviteResponse.GetHeaders("Record-Route")
 		for i := len(hdrs) - 1; i >= 0; i-- {
-			r := &RouteHeader{}
-			// NOT TESTED COULD BREAK
 			h := hdrs[i].(*RecordRouteHeader).Clone()
-			rrs := make([]*RecordRouteHeader, 0)
-
-			for hop := h; hop != nil; hop = hop.Next {
-				rrs = append(rrs, hop)
-			}
-
-			hop := h
-			for j := len(rrs) - 1; j >= 0; j-- {
-				hop = rrs[j]
-				hop = hop.Next
-			}
-			ackRequest.AppendHeader(r)
+			ackRequest.AppendHeader(h)
 		}
 	}
 

@@ -1,6 +1,8 @@
 package sip
 
-import "testing"
+import (
+	"testing"
+)
 
 func BenchmarkHeaderToLower(b *testing.B) {
 	//BenchmarkHeaderToLower-8   	1000000000	         1.033 ns/op	       0 B/op	       0 allocs/op
