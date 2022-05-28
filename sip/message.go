@@ -58,6 +58,8 @@ type Message interface {
 	GetHeaders(name string) []Header
 	// GetHeader returns first header with same name
 	GetHeader(name string) Header
+	// PrependHeader prepends header to message.
+	PrependHeader(header ...Header)
 	// AppendHeader appends header to message.
 	AppendHeader(header Header)
 	// RemoveHeader removes header from message.

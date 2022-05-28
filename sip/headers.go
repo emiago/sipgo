@@ -106,11 +106,14 @@ func (hs *headers) appendHeader(name string, header Header) {
 }
 
 // // PrependHeader adds header to the front of header list
-func (hs *headers) PrependHeader(header Header) {
-	newOrder := make([]Header, len(hs.headerOrder)+1)
-	newOrder[0] = header
+func (hs *headers) PrependHeader(headers ...Header) {
+	offset := len(headers)
+	newOrder := make([]Header, len(hs.headerOrder)+offset)
+	for i, h := range headers {
+		newOrder[i] = h
+	}
 	for i, h := range hs.headerOrder {
-		newOrder[i+1] = h
+		newOrder[i+offset] = h
 	}
 	hs.headerOrder = newOrder
 }
