@@ -152,7 +152,9 @@ func parseContactAddressHeader(headerName string, headerText string) (header sip
 	// on commas, so use a comma to signify the end of the final address section.
 	addresses := headerText + ","
 
-	head := sip.ContactHeader{}
+	head := sip.ContactHeader{
+		Params: sip.NewParams(),
+	}
 	h := &head
 	for idx, char := range addresses {
 		if char == '<' && !inQuotes {
@@ -164,7 +166,9 @@ func parseContactAddressHeader(headerName string, headerText string) (header sip
 		} else if !inQuotes && !inBrackets && char == ',' {
 			// if char == ',' {
 			if h == nil {
-				h = &sip.ContactHeader{}
+				h = &sip.ContactHeader{
+					Params: sip.NewParams(),
+				}
 			}
 			h.DisplayName, err = ParseAddressValue(addresses[prevIdx:idx], &h.Address, h.Params)
 			if err != nil {
