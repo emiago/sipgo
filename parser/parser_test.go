@@ -381,13 +381,6 @@ func BenchmarkParserNoData(b *testing.B) {
 	}()
 
 	data := []byte(strings.Join(msg, "\r\n"))
-	// b.Run("Original", func(b *testing.B) {
-	// 	parser := gosipparser.NewParser(output.(chan gosip.Message), errs, false, gosiplog.NewDefaultLogrusLogger())
-	// 	for i := 0; i < b.N; i++ {
-	// 		parser.Write(data)
-	// 	}
-	// })
-
 	b.Run("New", func(b *testing.B) {
 		parser := NewParser()
 		for i := 0; i < b.N; i++ {

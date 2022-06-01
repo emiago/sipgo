@@ -1,5 +1,4 @@
 // Originally forked from https://github.com/ghettovoice/gosip by @ghetovoice
-// TODO check license
 package transaction
 
 import (

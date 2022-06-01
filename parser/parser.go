@@ -10,7 +10,6 @@ import (
 
 	"github.com/emiraganov/sipgo/sip"
 
-	// "github.com/ghettovoice/gosip/log"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

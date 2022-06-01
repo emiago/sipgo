@@ -5,9 +5,6 @@ import (
 	"strings"
 )
 
-// SIP Headers structs
-// Originally forked from https://github.com/ghettovoice/gosip
-
 // Whitespace recognised by SIP protocol.
 const abnfWs = " \t"
 
