@@ -108,14 +108,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		}
 
 		req.SetDestination(proxydst)
-		// Append our via
-		if via, exists := req.Via(); exists {
-			newvia := via.Clone()
-			newvia.Host = host
-			newvia.Port = port
-			req.PrependHeader(newvia) //Via should be rewriten by transport
-		}
-
 		// Start client transaction and relay our request
 		clTx, err := srv.TransactionRequest(req)
 		if err != nil {
@@ -133,8 +125,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				if !more {
 					return
 				}
-				res.RemoveHeader("via")
-
 				res.SetDestination(req.Source())
 				if err := tx.Respond(res); err != nil {
 					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
@@ -148,6 +138,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 			case m := <-tx.Acks():
 				// Acks can not be send directly trough destination
+				log.Info().Str("m", m.StartLine()).Str("dst", proxydst).Msg("Proxing ACK")
 				m.SetDestination(proxydst)
 				srv.Send(m)
 
@@ -171,6 +162,40 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			}
 		}
 	}
+
+	srv.ServeMessage(func(m sip.Message) {
+		//This runs for every message
+		// log.Debug().Str("msg", m.String()).Msg("New message")
+		if h := m.GetHeader("Record-Route"); h == nil {
+			rr := &sip.RecordRouteHeader{
+				Address: sip.Uri{
+					Host: host,
+					Port: port,
+				},
+			}
+			m.PrependHeader(rr)
+		}
+
+		switch r := m.(type) {
+		case *sip.Request:
+			// We handle here only INVITE and BYE
+			if via, exists := r.Via(); exists && via.Host != host {
+				newvia := via.Clone()
+				newvia.Host = host
+				newvia.Port = port
+				m.PrependHeader(newvia)
+				return
+			}
+
+		case *sip.Response:
+			if _, exists := r.Via(); exists {
+				// if via.Host == listenIP {
+				r.RemoveHeader("via")
+				// }
+			}
+
+		}
+	})
 
 	var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		cont, exists := req.Contact()

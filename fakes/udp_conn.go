@@ -29,6 +29,10 @@ func (c *UDPConn) LocalAddr() net.Addr {
 	return &c.LAddr
 }
 
+func (c *UDPConn) RemoteAddr() net.Addr {
+	return &c.RAddr
+}
+
 // This is connection implementation
 func (c *UDPConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	c.mu.Lock()

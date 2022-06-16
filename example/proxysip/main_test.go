@@ -22,10 +22,6 @@ import (
 
 var (
 	NRequest = flag.Int("NReq", 1000, "Change default num request")
-
-	serverAddr  = net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
-	client1Addr = net.UDPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}
-	client2Addr = net.UDPAddr{IP: net.ParseIP("127.0.0.3"), Port: 5060}
 )
 
 func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
@@ -34,6 +30,145 @@ func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
 		t.Fatal(err)
 	}
 	return msg
+}
+
+func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *parser.Parser) {
+	// client2 := testCreateUDPListener(t, "udp", client2Addr)
+	// defer client2.Close()
+
+	// time.Sleep(12 * time.Second)
+	transport := "UDP"
+	switch client1.(type) {
+	case *fakes.TCPConn:
+		transport = "TCP"
+	}
+
+	branch := sip.GenerateBranch()
+	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
+	inviteReq := testCreateMessage(t, []string{
+		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + client1.LocalAddr().String() + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + client1.LocalAddr().String() + ">",
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"Call-ID: " + callid,
+		"CSeq: 1 INVITE",
+		"Content-Length: 0",
+		"",
+		"",
+	})
+
+	ackReq := testCreateMessage(t, []string{
+		"ACK sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + client1.LocalAddr().String() + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + client1.LocalAddr().String() + ">;tag=1928301774",
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"Call-ID: " + callid,
+		"CSeq: 1 ACK",
+		"Content-Length: 0",
+		"",
+		"",
+	})
+
+	byeReq := testCreateMessage(t, []string{
+		"BYE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + client1.LocalAddr().String() + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + client1.LocalAddr().String() + ">;tag=1928301774",
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"Call-ID: " + callid,
+		"CSeq: 2 BYE",
+		"Content-Length: 0",
+		"",
+		"",
+	})
+
+	// Run Client2
+	go func() {
+		//RECEIVE INVITE
+		{
+			res := client2.TestReadConn(t)
+			inviteReqRec, err := p.Parse(res)
+			require.Nil(t, err)
+			assert.Equal(t, inviteReqRec.StartLine(), inviteReq.StartLine())
+
+			// trying := sip.NewResponseFromRequest("", inviteReqRec.(sip.Request), 180, "Ringing", "")
+
+			// time.Sleep(1 * time.Second)
+
+			t.Log("CLIENT2 INVITE: Send 200 OK")
+			// Let transaction layer sends Trying
+			time.Sleep(300 * time.Millisecond)
+			ok200 := sip.NewResponseFromRequest(inviteReqRec.(*sip.Request), 200, "OK", nil)
+			// serverC.ExpectAddr(client2Addr)
+			resp := ok200.String()
+			client2.TestWriteConn(t, []byte(resp))
+		}
+
+		// RECEIVE ACK or BYE
+		{
+			// We can receive resend INVITE
+			for {
+				res := client2.TestReadConn(t)
+
+				resReceived, err := p.Parse(res)
+				if req, ok := resReceived.(*sip.Request); ok && req.IsInvite() {
+					continue
+				}
+
+				if req, ok := resReceived.(*sip.Request); ok && req.Method() == sip.ACK {
+					require.Nil(t, err)
+					t.Log("CLIENT2: Received ACK. Call established")
+					assert.Equal(t, ackReq.StartLine(), resReceived.StartLine())
+					continue
+				}
+
+				// RECEIVE BYE
+				req, ok := resReceived.(*sip.Request)
+				require.True(t, ok, resReceived.Short())
+				assert.Equal(t, byeReq.StartLine(), req.StartLine())
+
+				t.Log("CLIENT2 BYE: Send 200 OK")
+				ok200 := sip.NewResponseFromRequest(req, 200, "OK", nil)
+				// serverC.ExpectAddr(client2Addr)
+				client2.TestWriteConn(t, []byte(ok200.String()))
+				break
+			}
+
+		}
+	}()
+
+	// SEND INVITE
+	{
+		// serverC.ExpectAddr(client1Addr)
+		t.Log("CLIENT1: Send INVITE")
+		res := client1.TestRequest(t, []byte(inviteReq.String()))
+		t.Log("CLIENT1 INVITE: Got response")
+		trying, err := p.Parse(res)
+		require.Nil(t, err)
+		assert.Equal(t, "SIP/2.0 100 Trying", trying.StartLine())
+
+		res = client1.TestReadConn(t)
+		inviteOK, err := p.Parse(res)
+		require.Nil(t, err)
+		assert.Equal(t, "SIP/2.0 200 OK", inviteOK.StartLine())
+	}
+
+	// SEND ACK
+	{
+		t.Log("CLIENT1: Send ACK")
+		client1.TestWriteConn(t, []byte(ackReq.String()))
+	}
+
+	// SEND BYE
+	{
+		// serverC.ExpectAddr(client1Addr)
+		t.Log("CLIENT1: Send BYE")
+		res := client1.TestRequest(t, []byte(byeReq.String()))
+		t.Log("CLIENT1 BYE: Got response")
+		byeOK, err := p.Parse(res)
+		require.Nil(t, err)
+		assert.Equal(t, "SIP/2.0 200 OK", byeOK.StartLine())
+	}
+
 }
 
 func TestMain(m *testing.M) {
@@ -66,14 +201,16 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestInviteCall(t *testing.T) {
-	t.Log("Running proxy", serverAddr, client1Addr, client2Addr)
-
+func TestInviteCallUDP(t *testing.T) {
 	p := parser.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()
 	client2Reader, client2Writer := io.Pipe()
 	//Client1 writes to server and reads response
+
+	serverAddr := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
+	client1Addr := net.UDPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}
+	client2Addr := net.UDPAddr{IP: net.ParseIP("127.0.0.3"), Port: 5060}
 	client1 := &fakes.UDPConn{
 		LAddr:  client1Addr,
 		RAddr:  serverAddr,
@@ -104,140 +241,72 @@ func TestInviteCall(t *testing.T) {
 		},
 	}
 
+	t.Log("Running proxy", serverAddr, client1Addr, client2Addr)
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
 	go srv.TransportLayer().ServeUDP(serverC)
+	inviteScenario(t, client1, client2, p)
 
-	// client2 := testCreateUDPListener(t, "udp", client2Addr)
-	// defer client2.Close()
+}
 
-	// time.Sleep(12 * time.Second)
+func TestInviteCallTCP(t *testing.T) {
+	p := parser.NewParser()
+	serverReader, serverWriter := io.Pipe()
+	serverReader2, serverWriter2 := io.Pipe()
+	client1Reader, client1Writer := io.Pipe()
+	client2Reader, client2Writer := io.Pipe()
+	//Client1 writes to server and reads response
 
-	branch := sip.GenerateBranch()
-	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
-	inviteReq := testCreateMessage(t, []string{
-		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
-		"Via: SIP/2.0/UDP " + client1Addr.String() + ";branch=" + branch,
-		"From: \"Alice\" <sip:alice@" + client1Addr.String() + ">",
-		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
-		"Call-ID: " + callid,
-		"CSeq: 1 INVITE",
-		"Content-Length: 0",
-		"",
-		"",
-	})
+	serverAddr := net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
+	client1Addr := net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}
+	client2Addr := net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 5060}
 
-	ackReq := testCreateMessage(t, []string{
-		"ACK sip:bob@127.0.0.1:5060 SIP/2.0",
-		"Via: SIP/2.0/UDP " + client1Addr.String() + ";branch=" + branch,
-		"From: \"Alice\" <sip:alice@" + client1Addr.String() + ">;tag=1928301774",
-		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
-		"Call-ID: " + callid,
-		"CSeq: 1 ACK",
-		"Content-Length: 0",
-		"",
-		"",
-	})
-
-	byeReq := testCreateMessage(t, []string{
-		"BYE sip:bob@127.0.0.1:5060 SIP/2.0",
-		"Via: SIP/2.0/UDP " + client1Addr.String() + ";branch=" + branch,
-		"From: \"Alice\" <sip:alice@" + client1Addr.String() + ">;tag=1928301774",
-		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
-		"Call-ID: " + callid,
-		"CSeq: 2 BYE",
-		"Content-Length: 0",
-		"",
-		"",
-	})
-
-	// Run Client2
-	go func() {
-		//RECEIVE INVITE
-		{
-			res := client2.TestReadConn(t)
-			t.Log("CLIENT2: Received INVITE")
-			inviteReqRec, err := p.Parse(res)
-			require.Nil(t, err)
-			assert.Equal(t, inviteReqRec.StartLine(), inviteReq.StartLine())
-
-			// trying := sip.NewResponseFromRequest("", inviteReqRec.(sip.Request), 180, "Ringing", "")
-
-			// time.Sleep(1 * time.Second)
-
-			t.Log("CLIENT2: Send 200 OK")
-			// Let transaction layer sends Trying
-			time.Sleep(300 * time.Millisecond)
-			ok200 := sip.NewResponseFromRequest(inviteReqRec.(*sip.Request), 200, "OK", nil)
-			// serverC.ExpectAddr(client2Addr)
-			resp := ok200.String()
-			client2.TestWriteConn(t, []byte(resp))
-		}
-
-		// RECEIVE ACK or BYE
-		{
-			// We can receive resend INVITE
-			for {
-				res := client2.TestReadConn(t)
-
-				resReceived, err := p.Parse(res)
-				if req, ok := resReceived.(*sip.Request); ok && req.IsInvite() {
-					continue
-				}
-
-				if req, ok := resReceived.(*sip.Request); ok && req.Method() == sip.ACK {
-					require.Nil(t, err)
-					t.Log("CLIENT2: Received ACK. Call established")
-					assert.Equal(t, ackReq.StartLine(), resReceived.StartLine())
-					continue
-				}
-
-				// RECEIVE BYE
-				req, ok := resReceived.(*sip.Request)
-				require.True(t, ok)
-				assert.Equal(t, byeReq.StartLine(), req.StartLine())
-
-				t.Log("CLIENT2: Send 200 OK")
-				ok200 := sip.NewResponseFromRequest(req, 200, "OK", nil)
-				// serverC.ExpectAddr(client2Addr)
-				client2.TestWriteConn(t, []byte(ok200.String()))
-				break
-			}
-
-		}
-	}()
-
-	// SEND INVITE
-	{
-		// serverC.ExpectAddr(client1Addr)
-		res := client1.TestRequest(t, []byte(inviteReq.String()))
-		t.Log("CLIENT1: Got INVITE response")
-		trying, err := p.Parse(res)
-		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 100 Trying", trying.StartLine())
-
-		res = client1.TestReadConn(t)
-		inviteOK, err := p.Parse(res)
-		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", inviteOK.StartLine())
+	client1 := &fakes.TCPConn{
+		LAddr:  client1Addr,
+		RAddr:  serverAddr,
+		Reader: client1Reader,
+		Writer: serverWriter,
 	}
 
-	// SEND ACK
-	{
-		client1.TestWriteConn(t, []byte(ackReq.String()))
+	//Client2 writes to server and reads response
+	client2 := &fakes.TCPConn{
+		LAddr:  client2Addr,
+		RAddr:  serverAddr,
+		Reader: client2Reader,
+		Writer: serverWriter2,
 	}
 
-	// SEND BYE
-	{
-		// serverC.ExpectAddr(client1Addr)
-		res := client1.TestRequest(t, []byte(byeReq.String()))
-		t.Log("CLIENT1: Got BYE response")
-		byeOK, err := p.Parse(res)
-		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", byeOK.StartLine())
+	//Server writes to clients and reads response
+	serverC1 := &fakes.TCPConn{
+		LAddr:  serverAddr,
+		RAddr:  client1Addr,
+		Reader: serverReader,
+		Writer: client1Writer,
 	}
+
+	//Add client2 as new connection although normall this should go by Dial
+	serverC2 := &fakes.TCPConn{
+		LAddr:  serverAddr,
+		RAddr:  client2Addr,
+		Reader: serverReader2,
+		Writer: client2Writer,
+	}
+
+	listener := &fakes.TCPListener{
+		LAddr: serverAddr,
+		Conns: make(chan *fakes.TCPConn, 2),
+	}
+	listener.Conns <- serverC1
+	listener.Conns <- serverC2
+
+	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
+	go srv.TransportLayer().ServeTCP(listener)
+	inviteScenario(t, client1, client2, p)
 }
 
 func BenchmarkInviteCall(t *testing.B) {
+	serverAddr := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
+	client1Addr := net.UDPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}
+	client2Addr := net.UDPAddr{IP: net.ParseIP("127.0.0.3"), Port: 5060}
 	t.Log("Running proxy", serverAddr, client1Addr, client2Addr)
 	serverReader, serverWriter := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()

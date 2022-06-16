@@ -281,6 +281,7 @@ func (tx *ServerTx) actRespondDelete() FsmInput {
 	tx.mu.Unlock()
 
 	if lastErr != nil {
+		tx.log.Debug().Err(lastErr).Msg("fail to actRespondDelete")
 		return server_input_transport_err
 	}
 

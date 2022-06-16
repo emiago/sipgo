@@ -20,6 +20,7 @@ type Transport interface {
 	Serve(addr string, handler sip.MessageHandler) error
 	WriteMsg(msg sip.Message, raddr net.Addr) error
 	ResolveAddr(addr string) (net.Addr, error)
+	GetConnection(addr string) (Connection, error)
 	String() string
 	Close() error
 }

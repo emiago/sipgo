@@ -12,8 +12,10 @@ import (
 type commonTx struct {
 	key string
 
-	origin   *sip.Request
-	tpl      *transport.Layer
+	origin *sip.Request
+	tpl    *transport.Layer
+
+	conn     transport.Connection
 	lastResp *sip.Response
 
 	errs    chan error

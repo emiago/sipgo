@@ -113,13 +113,12 @@ func (tx *ServerTx) receiveRequest(req *sip.Request) (FsmInput, error) {
 		tx.lastCancel = req
 		return server_input_cancel, nil
 	}
-	return FsmInputNone, fmt.Errorf("Unexpected message error")
+	return FsmInputNone, fmt.Errorf("unexpected message error")
 }
 
 func (tx *ServerTx) Respond(res *sip.Response) error {
 	if res.IsCancel() {
-		_ = tx.tpl.WriteMsg(res)
-		return nil
+		return tx.tpl.WriteMsg(res)
 	}
 
 	input, err := tx.receiveRespond(res)
@@ -212,6 +211,7 @@ func (tx *ServerTx) passResp() error {
 	// tx.Log().Debug("actFinal")
 	err := tx.tpl.WriteMsg(lastResp)
 	if err != nil {
+		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
 		tx.mu.Lock()
 		tx.lastErr = err
 		tx.mu.Unlock()

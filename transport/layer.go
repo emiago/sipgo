@@ -77,8 +77,8 @@ func (l *Layer) handleMessage(msg sip.Message) {
 }
 
 // ServeUDP will listen on udp connection
-func (l *Layer) ServeUDP(udpConn net.PacketConn) error {
-	_, port, err := sip.ParseAddr(udpConn.LocalAddr().String())
+func (l *Layer) ServeUDP(c net.PacketConn) error {
+	_, port, err := sip.ParseAddr(c.LocalAddr().String())
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,20 @@ func (l *Layer) ServeUDP(udpConn net.PacketConn) error {
 	transport := NewUDPTransport(parser.NewParser())
 	l.addTransport(transport, port)
 
-	return transport.ServeConn(udpConn, l.handleMessage)
+	return transport.ServeConn(c, l.handleMessage)
+}
+
+// ServeTCP will listen on udp connection
+func (l *Layer) ServeTCP(c net.Listener) error {
+	_, port, err := sip.ParseAddr(c.Addr().String())
+	if err != nil {
+		return err
+	}
+
+	transport := NewTCPTransport(parser.NewParser())
+	l.addTransport(transport, port)
+
+	return transport.ServeConn(c, l.handleMessage)
 }
 
 // Serve on any network. This function will block
@@ -104,7 +117,7 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 	case "udp":
 		t = NewUDPTransport(p)
 	case "tcp":
-		fallthrough
+		t = NewTCPTransport(p)
 	case "tls":
 		fallthrough
 	default:
@@ -221,6 +234,22 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	return err
 }
 
+// GetOrCreateConnection gets existing or creates new connection based on addr
+func (l *Layer) GetOrCreateConnection(network, addr string) (Connection, error) {
+	network = NetworkToLower(network)
+	return l.getOrCreateConnection(network, addr)
+}
+
+func (l *Layer) getOrCreateConnection(network, addr string) (Connection, error) {
+	transport, ok := l.transports[network]
+	if !ok {
+		return nil, fmt.Errorf("transport %s is not supported", network)
+	}
+
+	c, err := transport.GetConnection(addr)
+	return c, err
+}
+
 func (l *Layer) Close() error {
 	var werr error
 	for _, t := range l.transports {
@@ -234,7 +263,7 @@ func (l *Layer) Close() error {
 
 func IsReliable(network string) bool {
 	switch network {
-	case "tcp", "tls":
+	case "tcp", "tls", "TCP", "TLS":
 		return true
 	default:
 		return false
@@ -243,7 +272,7 @@ func IsReliable(network string) bool {
 
 func IsStreamed(network string) bool {
 	switch network {
-	case "tcp", "tls":
+	case "tcp", "tls", "TCP", "TLS":
 		return true
 	default:
 		return false

@@ -46,19 +46,19 @@ var bufPool = sync.Pool{
 
 // UDP transport implementation
 type UDPTransport struct {
-	done chan struct{}
 	// listener *net.UDPConn
 	listener    net.PacketConn
 	listenerUDP *net.UDPConn // TODO consider removing this. There is maybe none benefit if we use if instead interface
 	parser      parser.SIPParser
 	handler     sip.MessageHandler
-	log         zerolog.Logger
+	conn        *UDPConnection
+
+	log zerolog.Logger
 }
 
 func NewUDPTransport(par parser.SIPParser) *UDPTransport {
 	p := &UDPTransport{
 		parser: par,
-		done:   make(chan struct{}),
 	}
 	p.log = log.Logger.With().Str("caller", "transport<UDP>").Logger()
 	return p
@@ -89,6 +89,7 @@ func (t *UDPTransport) Close() error {
 
 	t.listener = nil
 	t.listenerUDP = nil
+	t.conn = nil
 	return err
 }
 
@@ -118,6 +119,10 @@ func (t *UDPTransport) ServeConn(udpConn net.PacketConn, handler sip.MessageHand
 
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), udpConn.LocalAddr().String())
 	t.listener = udpConn
+	t.conn = &UDPConnection{
+		PacketConn: udpConn,
+	}
+
 	t.handler = handler
 	/*
 		Multiple readers makes problem, which can delay writing response
@@ -167,6 +172,10 @@ func (t *UDPTransport) WriteMsg(msg sip.Message, raddr net.Addr) error {
 	}
 
 	return nil
+}
+
+func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
+	return t.conn, nil
 }
 
 func (t *UDPTransport) readConnection(conn net.PacketConn) {
@@ -228,4 +237,33 @@ func (t *UDPTransport) parse(data []byte, src string) {
 	msg.SetTransport(TransportUDP)
 	msg.SetSource(src)
 	t.handler(msg)
+}
+
+type UDPConnection struct {
+	net.PacketConn
+}
+
+func (c *UDPConnection) WriteMsg(msg sip.Message) error {
+	dst := msg.Destination()
+	raddr, err := net.ResolveUDPAddr("udp", dst)
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	msg.StringWrite(buf)
+	data := buf.Bytes()
+
+	n, err := c.WriteTo(data, raddr)
+	if err != nil {
+		return fmt.Errorf("conn %s write err=%w", c, err)
+	}
+
+	if n == 0 {
+		return fmt.Errorf("wrote 0 bytes")
+	}
+
+	if n != len(data) {
+		return fmt.Errorf("fail to write full message")
+	}
+	return nil
 }

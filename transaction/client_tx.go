@@ -25,11 +25,12 @@ type ClientTx struct {
 	closeOnce sync.Once
 }
 
-func NewClientTx(key string, origin *sip.Request, tpl *transport.Layer, logger zerolog.Logger) *ClientTx {
+func NewClientTx(key string, origin *sip.Request, conn transport.Connection, logger zerolog.Logger) *ClientTx {
 	origin = prepareClientRequest(origin)
 	tx := &ClientTx{}
 	tx.key = key
-	tx.tpl = tpl
+	// tx.conn = tpl
+	tx.conn = conn
 	// buffer chan - about ~10 retransmit responses
 	tx.responses = make(chan *sip.Response)
 	tx.errs = make(chan error)
@@ -66,7 +67,8 @@ func prepareClientRequest(origin *sip.Request) *sip.Request {
 func (tx *ClientTx) Init() error {
 	tx.initFSM()
 
-	if err := tx.tpl.WriteMsg(tx.Origin()); err != nil {
+	if err := tx.conn.WriteMsg(tx.Origin()); err != nil {
+		tx.log.Debug().Err(err).Str("req", tx.Origin().StartLine()).Msg("Fail to write request on init")
 		tx.mu.Lock()
 		tx.lastErr = err
 		tx.mu.Unlock()
@@ -166,7 +168,7 @@ func (tx *ClientTx) cancel() {
 	tx.mu.RUnlock()
 
 	cancelRequest := sip.NewCancelRequest(tx.Origin())
-	if err := tx.tpl.WriteMsg(cancelRequest); err != nil {
+	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
 		var lastRespStr string
 		if lastResp != nil {
 			lastRespStr = lastResp.Short()
@@ -193,7 +195,7 @@ func (tx *ClientTx) ack() {
 	tx.mu.RUnlock()
 
 	ack := sip.NewAckRequest(tx.Origin(), lastResp, nil)
-	err := tx.tpl.WriteMsg(ack)
+	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().
 			Str("invite_request", tx.Origin().Short()).
@@ -231,13 +233,14 @@ func (tx *ClientTx) resend() {
 
 	// tx.log.Debug("resend origin request")
 
-	err := tx.tpl.WriteMsg(tx.Origin())
+	err := tx.conn.WriteMsg(tx.Origin())
 
 	tx.mu.Lock()
 	tx.lastErr = err
 	tx.mu.Unlock()
 
 	if err != nil {
+		tx.log.Debug().Err(err).Str("req", tx.Origin().StartLine()).Msg("Fail to resend request")
 		go func() {
 			tx.spinFsm(client_input_transport_err)
 		}()
@@ -264,6 +267,10 @@ func (tx *ClientTx) delete() {
 		close(tx.done)
 		close(tx.responses)
 		tx.mu.Unlock()
+
+		if err := tx.conn.Close(); err != nil {
+			tx.log.Info().Err(err).Msg("Closing connection returned error")
+		}
 
 		// Maybe there is better way
 		tx.onTerminate(tx.key)
