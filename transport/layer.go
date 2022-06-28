@@ -179,6 +179,8 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		return fmt.Errorf("build address target for %s: %w", msg.Destination(), err)
 	}
 
+	var conn Connection
+
 	switch msg.(type) {
 	// RFC 3261 - 18.1.1.
 	// 	TODO
@@ -213,40 +215,72 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 			}
 		}
 
+		//Every new request must be handled in seperate connection
+		conn, err = l.createConnection(network, addr)
+		if err != nil {
+			return err
+		}
+
+		defer conn.Close()
+
 		// RFC 3261 - 18.2.2.
 	case *sip.Response:
+
+		conn, err = l.getConnection(network, addr)
+		if err != nil {
+			return err
+		}
 	}
 
-	transport, ok := l.transports[network]
-	if !ok {
-		return fmt.Errorf("transport %s is not supported", network)
-	}
-
-	raddr, err := transport.ResolveAddr(addr)
-	if err != nil {
+	if err := conn.WriteMsg(msg); err != nil {
 		return err
 	}
 
-	err = transport.WriteMsg(msg, raddr)
-	if err != nil {
-		err = fmt.Errorf("send SIP message through %s protocol to %s: %w", network, addr, err)
-	}
+	// transport, ok := l.transports[network]
+	// if !ok {
+	// 	return fmt.Errorf("transport %s is not supported", network)
+	// }
+
+	// raddr, err := transport.ResolveAddr(addr)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = transport.WriteMsg(msg, raddr)
+	// if err != nil {
+	// 	err = fmt.Errorf("send SIP message through %s protocol to %s: %w", network, addr, err)
+	// }
 	return err
 }
 
-// GetOrCreateConnection gets existing or creates new connection based on addr
-func (l *Layer) GetOrCreateConnection(network, addr string) (Connection, error) {
+// GetConnection gets existing or creates new connection based on addr
+func (l *Layer) GetConnection(network, addr string) (Connection, error) {
 	network = NetworkToLower(network)
-	return l.getOrCreateConnection(network, addr)
+	return l.getConnection(network, addr)
 }
 
-func (l *Layer) getOrCreateConnection(network, addr string) (Connection, error) {
+func (l *Layer) CreateConnection(network, addr string) (Connection, error) {
+	network = NetworkToLower(network)
+	return l.createConnection(network, addr)
+}
+
+func (l *Layer) getConnection(network, addr string) (Connection, error) {
 	transport, ok := l.transports[network]
 	if !ok {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
 	c, err := transport.GetConnection(addr)
+	return c, err
+}
+
+func (l *Layer) createConnection(network, addr string) (Connection, error) {
+	transport, ok := l.transports[network]
+	if !ok {
+		return nil, fmt.Errorf("transport %s is not supported", network)
+	}
+
+	c, err := transport.CreateConnection(addr)
 	return c, err
 }
 

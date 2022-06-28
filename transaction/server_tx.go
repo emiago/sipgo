@@ -29,14 +29,16 @@ type ServerTx struct {
 	timer_l      *time.Timer
 	reliable     bool
 
-	mu        sync.RWMutex
+	mu sync.RWMutex
+
 	closeOnce sync.Once
 }
 
-func NewServerTx(key string, origin *sip.Request, tpl *transport.Layer, logger zerolog.Logger) *ServerTx {
+func NewServerTx(key string, origin *sip.Request, conn transport.Connection, logger zerolog.Logger) *ServerTx {
 	tx := new(ServerTx)
 	tx.key = key
-	tx.tpl = tpl
+	tx.conn = conn
+
 	// about ~10 retransmits
 	tx.acks = make(chan *sip.Request)
 	tx.cancels = make(chan *sip.Request)
@@ -118,7 +120,7 @@ func (tx *ServerTx) receiveRequest(req *sip.Request) (FsmInput, error) {
 
 func (tx *ServerTx) Respond(res *sip.Response) error {
 	if res.IsCancel() {
-		return tx.tpl.WriteMsg(res)
+		return tx.conn.WriteMsg(res)
 	}
 
 	input, err := tx.receiveRespond(res)
@@ -209,7 +211,7 @@ func (tx *ServerTx) passResp() error {
 	}
 
 	// tx.Log().Debug("actFinal")
-	err := tx.tpl.WriteMsg(lastResp)
+	err := tx.conn.WriteMsg(lastResp)
 	if err != nil {
 		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
 		tx.mu.Lock()

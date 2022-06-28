@@ -166,15 +166,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	srv.ServeMessage(func(m sip.Message) {
 		//This runs for every message
 		// log.Debug().Str("msg", m.String()).Msg("New message")
-		if h := m.GetHeader("Record-Route"); h == nil {
-			rr := &sip.RecordRouteHeader{
-				Address: sip.Uri{
-					Host: host,
-					Port: port,
-				},
-			}
-			m.PrependHeader(rr)
-		}
 
 		switch r := m.(type) {
 		case *sip.Request:
@@ -184,16 +175,26 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				newvia.Host = host
 				newvia.Port = port
 				m.PrependHeader(newvia)
-				return
 			}
 
 		case *sip.Response:
 			if _, exists := r.Via(); exists {
 				// if via.Host == listenIP {
-				r.RemoveHeader("via")
+				r.RemoveHeader("Via")
 				// }
 			}
 
+		}
+
+		if h := m.GetHeader("Record-Route"); h == nil {
+			rr := &sip.RecordRouteHeader{
+				Address: sip.Uri{
+					Host: host,
+					Port: port,
+				},
+			}
+			m.PrependHeader(rr)
+			// m.AppendHeaderAfter(rr, "Via")
 		}
 	})
 

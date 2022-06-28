@@ -13,7 +13,7 @@ type commonTx struct {
 	key string
 
 	origin *sip.Request
-	tpl    *transport.Layer
+	// tpl    *transport.Layer
 
 	conn     transport.Connection
 	lastResp *sip.Response
@@ -51,9 +51,9 @@ func (tx *commonTx) Key() string {
 	return tx.key
 }
 
-func (tx *commonTx) Transport() sip.Transport {
-	return tx.tpl
-}
+// func (tx *commonTx) Transport() sip.Transport {
+// 	return tx.tpl
+// }
 
 // Errors can be passed via channel. Channel is created on first call of this function
 func (tx *commonTx) Errors() <-chan error {

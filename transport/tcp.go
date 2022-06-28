@@ -127,16 +127,27 @@ func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
 	addr = raddr.String()
 
 	c := t.pool.Get(addr)
-	if c == nil {
-		t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			return nil, fmt.Errorf("%s dial err=%w", t, err)
-		}
-		c = &Conn{conn}
-		t.pool.Add(addr, c)
-		go t.readConnection(conn, addr)
+	return c, nil
+}
+
+func (t *TCPTransport) CreateConnection(addr string) (Connection, error) {
+	raddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, err
 	}
+	addr = raddr.String()
+	return t.createConnection(addr)
+}
+
+func (t *TCPTransport) createConnection(addr string) (Connection, error) {
+	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s dial err=%w", t, err)
+	}
+	c := &TCPConnection{conn}
+	t.pool.Add(addr, c)
+	go t.readConnection(conn, addr)
 	return c, nil
 }
 
@@ -161,7 +172,6 @@ func (t *TCPTransport) readConnection(conn net.Conn, raddr string) {
 		}
 
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-
 		t.parse(data, raddr)
 	}
 }
@@ -187,18 +197,44 @@ func (t *TCPTransport) parse(data []byte, src string) {
 	t.handler(msg)
 }
 
-type TCPWriter struct {
-	c net.Conn
+type TCPConnection struct {
+	net.Conn
 }
 
-func (c *TCPWriter) WriteMsg(msg sip.Message) error {
+func (c *TCPConnection) WriteMsg(msg sip.Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
 	msg.StringWrite(buf)
 	data := buf.Bytes()
 
-	n, err := c.c.Write(data)
+	n, err := c.Write(data)
+	if err != nil {
+		return fmt.Errorf("conn %s write err=%w", c, err)
+	}
+
+	if n == 0 {
+		return fmt.Errorf("wrote 0 bytes")
+	}
+
+	if n != len(data) {
+		return fmt.Errorf("fail to write full message")
+	}
+	return nil
+}
+
+type TCPRealConnection struct {
+	*net.TCPConn
+}
+
+func (c *TCPRealConnection) WriteMsg(msg sip.Message) error {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	msg.StringWrite(buf)
+	data := buf.Bytes()
+
+	n, err := c.Write(data)
 	if err != nil {
 		return fmt.Errorf("conn %s write err=%w", c, err)
 	}

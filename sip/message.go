@@ -62,6 +62,8 @@ type Message interface {
 	PrependHeader(header ...Header)
 	// AppendHeader appends header to message.
 	AppendHeader(header Header)
+	// AppendHeaderAfter appends header to message.
+	AppendHeaderAfter(header Header, name string)
 	// RemoveHeader removes header from message.
 	RemoveHeader(name string)
 	ReplaceHeader(header Header)

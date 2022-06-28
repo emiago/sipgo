@@ -83,7 +83,14 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 		return
 	}
 
-	tx = NewServerTx(key, req, txl.tpl, txl.log)
+	// Connection must exist by transport layer.
+	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
+	if err != nil {
+		txl.log.Error().Err(err)
+		return
+	}
+
+	tx = NewServerTx(key, req, conn, txl.log)
 
 	if err := tx.Init(); err != nil {
 		txl.log.Error().Err(err)
@@ -131,7 +138,7 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 		return nil, fmt.Errorf("transaction already exists")
 	}
 
-	conn, err := txl.tpl.GetOrCreateConnection(req.Transport(), req.Destination())
+	conn, err := txl.tpl.CreateConnection(req.Transport(), req.Destination())
 	if err != nil {
 		return nil, err
 	}

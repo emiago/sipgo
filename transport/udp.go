@@ -51,7 +51,7 @@ type UDPTransport struct {
 	listenerUDP *net.UDPConn // TODO consider removing this. There is maybe none benefit if we use if instead interface
 	parser      parser.SIPParser
 	handler     sip.MessageHandler
-	conn        *UDPConnection
+	conn        Connection
 
 	log zerolog.Logger
 }
@@ -119,9 +119,6 @@ func (t *UDPTransport) ServeConn(udpConn net.PacketConn, handler sip.MessageHand
 
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), udpConn.LocalAddr().String())
 	t.listener = udpConn
-	t.conn = &UDPConnection{
-		PacketConn: udpConn,
-	}
 
 	t.handler = handler
 	/*
@@ -131,12 +128,15 @@ func (t *UDPTransport) ServeConn(udpConn net.PacketConn, handler sip.MessageHand
 	switch c := udpConn.(type) {
 	case *net.UDPConn:
 		t.listenerUDP = c
+		t.conn = &UDPRealConnection{c}
+
 		// Avoid interface usage, use directly connection
 		for i := 0; i < UDPReadWorkers-1; i++ {
 			go t.readUDPConn(c)
 		}
 		t.readUDPConn(c)
 	default:
+		t.conn = &UDPConnection{c}
 		for i := 0; i < UDPReadWorkers-1; i++ {
 			go t.readConnection(udpConn)
 		}
@@ -174,7 +174,13 @@ func (t *UDPTransport) WriteMsg(msg sip.Message, raddr net.Addr) error {
 	return nil
 }
 
+// GetConnection will return same listener connection
 func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
+	return t.conn, nil
+}
+
+// CreateConnection will return same listener connection
+func (t *UDPTransport) CreateConnection(addr string) (Connection, error) {
 	return t.conn, nil
 }
 
@@ -243,9 +249,17 @@ type UDPConnection struct {
 	net.PacketConn
 }
 
+func (c *UDPConnection) Close() error {
+	//Do not allow closing UDP
+	return nil
+}
+
 func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 	dst := msg.Destination()
 	raddr, err := net.ResolveUDPAddr("udp", dst)
+	if err != nil {
+		return err
+	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -256,6 +270,43 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 	n, err := c.WriteTo(data, raddr)
 	if err != nil {
 		return fmt.Errorf("conn %s write err=%w", c, err)
+	}
+
+	if n == 0 {
+		return fmt.Errorf("wrote 0 bytes")
+	}
+
+	if n != len(data) {
+		return fmt.Errorf("fail to write full message")
+	}
+	return nil
+}
+
+type UDPRealConnection struct {
+	*net.UDPConn
+}
+
+func (c *UDPRealConnection) Close() error {
+	//Do not allow closing UDP
+	return nil
+}
+
+func (c *UDPRealConnection) WriteMsg(msg sip.Message) error {
+	dst := msg.Destination()
+	raddr, err := net.ResolveUDPAddr("udp", dst)
+	if err != nil {
+		return err
+	}
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	msg.StringWrite(buf)
+	data := buf.Bytes()
+
+	n, err := c.WriteToUDP(data, raddr)
+	if err != nil {
+		return fmt.Errorf("conn %s write err=%w", c.LocalAddr().String(), err)
 	}
 
 	if n == 0 {

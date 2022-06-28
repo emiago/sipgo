@@ -95,6 +95,26 @@ func (hs *headers) AppendHeader(header Header) {
 	// hs.appendHeader(name, header)
 }
 
+func (hs *headers) AppendHeaderAfter(header Header, name string) {
+	ind := -1
+	for i, h := range hs.headerOrder {
+		if h.Name() == name {
+			ind = i
+		}
+	}
+
+	if ind < 0 {
+		hs.AppendHeader(header)
+		return
+	}
+
+	newOrder := make([]Header, len(hs.headerOrder)+1)
+	copy(newOrder, hs.headerOrder[:ind+1])
+	newOrder[ind] = header
+	copy(newOrder[ind+1:], hs.headerOrder[ind:])
+	hs.headerOrder = newOrder
+}
+
 func (hs *headers) appendHeader(name string, header Header) {
 	// if _, ok := hs.headers[name]; ok {
 	// 	// TODO SetNextHeader
@@ -169,7 +189,7 @@ func (hs *headers) getHeader(nameLower string) Header {
 }
 
 func (hs *headers) RemoveHeader(name string) {
-	name = HeaderToLower(name)
+	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
 	// update order slice
 	for idx, entry := range hs.headerOrder {

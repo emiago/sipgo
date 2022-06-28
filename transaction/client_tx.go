@@ -268,12 +268,12 @@ func (tx *ClientTx) delete() {
 		close(tx.responses)
 		tx.mu.Unlock()
 
+		// Maybe there is better way
+		tx.onTerminate(tx.key)
+
 		if err := tx.conn.Close(); err != nil {
 			tx.log.Info().Err(err).Msg("Closing connection returned error")
 		}
-
-		// Maybe there is better way
-		tx.onTerminate(tx.key)
 	})
 
 	time.Sleep(time.Microsecond)

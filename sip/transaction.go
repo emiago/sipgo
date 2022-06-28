@@ -5,7 +5,7 @@ type Transaction interface {
 	Key() string
 	Origin() *Request
 	String() string
-	Transport() Transport
+	// Transport() Transport
 	Terminate()
 	Done() <-chan bool
 	Errors() <-chan error

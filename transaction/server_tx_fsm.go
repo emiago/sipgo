@@ -274,7 +274,7 @@ func (tx *ServerTx) actDelete() FsmInput {
 func (tx *ServerTx) actRespondDelete() FsmInput {
 	// tx.Log().Debug("actRespondDelete")
 	tx.delete()
-	lastErr := tx.tpl.WriteMsg(tx.lastResp)
+	lastErr := tx.conn.WriteMsg(tx.lastResp)
 
 	tx.mu.Lock()
 	tx.lastErr = lastErr
