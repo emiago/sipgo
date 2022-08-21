@@ -111,22 +111,26 @@ func (msg *MessageData) Body() []byte {
 
 // SetBody sets message body, calculates it length and add 'Content-Length' header.
 func (msg *MessageData) SetBody(body []byte) {
+	var length ContentLength
 	msg.body = body
 	if body == nil {
-		return
+		length = ContentLength(0)
+	} else {
+		length = ContentLength(len(body))
 	}
 
 	hdr, exists := msg.ContentLength()
-	length := ContentLength(len(body))
 	if exists {
 		if length == *hdr {
 			//Skip appending if value is same
 			return
 		}
-		msg.appendHeader("content-length", &length)
+		// msg.appendHeader("content-length", &length)
+		msg.ReplaceHeader(&length)
 		return
 	}
-	msg.ReplaceHeader(&length)
+
+	msg.AppendHeader(&length)
 }
 
 func (msg *MessageData) Transport() string {

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiraganov/sipgo/transport"
 
 	_ "net/http/pprof"
 
@@ -26,7 +27,7 @@ func main() {
 	debflag := flag.Bool("debug", false, "")
 	pprof := flag.Bool("pprof", false, "Full profile")
 	extIP := flag.String("ip", "127.0.0.1:5060", "My exernal ip")
-	dst := flag.String("dst", "127.0.0.2:5060", "Destination pbx, sip server")
+	dst := flag.String("dst", "", "Destination pbx, sip server")
 	transportType := flag.String("t", "udp", "Transport, default will be determined by request")
 	flag.Parse()
 
@@ -43,6 +44,7 @@ func main() {
 
 	if *debflag {
 		log.Logger = log.Logger.Level(zerolog.DebugLevel)
+		transport.SIPDebug = true
 	}
 
 	log.Info().Int("cpus", runtime.NumCPU()).Msg("Runtime")
@@ -81,9 +83,14 @@ func httpServer(address string) {
 func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	// Prepare all variables we need for our service
 	host, port, _ := sip.ParseAddr(ip)
-	srv, _ := sipgo.NewServer(
+	srv, err := sipgo.NewServer(
 		sipgo.WithIP(ip),
 	)
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to setup proxy")
+	}
+
 	registry := NewRegistry()
 
 	var reply = func(tx sip.ServerTransaction, req *sip.Request, code sip.StatusCode, reason string) {
@@ -97,17 +104,18 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	var route = func(req *sip.Request, tx sip.ServerTransaction) {
 		// If we are proxying to asterisk or other proxy -dst must be set
 		// Otherwise we will look on our registration entries
+		dst := proxydst
 		if proxydst == "" {
 			tohead, _ := req.To()
-			proxydst = registry.Get(tohead.Address.User)
+			dst = registry.Get(tohead.Address.User)
 		}
 
-		if proxydst == "" {
+		if dst == "" {
 			reply(tx, req, 404, "Not found")
 			return
 		}
 
-		req.SetDestination(proxydst)
+		req.SetDestination(dst)
 		// Start client transaction and relay our request
 		clTx, err := srv.TransactionRequest(req)
 		if err != nil {
@@ -138,8 +146,8 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 			case m := <-tx.Acks():
 				// Acks can not be send directly trough destination
-				log.Info().Str("m", m.StartLine()).Str("dst", proxydst).Msg("Proxing ACK")
-				m.SetDestination(proxydst)
+				log.Info().Str("m", m.StartLine()).Str("dst", dst).Msg("Proxing ACK")
+				m.SetDestination(dst)
 				srv.Send(m)
 
 			case m := <-tx.Cancels():
@@ -165,54 +173,75 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 	srv.ServeMessage(func(m sip.Message) {
 		//This runs for every message
-		// log.Debug().Str("msg", m.String()).Msg("New message")
+		// if log.Logger.GetLevel() == zerolog.DebugLevel {
+		// 	log.Debug().Msgf("New message\n%s", m.String())
+		// }
 
-		switch r := m.(type) {
+		/* switch r := m.(type) {
 		case *sip.Request:
 			// We handle here only INVITE and BYE
-			if via, exists := r.Via(); exists && via.Host != host {
-				newvia := via.Clone()
-				newvia.Host = host
-				newvia.Port = port
-				m.PrependHeader(newvia)
-			}
+			// if via, exists := r.Via(); exists && via.Host != host {
+			// 	newvia := via.Clone()
+			// 	newvia.Host = host
+			// 	newvia.Port = port
+			// 	m.PrependHeader(newvia)
+			// }
 
 		case *sip.Response:
-			if _, exists := r.Via(); exists {
-				// if via.Host == listenIP {
-				r.RemoveHeader("Via")
-				// }
-			}
+			// This makes no sense anymore
+			// if via, exists := r.Via(); exists {
+			// 	if via.Host != host {
+			// 		r.RemoveHeader("Via")
+			// 	}
+			// }
 
-		}
+		} */
 
 		if h := m.GetHeader("Record-Route"); h == nil {
+			// Transport must be provided as well
+			// https://datatracker.ietf.org/doc/html/rfc5658
 			rr := &sip.RecordRouteHeader{
 				Address: sip.Uri{
 					Host: host,
 					Port: port,
+					UriParams: sip.HeaderParams{
+						"transport": transport.NetworkToLower(m.Transport()),
+					},
 				},
 			}
+
 			m.PrependHeader(rr)
 			// m.AppendHeaderAfter(rr, "Via")
 		}
 	})
 
 	var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+		// https://www.rfc-editor.org/rfc/rfc3261#section-10.3
 		cont, exists := req.Contact()
 		if !exists {
-			reply(tx, req, 500, "Missing contact")
+			reply(tx, req, 404, "Missing address of record")
 			return
 		}
 
 		// We have a list of uris
 		uri := cont.Address
-		addr := uri.Host + strconv.Itoa(uri.Port)
+		if uri.Host == host && uri.Port == port {
+			reply(tx, req, 401, "Contact address not provided")
+			return
+		}
+
+		addr := uri.Host + ":" + strconv.Itoa(uri.Port)
+
 		registry.Add(uri.User, addr)
 		log.Debug().Msgf("Contact added %s -> %s", uri.User, addr)
 
 		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 		// log.Debug().Msgf("Sending response: \n%s", res.String())
+
+		// URI params must be reset or this should be regenetad
+		cont.Address.UriParams = sip.NewParams()
+		cont.Address.UriParams.Add("transport", req.Transport())
+
 		if err := tx.Respond(res); err != nil {
 			log.Error().Err(err).Msg("Sending REGISTER OK failed")
 			return
@@ -224,7 +253,12 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	}
 
 	var ackHandler = func(req *sip.Request, tx sip.ServerTransaction) {
-		req.SetDestination(proxydst)
+		dst := proxydst
+		if proxydst == "" {
+			tohead, _ := req.To()
+			dst = registry.Get(tohead.Address.User)
+		}
+		req.SetDestination(dst)
 		if err := srv.Send(req); err != nil {
 			log.Error().Err(err).Msg("Send failed")
 			reply(tx, req, 500, "")

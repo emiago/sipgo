@@ -6,7 +6,8 @@ services:
       context: ../../
 
     # image: golang:latest
-    command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -debug
+    # command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -debug
+    command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -debug
     # stdin_open: true
     # command: bash
     # working_dir: /usr/src/sipgo

@@ -36,7 +36,7 @@ services:
 
   uac:
     image: ctaloi/sipp
-    command: -sn uac -r 1000 -rp 1000 -i 10.5.0.30   10.5.0.10:5060
+    command: -sn uac -r 1 -rp 3000 -i 10.5.0.30   10.5.0.10:5060
     # network_mode: "host"
     cpuset: "5"
     networks:

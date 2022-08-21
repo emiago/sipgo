@@ -3,7 +3,9 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -139,6 +141,10 @@ func (p *Parser) Parse(data []byte) (msg sip.Message, err error) {
 
 	contentLength := getBodyLength(data)
 
+	if contentLength <= 0 {
+		return msg, nil
+	}
+
 	// p.log.Debugf("%s reads body with length = %d bytes", p, contentLength)
 	body := make([]byte, contentLength)
 	total, err := nextChunk(reader, body)
@@ -204,6 +210,10 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 	// If we need to continue then try to grow
 	line, err = reader.ReadString('\n')
 	if err != nil {
+		if err == io.EOF {
+			return "", nil
+		}
+
 		return "", err
 	}
 
@@ -212,6 +222,8 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 		line = line[:lenline-2]
 		return line, nil
 	}
+
+	return line, nil
 
 	// This is now slow part
 	var buffer strings.Builder
@@ -223,6 +235,11 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 		// bufio.ScanLines()
 		data, err = reader.ReadString('\r')
 		if err != nil {
+			if lenline > 0 && errors.Is(err, io.EOF) {
+				// Non found \r means we only have normal breaks
+				return line, nil
+			}
+
 			return "", err
 		}
 

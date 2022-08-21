@@ -138,9 +138,13 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 		return nil, fmt.Errorf("transaction already exists")
 	}
 
-	conn, err := txl.tpl.CreateConnection(req.Transport(), req.Destination())
+	conn, err := txl.tpl.ClientRequestConnection(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if conn == nil {
+		return nil, fmt.Errorf("somethings is wrong")
 	}
 
 	tx := NewClientTx(key, req, conn, txl.log)

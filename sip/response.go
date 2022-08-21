@@ -248,9 +248,9 @@ func NewResponseFromRequest(
 		}
 	}
 
-	if body != nil {
-		res.SetBody(body)
-	}
+	// if body != nil {
+	res.SetBody(body)
+	// }
 
 	res.SetTransport(req.Transport())
 	res.SetSource(req.Destination())

@@ -124,6 +124,7 @@ func TestParseHeaders(t *testing.T) {
 			"Contact: sip:sipp@127.0.0.3:5060":            "Contact: <sip:sipp@127.0.0.3:5060>",
 			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":     "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
+			"m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": "Contact: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"",
 		} {
 			h, err := parser.ParseHeader(header)
 			require.Nil(t, err)
@@ -268,6 +269,29 @@ func TestParseRequest(t *testing.T) {
 	assert.Equal(t, to.Address.Host+":"+strconv.Itoa(to.Address.Port), "127.0.0.1:5060")
 
 	assert.Equal(t, msg.String(), msgstr)
+}
+
+func TestRegisterRequestFail(t *testing.T) {
+	m := `REGISTER sip:10.5.0.10:5060;transport=udp SIP/2.0
+v: SIP/2.0/UDP 10.5.0.1:51477;rport;branch=z9hG4bKPj55659194-de09-497e-8cd0-978755d148bc
+Route: <sip:10.5.0.10:5060;transport=udp;lr>
+Route: <sip:10.5.0.10:5060;transport=udp;lr>
+Max-Forwards: 70
+f: <sip:test@10.5.0.10>;tag=171a9361-dd7b-49a8-831b-16691c419860
+t: <sip:test@10.5.0.10>
+i: 6d3e7e31-f58e-4d7e-8bc3-1c7efa230424
+CSeq: 10330 REGISTER
+User-Agent: PJSUA v2.10 Linux-5.14.4.18/x86_64/glibc-2.31
+m: <sip:test@10.5.0.1:51477;ob>
+Expires: 30
+Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+l:  0`
+	parser := NewParser()
+	msg, err := parser.Parse([]byte(m))
+	require.Nil(t, err, err)
+
+	c := msg.GetHeader("Contact").(*sip.ContactHeader)
+	assert.Equal(t, "test", c.Address.User)
 }
 
 func BenchmarkParser(b *testing.B) {

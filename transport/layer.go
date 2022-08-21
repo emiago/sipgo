@@ -31,6 +31,8 @@ type Layer struct {
 
 	cancelOnce sync.Once
 	log        zerolog.Logger
+
+	ConnectionReuse bool
 }
 
 // NewLayer creates transport layer.
@@ -40,9 +42,10 @@ func NewLayer(
 	dnsResolver *net.Resolver,
 ) *Layer {
 	l := &Layer{
-		transports:  make(map[string]Transport),
-		listenPorts: make(map[string][]int),
-		dnsResolver: dnsResolver,
+		transports:      make(map[string]Transport),
+		listenPorts:     make(map[string][]int),
+		dnsResolver:     dnsResolver,
+		ConnectionReuse: true,
 	}
 
 	l.log = log.Logger.With().Str("caller", "transportlayer").Logger()
@@ -83,7 +86,7 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 		return err
 	}
 
-	transport := NewUDPTransport(parser.NewParser())
+	transport := NewUDPTransport(c.LocalAddr().String(), parser.NewParser())
 	l.addTransport(transport, port)
 
 	return transport.ServeConn(c, l.handleMessage)
@@ -96,7 +99,7 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 		return err
 	}
 
-	transport := NewTCPTransport(parser.NewParser())
+	transport := NewTCPTransport(c.Addr().String(), parser.NewParser())
 	l.addTransport(transport, port)
 
 	return transport.ServeConn(c, l.handleMessage)
@@ -115,9 +118,9 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 	var t Transport
 	switch network {
 	case "udp":
-		t = NewUDPTransport(p)
+		t = NewUDPTransport(addr, p)
 	case "tcp":
-		t = NewTCPTransport(p)
+		t = NewTCPTransport(addr, p)
 	case "tls":
 		fallthrough
 	default:
@@ -127,7 +130,7 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 	// Add transport to list
 	l.addTransport(t, port)
 
-	err = t.Serve(addr, l.handleMessage)
+	err = t.Serve(l.handleMessage)
 	return err
 }
 
@@ -150,7 +153,7 @@ func (l *Layer) WriteMsg(msg sip.Message) error {
 }
 
 func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
-	/*
+	/*s
 		// Client sending request, or we are sending responses
 		To consider
 			18.2.1
@@ -164,24 +167,10 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		contain the source address from which the packet was received.
 	*/
 
-	viaHop, ok := msg.Via()
-	if !ok {
-		return fmt.Errorf("Missing via in message")
-	}
-
-	network = NetworkToLower(network)
-
-	host, _, err := net.SplitHostPort(addr)
-
-	// target := sip.Target{}
-	// err := sip.NewTargetFromAddr(addr, &target)
-	if err != nil {
-		return fmt.Errorf("build address target for %s: %w", msg.Destination(), err)
-	}
-
 	var conn Connection
+	var err error
 
-	switch msg.(type) {
+	switch m := msg.(type) {
 	// RFC 3261 - 18.1.1.
 	// 	TODO
 	// 	If a request is within 200 bytes of the path MTU, or if it is larger
@@ -191,42 +180,17 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	//    one indicated in the top Via, the value in the top Via MUST be
 	//    changed.
 	case *sip.Request:
-		// rewrite sent-by transport
-		// viaHop.Transport = msg.Transport()
-		// viaHop.Host = l.host
-
-		// rewrite sent-by port
-		if viaHop.Port <= 0 {
-			if ports, ok := l.listenPorts[network]; ok {
-				port := ports[rand.Intn(len(ports))]
-				viaHop.Port = port
-			} else {
-				defPort := sip.DefaultPort(network)
-				viaHop.Port = int(defPort)
-			}
-		}
-
-		// dns srv lookup
-		if net.ParseIP(host) == nil {
-			ctx := context.Background()
-			if _, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", network, host); err == nil && len(addrs) > 0 {
-				a := addrs[0]
-				addr = a.Target[:len(a.Target)-1] + ":" + strconv.Itoa(int(a.Port))
-			}
-		}
-
 		//Every new request must be handled in seperate connection
-		conn, err = l.createConnection(network, addr)
+		conn, err = l.ClientRequestConnection(m)
 		if err != nil {
 			return err
 		}
-
 		defer conn.Close()
 
 		// RFC 3261 - 18.2.2.
 	case *sip.Response:
 
-		conn, err = l.getConnection(network, addr)
+		conn, err = l.GetConnection(network, addr)
 		if err != nil {
 			return err
 		}
@@ -253,6 +217,62 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	return err
 }
 
+// ClientRequestConnection is based on
+// https://www.rfc-editor.org/rfc/rfc3261#section-18.1.1
+// It is wrapper for getting and creating connection
+func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err error) {
+	network := NetworkToLower(req.Transport())
+	addr := req.Destination()
+
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("build address target for %s: %w", addr, err)
+	}
+	// dns srv lookup
+	if net.ParseIP(host) == nil {
+		ctx := context.Background()
+		if _, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", network, host); err == nil && len(addrs) > 0 {
+			a := addrs[0]
+			addr = a.Target[:len(a.Target)-1] + ":" + strconv.Itoa(int(a.Port))
+		}
+	}
+
+	if l.ConnectionReuse {
+		c, err = l.getConnection(network, addr)
+		if c == nil {
+			c, err = l.createConnection(network, addr)
+		}
+	} else {
+		c, err = l.createConnection(network, addr)
+
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	viaHop, exists := req.Via()
+	if !exists {
+		return nil, fmt.Errorf("missing Via Header")
+	}
+	// rewrite sent-by port
+	if viaHop.Port <= 0 {
+		if ports, ok := l.listenPorts[network]; ok {
+			port := ports[rand.Intn(len(ports))]
+			viaHop.Port = port
+		} else {
+			defPort := sip.DefaultPort(network)
+			viaHop.Port = int(defPort)
+		}
+	}
+
+	if l.ConnectionReuse {
+		viaHop.Params.Add("alias", "")
+	}
+
+	return c, nil
+}
+
 // GetConnection gets existing or creates new connection based on addr
 func (l *Layer) GetConnection(network, addr string) (Connection, error) {
 	network = NetworkToLower(network)
@@ -271,6 +291,9 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 	}
 
 	c, err := transport.GetConnection(addr)
+	if err == nil && c == nil {
+		return nil, fmt.Errorf("connection does not exist")
+	}
 	return c, err
 }
 

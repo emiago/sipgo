@@ -303,6 +303,67 @@ func TestInviteCallTCP(t *testing.T) {
 	inviteScenario(t, client1, client2, p)
 }
 
+func TestRegisterTCP(t *testing.T) {
+	p := parser.NewParser()
+	serverReader, serverWriter := io.Pipe()
+	// serverReader2, serverWriter2 := io.Pipe()
+	client1Reader, client1Writer := io.Pipe()
+	// client2Reader, client2Writer := io.Pipe()
+	//Client1 writes to server and reads response
+
+	serverAddr := net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
+	client1Addr := net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}
+	client2Addr := net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 5060}
+
+	client1 := &fakes.TCPConn{
+		LAddr:  client1Addr,
+		RAddr:  serverAddr,
+		Reader: client1Reader,
+		Writer: serverWriter,
+	}
+
+	//Server writes to clients and reads response
+	serverC1 := &fakes.TCPConn{
+		LAddr:  serverAddr,
+		RAddr:  client1Addr,
+		Reader: serverReader,
+		Writer: client1Writer,
+	}
+
+	listener := &fakes.TCPListener{
+		LAddr: serverAddr,
+		Conns: make(chan *fakes.TCPConn, 2),
+	}
+	listener.Conns <- serverC1
+
+	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
+	go srv.TransportLayer().ServeTCP(listener)
+
+	reg := testCreateMessage(t, []string{
+		"REGISTER sip:10.5.0.10:5060;transport=tcp SIP/2.0",
+		"v: SIP/2.0/TCP 10.5.0.1:47453;rport;branch=z9hG4bKPj90632a72-086e-485c-bff4-dbe6711fdcec;alias",
+		"Route: <sip:10.5.0.10:5060;transport=tcp;lr>",
+		"Route: <sip:10.5.0.10:5060;transport=tcp;lr>",
+		"Max-Forwards: 70",
+		"f: <sip:KC82LHNFR5@10.5.0.10>;tag=fe37d7ec-2449-4fed-a759-77f62b37133b",
+		"t: <sip:KC82LHNFR5@10.5.0.10>",
+		"i: 5187d714-12ed-47b9-8934-47bfa447960d",
+		"CSeq: 51826 REGISTER",
+		"User-Agent: PJSUA v2.10 Linux-5.14.4.18/x86_64/glibc-2.31",
+		"k: outbound, path",
+		"m: <sip:KC82LHNFR5@10.5.0.1:47453;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"",
+		"Expires: 90",
+		"Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
+		"l:  0",
+	})
+
+	res := client1.TestRequest(t, []byte(reg.String()))
+	res200, err := p.Parse(res)
+	require.Nil(t, err)
+	t.Log(res200.String())
+	assert.Equal(t, "SIP/2.0 200 OK", res200.StartLine())
+}
+
 func BenchmarkInviteCall(t *testing.B) {
 	serverAddr := net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060}
 	client1Addr := net.UDPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060}

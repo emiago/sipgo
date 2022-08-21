@@ -16,6 +16,7 @@ var ()
 
 // TCP transport implementation
 type TCPTransport struct {
+	addr     string
 	listener net.Listener
 	parser   parser.SIPParser
 	handler  sip.MessageHandler
@@ -24,8 +25,9 @@ type TCPTransport struct {
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par parser.SIPParser) *TCPTransport {
+func NewTCPTransport(addr string, par parser.SIPParser) *TCPTransport {
 	p := &TCPTransport{
+		addr:   addr,
 		parser: par,
 		pool:   NewConnectionPool(),
 	}
@@ -35,6 +37,10 @@ func NewTCPTransport(par parser.SIPParser) *TCPTransport {
 
 func (t *TCPTransport) String() string {
 	return "transport<TCP>"
+}
+
+func (t *TCPTransport) Addr() string {
+	return t.addr
 }
 
 func (t *TCPTransport) Network() string {
@@ -59,8 +65,8 @@ func (t *TCPTransport) Close() error {
 
 // TODO
 // This is more generic way to provide listener and it is blocking
-func (t *TCPTransport) Serve(addr string, handler sip.MessageHandler) error {
-	// resolve local UDP endpoint
+func (t *TCPTransport) Serve(handler sip.MessageHandler) error {
+	addr := t.addr
 	laddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -99,8 +105,9 @@ func (t *TCPTransport) Accept() error {
 		t.log.Debug().Str("raddr", raddr).Msg("New TCP connection")
 
 		// Add connection to pool
-		t.pool.Add(raddr, &Conn{conn})
-		go t.readConnection(conn, raddr)
+		c := &TCPConnection{conn}
+		t.pool.Add(raddr, c)
+		go t.readConnection(c, raddr)
 	}
 }
 
@@ -135,24 +142,29 @@ func (t *TCPTransport) CreateConnection(addr string) (Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr = raddr.String()
-	return t.createConnection(addr)
+	return t.createConnection(raddr)
 }
 
-func (t *TCPTransport) createConnection(addr string) (Connection, error) {
+func (t *TCPTransport) createConnection(raddr *net.TCPAddr) (Connection, error) {
+	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
-	conn, err := net.Dial("tcp", addr)
+
+	conn, err := net.DialTCP("tcp", nil, raddr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
+
+	// // conn.SetKeepAlive(true)
+	// conn.SetKeepAlivePeriod(3 * time.Second)
+
 	c := &TCPConnection{conn}
 	t.pool.Add(addr, c)
-	go t.readConnection(conn, addr)
+	go t.readConnection(c, addr)
 	return c, nil
 }
 
 // This should performe better to avoid any interface allocation
-func (t *TCPTransport) readConnection(conn net.Conn, raddr string) {
+func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
 	buf := make([]byte, UDPbufferSize)
 	defer conn.Close()
 	defer t.pool.Del(raddr)
@@ -201,33 +213,25 @@ type TCPConnection struct {
 	net.Conn
 }
 
+func (c *TCPConnection) Read(b []byte) (n int, err error) {
+	// Some debug hook. TODO move to proper way
+	n, err = c.Conn.Read(b)
+	if SIPDebug {
+		log.Debug().Msgf("TCP read <- %s:\n%s", c.Conn.RemoteAddr(), string(b))
+	}
+	return n, err
+}
+
+func (c *TCPConnection) Write(b []byte) (n int, err error) {
+	// Some debug hook. TODO move to proper way
+	n, err = c.Conn.Write(b)
+	if SIPDebug {
+		log.Debug().Msgf("TCP write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
+	}
+	return n, err
+}
+
 func (c *TCPConnection) WriteMsg(msg sip.Message) error {
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
-	msg.StringWrite(buf)
-	data := buf.Bytes()
-
-	n, err := c.Write(data)
-	if err != nil {
-		return fmt.Errorf("conn %s write err=%w", c, err)
-	}
-
-	if n == 0 {
-		return fmt.Errorf("wrote 0 bytes")
-	}
-
-	if n != len(data) {
-		return fmt.Errorf("fail to write full message")
-	}
-	return nil
-}
-
-type TCPRealConnection struct {
-	*net.TCPConn
-}
-
-func (c *TCPRealConnection) WriteMsg(msg sip.Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()

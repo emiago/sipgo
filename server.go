@@ -283,6 +283,8 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 }
 
 // ServeMessage can be used as middleware for preprocessing message
+// It process all received requests and all received responses.
+// NOTE: It does not serve any client request or server responses.
 func (srv *Server) ServeMessage(f func(m sip.Message)) {
 	srv.tp.OnMessage(f)
 }

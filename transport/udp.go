@@ -47,6 +47,7 @@ var bufPool = sync.Pool{
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
+	addr        string
 	listener    net.PacketConn
 	listenerUDP *net.UDPConn // TODO consider removing this. There is maybe none benefit if we use if instead interface
 	parser      parser.SIPParser
@@ -56,8 +57,9 @@ type UDPTransport struct {
 	log zerolog.Logger
 }
 
-func NewUDPTransport(par parser.SIPParser) *UDPTransport {
+func NewUDPTransport(addr string, par parser.SIPParser) *UDPTransport {
 	p := &UDPTransport{
+		addr:   addr,
 		parser: par,
 	}
 	p.log = log.Logger.With().Str("caller", "transport<UDP>").Logger()
@@ -66,6 +68,10 @@ func NewUDPTransport(par parser.SIPParser) *UDPTransport {
 
 func (t *UDPTransport) String() string {
 	return "transport<UDP>"
+}
+
+func (t *UDPTransport) Addr() string {
+	return t.addr
 }
 
 func (t *UDPTransport) Network() string {
@@ -95,8 +101,9 @@ func (t *UDPTransport) Close() error {
 
 // TODO
 // This is more generic way to provide listener and it is blocking
-func (t *UDPTransport) Serve(addr string, handler sip.MessageHandler) error {
+func (t *UDPTransport) Serve(handler sip.MessageHandler) error {
 	// resolve local UDP endpoint
+	addr := t.addr
 	laddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -159,16 +166,23 @@ func (t *UDPTransport) WriteMsg(msg sip.Message, raddr net.Addr) error {
 	msg.StringWrite(buf)
 
 	data := buf.Bytes()
+	len := len(data)
 	var err error
+	var n int
 
 	if t.listenerUDP != nil {
-		_, err = t.listenerUDP.WriteTo(data, raddr)
+		n, err = t.listenerUDP.WriteTo(data, raddr)
 	} else {
-		_, err = t.listener.WriteTo(data, raddr)
+		n, err = t.listener.WriteTo(data, raddr)
 	}
 
 	if err != nil {
 		return fmt.Errorf("%s write err=%w", t, err)
+	}
+
+	if n < len {
+		// We should disconect when this happens. Could lead unknown state
+		return fmt.Errorf("partial write. n=%d", n)
 	}
 
 	return nil

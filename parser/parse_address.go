@@ -26,6 +26,11 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 			}
 			endQuote = i
 		case '<':
+			if uriStart > 0 {
+				// This must be additional options parsing
+				continue
+			}
+
 			if endQuote > 0 {
 				displayName = addressText[startQuote+1 : endQuote]
 				startQuote, endQuote = -1, -1
