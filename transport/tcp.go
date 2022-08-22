@@ -2,8 +2,11 @@ package transport
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"net"
+	"sync"
 
 	"github.com/emiraganov/sipgo/parser"
 	"github.com/emiraganov/sipgo/sip"
@@ -101,29 +104,13 @@ func (t *TCPTransport) Accept() error {
 			t.log.Error().Err(err).Msg("Fail to accept conenction")
 			return err
 		}
-		raddr := conn.RemoteAddr().String()
-		t.log.Debug().Str("raddr", raddr).Msg("New TCP connection")
 
-		// Add connection to pool
-		c := &TCPConnection{conn}
-		t.pool.Add(raddr, c)
-		go t.readConnection(c, raddr)
+		t.initConnection(conn, conn.RemoteAddr().String())
 	}
 }
 
 func (t *TCPTransport) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveTCPAddr("tcp", addr)
-}
-
-func (t *TCPTransport) WriteMsg(msg sip.Message, raddr net.Addr) (err error) {
-	rip := raddr.String()
-	c, err := t.GetConnection(rip)
-	if err != nil {
-		return err
-	}
-	t.log.Debug().Str("raddr", rip).Str("data", msg.StartLine()).Msg("new write")
-	err = c.WriteMsg(msg)
-	return err
 }
 
 func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
@@ -154,13 +141,22 @@ func (t *TCPTransport) createConnection(raddr *net.TCPAddr) (Connection, error) 
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
+	c := t.initConnection(conn, addr)
+	return c, nil
+}
+
+func (t *TCPTransport) initConnection(conn net.Conn, addr string) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
-	c := &TCPConnection{conn}
+	t.log.Debug().Str("raddr", addr).Msg("New TCP connection")
+	c := &TCPConnection{
+		Conn:     conn,
+		refcount: 1,
+	}
 	t.pool.Add(addr, c)
 	go t.readConnection(c, addr)
-	return c, nil
+	return c
 }
 
 // This should performe better to avoid any interface allocation
@@ -174,7 +170,9 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
 		num, err := conn.Read(buf)
 
 		if err != nil {
-			t.log.Error().Err(err)
+			if !errors.Is(err, io.EOF) {
+				t.log.Error().Err(err).Msg("Got TCP error")
+			}
 			return
 		}
 
@@ -211,6 +209,31 @@ func (t *TCPTransport) parse(data []byte, src string) {
 
 type TCPConnection struct {
 	net.Conn
+
+	mu       sync.RWMutex
+	refcount int
+}
+
+func (c *TCPConnection) Ref(i int) {
+	c.mu.Lock()
+	c.refcount += i
+	ref := c.refcount
+	c.mu.Unlock()
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference increment")
+
+}
+
+func (c *TCPConnection) Close() error {
+	c.mu.Lock()
+	c.refcount--
+	ref := c.refcount
+	c.mu.Unlock()
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("TCP reference decrement")
+	if ref > 0 {
+		return nil
+	}
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("TCP closing")
+	return c.Conn.Close()
 }
 
 func (c *TCPConnection) Read(b []byte) (n int, err error) {

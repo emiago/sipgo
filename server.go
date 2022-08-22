@@ -178,6 +178,7 @@ func (srv *Server) TransactionRequest(req *sip.Request) (sip.ClientTransaction, 
 		To consider
 		18.2.1 We could have to change network if message is to large for UDP
 	*/
+
 	return srv.tx.Request(req)
 }
 

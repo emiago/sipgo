@@ -154,6 +154,8 @@ func (tx *ClientTx) stateProceeding(s FsmInput) FsmInput {
 func (tx *ClientTx) stateCompleted(s FsmInput) FsmInput {
 	var spinfn FsmState
 	switch s {
+	case client_input_delete:
+		tx.fsmState, spinfn = tx.stateTerminated, tx.actDelete
 	case client_input_timer_d:
 		tx.fsmState, spinfn = tx.stateTerminated, tx.actDelete
 	default:
@@ -284,6 +286,7 @@ func (tx *ClientTx) actFinal() FsmInput {
 	tx.passUp()
 
 	tx.mu.Lock()
+	defer tx.mu.Unlock()
 
 	if tx.timer_a != nil {
 		tx.timer_a.Stop()
@@ -295,14 +298,14 @@ func (tx *ClientTx) actFinal() FsmInput {
 	}
 
 	// tx.Log().Tracef("timer_d set to %v", tx.timer_d_time)
+	if tx.timer_d_time > 0 {
+		tx.timer_d = time.AfterFunc(tx.timer_d_time, func() {
+			tx.spinFsm(client_input_timer_d)
+		})
+		return FsmInputNone
+	}
 
-	tx.timer_d = time.AfterFunc(tx.timer_d_time, func() {
-		tx.spinFsm(client_input_timer_d)
-	})
-
-	tx.mu.Unlock()
-
-	return FsmInputNone
+	return client_input_delete
 }
 
 func (tx *ClientTx) actCancel() FsmInput {

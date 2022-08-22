@@ -9,12 +9,20 @@ import (
 )
 
 type Connection interface {
+	// WriteMsg marshals message and sends to socket
 	WriteMsg(msg sip.Message) error
+	// Reference of connection can be increased/decreased to prevent closing to earlyss
+	Ref(i int)
+	// Close decreases reference and if ref = 0 closes connection
 	Close() error
 }
 
 type Conn struct {
 	net.Conn
+}
+
+func (c *Conn) Ref(i int) {
+	// Not used so far
 }
 
 func (c *Conn) String() string {

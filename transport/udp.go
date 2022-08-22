@@ -119,73 +119,30 @@ func (t *UDPTransport) Serve(handler sip.MessageHandler) error {
 
 // ServeConn is direct way to provide conn on which this worker will listen
 // UDPReadWorkers are used to create more workers
-func (t *UDPTransport) ServeConn(udpConn net.PacketConn, handler sip.MessageHandler) error {
+func (t *UDPTransport) ServeConn(conn net.PacketConn, handler sip.MessageHandler) error {
 	if t.listener != nil {
 		return fmt.Errorf("UDP transport instance can only listen on one connection")
 	}
 
-	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), udpConn.LocalAddr().String())
-	t.listener = udpConn
+	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), conn.LocalAddr().String())
+	t.listener = conn
 
 	t.handler = handler
 	/*
 		Multiple readers makes problem, which can delay writing response
 	*/
 
-	switch c := udpConn.(type) {
-	case *net.UDPConn:
-		t.listenerUDP = c
-		t.conn = &UDPRealConnection{c}
-
-		// Avoid interface usage, use directly connection
-		for i := 0; i < UDPReadWorkers-1; i++ {
-			go t.readUDPConn(c)
-		}
-		t.readUDPConn(c)
-	default:
-		t.conn = &UDPConnection{c}
-		for i := 0; i < UDPReadWorkers-1; i++ {
-			go t.readConnection(udpConn)
-		}
-		t.readConnection(udpConn)
+	t.conn = &UDPConnection{conn}
+	for i := 0; i < UDPReadWorkers-1; i++ {
+		go t.readConnection(conn)
 	}
+	t.readConnection(conn)
 
 	return nil
 }
 
 func (t *UDPTransport) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveUDPAddr("udp", addr)
-}
-
-func (t *UDPTransport) WriteMsg(msg sip.Message, raddr net.Addr) error {
-	// Using sync pool to remove allocation pressure
-	// NOTE: Buffer pool is better than stringer pool. Makes less allocs, avoids conversion
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
-	msg.StringWrite(buf)
-
-	data := buf.Bytes()
-	len := len(data)
-	var err error
-	var n int
-
-	if t.listenerUDP != nil {
-		n, err = t.listenerUDP.WriteTo(data, raddr)
-	} else {
-		n, err = t.listener.WriteTo(data, raddr)
-	}
-
-	if err != nil {
-		return fmt.Errorf("%s write err=%w", t, err)
-	}
-
-	if n < len {
-		// We should disconect when this happens. Could lead unknown state
-		return fmt.Errorf("partial write. n=%d", n)
-	}
-
-	return nil
 }
 
 // GetConnection will return same listener connection
@@ -263,6 +220,10 @@ type UDPConnection struct {
 	net.PacketConn
 }
 
+func (c *UDPConnection) Ref(i int) {
+	// For now all udp connections must be reused
+}
+
 func (c *UDPConnection) Close() error {
 	//Do not allow closing UDP
 	return nil
@@ -284,43 +245,6 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 	n, err := c.WriteTo(data, raddr)
 	if err != nil {
 		return fmt.Errorf("conn %s write err=%w", c, err)
-	}
-
-	if n == 0 {
-		return fmt.Errorf("wrote 0 bytes")
-	}
-
-	if n != len(data) {
-		return fmt.Errorf("fail to write full message")
-	}
-	return nil
-}
-
-type UDPRealConnection struct {
-	*net.UDPConn
-}
-
-func (c *UDPRealConnection) Close() error {
-	//Do not allow closing UDP
-	return nil
-}
-
-func (c *UDPRealConnection) WriteMsg(msg sip.Message) error {
-	dst := msg.Destination()
-	raddr, err := net.ResolveUDPAddr("udp", dst)
-	if err != nil {
-		return err
-	}
-
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
-	msg.StringWrite(buf)
-	data := buf.Bytes()
-
-	n, err := c.WriteToUDP(data, raddr)
-	if err != nil {
-		return fmt.Errorf("conn %s write err=%w", c.LocalAddr().String(), err)
 	}
 
 	if n == 0 {

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -44,7 +45,7 @@ func main() {
 
 	if *debflag {
 		log.Logger = log.Logger.Level(zerolog.DebugLevel)
-		transport.SIPDebug = true
+		// transport.SIPDebug = true
 	}
 
 	log.Info().Int("cpus", runtime.NumCPU()).Msg("Runtime")
@@ -114,9 +115,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			reply(tx, req, 404, "Not found")
 			return
 		}
+		// NOTE: Send Trying here
 
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
+
 		clTx, err := srv.TransactionRequest(req)
 		if err != nil {
 			log.Error().Err(err).Msg("RequestWithContext  failed")
@@ -126,6 +129,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		defer clTx.Terminate()
 
 		// Keep monitoring transactions, and proxy client responses to server transaction
+		log.Debug().Str("req", req.Method().String()).Msg("Starting transaction")
 		for {
 			select {
 
@@ -165,37 +169,46 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				return
 
 			case <-tx.Done():
-				log.Debug().Msg("Transaction done")
+				log.Debug().Str("req", req.Method().String()).Msg("Transaction done")
 				return
 			}
 		}
 	}
 
+	// Handle Server requests and Client responses
 	srv.ServeMessage(func(m sip.Message) {
 		//This runs for every message
 		// if log.Logger.GetLevel() == zerolog.DebugLevel {
 		// 	log.Debug().Msgf("New message\n%s", m.String())
 		// }
 
-		/* switch r := m.(type) {
+		switch r := m.(type) {
+
 		case *sip.Request:
 			// We handle here only INVITE and BYE
-			// if via, exists := r.Via(); exists && via.Host != host {
-			// 	newvia := via.Clone()
-			// 	newvia.Host = host
-			// 	newvia.Port = port
-			// 	m.PrependHeader(newvia)
-			// }
+			// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
+			if via, exists := r.Via(); exists {
+				newvia := via.Clone()
+				newvia.Host = host
+				newvia.Port = port
+				m.PrependHeader(newvia)
+
+				if via.Params.Has("rport") {
+					h, p, _ := net.SplitHostPort(r.Source())
+					via.Params.Add("rport", p)
+					via.Params.Add("received", h)
+				}
+			}
 
 		case *sip.Response:
 			// This makes no sense anymore
-			// if via, exists := r.Via(); exists {
-			// 	if via.Host != host {
-			// 		r.RemoveHeader("Via")
-			// 	}
-			// }
+			if via, exists := r.Via(); exists {
+				if via.Host == host && via.Port == port {
+					r.RemoveHeader("Via")
+				}
+			}
 
-		} */
+		}
 
 		if h := m.GetHeader("Record-Route"); h == nil {
 			// Transport must be provided as well
@@ -206,6 +219,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 					Port: port,
 					UriParams: sip.HeaderParams{
 						"transport": transport.NetworkToLower(m.Transport()),
+						"lr":        "",
 					},
 				},
 			}

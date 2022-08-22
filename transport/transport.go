@@ -23,7 +23,6 @@ type Transport interface {
 	Addr() string
 	Network() string
 	Serve(handler sip.MessageHandler) error
-	WriteMsg(msg sip.Message, raddr net.Addr) error
 	ResolveAddr(addr string) (net.Addr, error)
 	GetConnection(addr string) (Connection, error)
 	CreateConnection(addr string) (Connection, error)

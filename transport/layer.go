@@ -154,17 +154,17 @@ func (l *Layer) WriteMsg(msg sip.Message) error {
 
 func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	/*s
-		// Client sending request, or we are sending responses
-		To consider
-			18.2.1
-			When the server transport receives a request over any transport, it
-			MUST examine the value of the "sent-by" parameter in the top Via
-			header field value.
-			If the host portion of the "sent-by" parameter
-		contains a domain name, or if it contains an IP address that differs
-		from the packet source address, the server MUST add a "received"
-		parameter to that Via header field value.  This parameter MUST
-		contain the source address from which the packet was received.
+	// Client sending request, or we are sending responses
+	To consider
+		18.2.1
+		When the server transport receives a request over any transport, it
+		MUST examine the value of the "sent-by" parameter in the top Via
+		header field value.
+		If the host portion of the "sent-by" parameter
+	contains a domain name, or if it contains an IP address that differs
+	from the packet source address, the server MUST add a "received"
+	parameter to that Via header field value.  This parameter MUST
+	contain the source address from which the packet was received.
 	*/
 
 	var conn Connection
@@ -185,6 +185,8 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		if err != nil {
 			return err
 		}
+
+		// Reference counting should prevent us closing connection too early
 		defer conn.Close()
 
 		// RFC 3261 - 18.2.2.
@@ -237,20 +239,6 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		}
 	}
 
-	if l.ConnectionReuse {
-		c, err = l.getConnection(network, addr)
-		if c == nil {
-			c, err = l.createConnection(network, addr)
-		}
-	} else {
-		c, err = l.createConnection(network, addr)
-
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
 	viaHop, exists := req.Via()
 	if !exists {
 		return nil, fmt.Errorf("missing Via Header")
@@ -268,9 +256,17 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 
 	if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
+		c, _ = l.getConnection(network, addr)
+		if c != nil {
+			//Increase reference. This should prevent client connection early drop
+			l.log.Debug().Str("req", req.Method().String()).Msg("Connection ref increment")
+			c.Ref(1)
+			return c, nil
+		}
 	}
 
-	return c, nil
+	c, err = l.createConnection(network, addr)
+	return c, err
 }
 
 // GetConnection gets existing or creates new connection based on addr
@@ -294,6 +290,7 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 	if err == nil && c == nil {
 		return nil, fmt.Errorf("connection does not exist")
 	}
+
 	return c, err
 }
 
