@@ -54,8 +54,10 @@ func (txl *Layer) defaultUnhandledRespHandler(res *sip.Response) {
 func (txl *Layer) handleMessage(msg sip.Message) {
 	switch msg := msg.(type) {
 	case *sip.Request:
+		// TODO Consider making goroutine here already?
 		txl.handleRequest(msg)
 	case *sip.Response:
+		// TODO Consider making goroutine here already?
 		txl.handleResponse(msg)
 	default:
 		txl.log.Error().Msg("unsupported message, skip it")

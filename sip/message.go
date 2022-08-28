@@ -78,7 +78,14 @@ type Message interface {
 	To() (*ToHeader, bool)
 	// CSeq returns 'CSeq' header field.
 	CSeq() (*CSeq, bool)
+	// ContentLength returns 'Content-Length' header field.
 	ContentLength() (*ContentLength, bool)
+	// ContentType returns 'Content-Type' header field.
+	ContentType() (*ContentType, bool)
+	// Route returns 'Route' header field.
+	Route() (*RouteHeader, bool)
+	// RecordRoute returns 'Record-Route' header field.
+	RecordRoute() (*RecordRouteHeader, bool)
 
 	// Body returns message body.
 	Body() []byte

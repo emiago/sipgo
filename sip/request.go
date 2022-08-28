@@ -251,10 +251,22 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 
 	maxForwardsHeader := MaxForwards(70)
 	ackRequest.AppendHeader(&maxForwardsHeader)
-	CopyHeaders("From", inviteRequest, ackRequest)
-	CopyHeaders("To", inviteResponse, ackRequest)
-	CopyHeaders("Call-ID", inviteRequest, ackRequest)
-	CopyHeaders("CSeq", inviteRequest, ackRequest)
+	if h, _ := inviteRequest.From(); h != nil {
+		ackRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteResponse.To(); h != nil {
+		ackRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteRequest.CallID(); h != nil {
+		ackRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteRequest.CSeq(); h != nil {
+		ackRequest.AppendHeader(h.headerClone())
+	}
+
 	cseq, _ := ackRequest.CSeq()
 	cseq.MethodName = ACK
 
@@ -278,10 +290,19 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	CopyHeaders("Route", requestForCancel, cancelReq)
 	maxForwardsHeader := MaxForwards(70)
 	cancelReq.AppendHeader(&maxForwardsHeader)
-	CopyHeaders("From", requestForCancel, cancelReq)
-	CopyHeaders("To", requestForCancel, cancelReq)
-	CopyHeaders("Call-ID", requestForCancel, cancelReq)
-	CopyHeaders("CSeq", requestForCancel, cancelReq)
+
+	if h, _ := requestForCancel.From(); h != nil {
+		cancelReq.AppendHeader(h.headerClone())
+	}
+	if h, _ := requestForCancel.To(); h != nil {
+		cancelReq.AppendHeader(h.headerClone())
+	}
+	if h, _ := requestForCancel.CallID(); h != nil {
+		cancelReq.AppendHeader(h.headerClone())
+	}
+	if h, _ := requestForCancel.CSeq(); h != nil {
+		cancelReq.AppendHeader(h.headerClone())
+	}
 	cseq, _ := cancelReq.CSeq()
 	cseq.MethodName = CANCEL
 

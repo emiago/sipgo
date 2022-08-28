@@ -232,10 +232,21 @@ func NewResponseFromRequest(
 	)
 	CopyHeaders("Record-Route", req, res)
 	CopyHeaders("Via", req, res)
-	CopyHeaders("From", req, res)
-	CopyHeaders("To", req, res)
-	CopyHeaders("Call-ID", req, res)
-	CopyHeaders("CSeq", req, res)
+	if h, _ := req.From(); h != nil {
+		res.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := req.To(); h != nil {
+		res.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := req.CallID(); h != nil {
+		res.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := req.CSeq(); h != nil {
+		res.AppendHeader(h.headerClone())
+	}
 
 	if statusCode == 100 {
 		CopyHeaders("Timestamp", req, res)

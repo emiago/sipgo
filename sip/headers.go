@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const ()
+
 // Header is a single SIP header.
 type Header interface {
 	// Name returns header name.
@@ -41,6 +43,8 @@ type headers struct {
 	cseq          *CSeq
 	contentLength *ContentLength
 	contentType   *ContentType
+	route         *RouteHeader
+	recordRoute   *RecordRouteHeader
 }
 
 func (hs *headers) String() string {
@@ -69,9 +73,7 @@ func (hs *headers) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString("\r\n")
 }
 
-// Add the given header.
-func (hs *headers) AppendHeader(header Header) {
-	hs.headerOrder = append(hs.headerOrder, header)
+func (hs *headers) setHeaderRef(header Header) {
 	switch m := header.(type) {
 	case *ViaHeader:
 		hs.via = m
@@ -85,11 +87,22 @@ func (hs *headers) AppendHeader(header Header) {
 		hs.cseq = m
 	case *ContactHeader:
 		hs.contact = m
+	case *RouteHeader:
+		hs.route = m
+	case *RecordRouteHeader:
+		hs.recordRoute = m
 	case *ContentLength:
 		hs.contentLength = m
 	case *ContentType:
 		hs.contentType = m
+
 	}
+}
+
+// Add the given header.
+func (hs *headers) AppendHeader(header Header) {
+	hs.headerOrder = append(hs.headerOrder, header)
+	hs.setHeaderRef(header)
 
 	// name := HeaderToLower(header.Name())
 	// hs.appendHeader(name, header)
@@ -131,6 +144,7 @@ func (hs *headers) PrependHeader(headers ...Header) {
 	newOrder := make([]Header, len(hs.headerOrder)+offset)
 	for i, h := range headers {
 		newOrder[i] = h
+		hs.setHeaderRef(h)
 	}
 	for i, h := range hs.headerOrder {
 		newOrder[i+offset] = h
@@ -142,6 +156,7 @@ func (hs *headers) ReplaceHeader(header Header) {
 	for i, h := range hs.headerOrder {
 		if h.Name() == header.Name() {
 			hs.headerOrder[i] = h
+			hs.setHeaderRef(h)
 			break
 		}
 	}
@@ -169,6 +184,8 @@ func (hs *headers) GetHeaders(name string) []Header {
 }
 
 // Return Header if exists, otherwise nil is returned
+// Use lower case to avoid allocs
+// Headers are pointers, always Clone them for change
 func (hs *headers) GetHeader(name string) Header {
 	name = HeaderToLower(name)
 	return hs.getHeader(name)
@@ -239,6 +256,14 @@ func (hs *headers) ContentType() (*ContentType, bool) {
 
 func (hs *headers) Contact() (*ContactHeader, bool) {
 	return hs.contact, hs.contact != nil
+}
+
+func (hs *headers) Route() (*RouteHeader, bool) {
+	return hs.route, hs.route != nil
+}
+
+func (hs *headers) RecordRoute() (*RecordRouteHeader, bool) {
+	return hs.recordRoute, hs.recordRoute != nil
 }
 
 // Encapsulates a header that gossip does not natively support.
@@ -767,6 +792,12 @@ func (h *ViaHeader) cloneFirst() *ViaHeader {
 	return newHop
 }
 
+func (h *ViaHeader) Remove() {
+	r := h.Next
+	h.Next = nil //Let garbage collect
+	h = r
+}
+
 type ContentType string
 
 func (h *ContentType) String() string {
@@ -911,10 +942,3 @@ func CopyHeaders(name string, from, to Message) {
 		to.AppendHeader(h.headerClone())
 	}
 }
-
-// func PrependCopyHeaders(name string, from, to Message) {
-// 	name = HeaderToLower(name)
-// 	for _, h := range from.GetHeaders(name) {
-// 		to.PrependHeader(h.Clone())
-// 	}
-// }

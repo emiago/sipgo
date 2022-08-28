@@ -83,6 +83,8 @@ func HeaderToLower(s string) string {
 		return "cseq"
 	case "Content-Type", "content-type":
 		return "content-type"
+	case "Route", "route":
+		return "route"
 	case "Record-Route", "record-route":
 		return "record-route"
 	case "Timestamp", "timestamp":

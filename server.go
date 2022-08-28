@@ -31,6 +31,9 @@ type Server struct {
 	serveMessage func(m sip.Message)
 
 	log zerolog.Logger
+
+	requestCallback  func(r *sip.Request)
+	responseCallback func(r *sip.Response)
 }
 
 type ServerOption func(s *Server) error
@@ -113,11 +116,6 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-// onRequest gets request from Transaction layer
-func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
-	go srv.handleRequest(req, tx)
-}
-
 // Listen adds listener for serve
 func (srv *Server) Listen(network string, addr string) {
 	srv.listeners[addr] = network
@@ -140,8 +138,17 @@ func (srv *Server) ServeWithContext(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// onRequest gets request from Transaction layer
+func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
+	go srv.handleRequest(req, tx)
+}
+
 // handleRequest must be run in seperate goroutine
 func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
+	if srv.requestCallback != nil {
+		srv.requestCallback(req)
+	}
+
 	handler := srv.getHandler(req.Method())
 
 	if handler == nil {
@@ -178,7 +185,6 @@ func (srv *Server) TransactionRequest(req *sip.Request) (sip.ClientTransaction, 
 		To consider
 		18.2.1 We could have to change network if message is to large for UDP
 	*/
-
 	return srv.tx.Request(req)
 }
 
@@ -283,11 +289,32 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 	return handler
 }
 
-// ServeMessage can be used as middleware for preprocessing message
+// ServeRequest can be used as middleware for preprocessing message
 // It process all received requests and all received responses.
-// NOTE: It does not serve any client request or server responses.
-func (srv *Server) ServeMessage(f func(m sip.Message)) {
-	srv.tp.OnMessage(f)
+// NOTE: It can only be called once
+func (srv *Server) ServeRequest(f func(r *sip.Request)) {
+	if srv.requestCallback != nil {
+		panic("request callback can only be assigned once")
+	}
+	srv.requestCallback = f
+}
+
+// TODO can this handled better?
+func (srv *Server) ServeResponse(f func(m *sip.Response)) {
+	if srv.responseCallback != nil {
+		panic("response callback can only be assigned once")
+	}
+	srv.responseCallback = f
+	srv.tp.OnMessage(srv.onTransportMessage)
+}
+
+func (srv *Server) onTransportMessage(m sip.Message) {
+	//Register transport middleware
+	// this avoids allocations and it forces devs to avoid sip.Message usage
+	switch r := m.(type) {
+	case *sip.Response:
+		srv.responseCallback(r)
+	}
 }
 
 // Transport is function to get transport layer of server

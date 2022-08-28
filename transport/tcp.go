@@ -263,7 +263,7 @@ func (c *TCPConnection) WriteMsg(msg sip.Message) error {
 
 	n, err := c.Write(data)
 	if err != nil {
-		return fmt.Errorf("conn %s write err=%w", c, err)
+		return fmt.Errorf("conn %s write err=%w", c.RemoteAddr().String(), err)
 	}
 
 	if n == 0 {

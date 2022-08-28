@@ -175,57 +175,52 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		}
 	}
 
-	// Handle Server requests and Client responses
-	srv.ServeMessage(func(m sip.Message) {
-		//This runs for every message
-		// if log.Logger.GetLevel() == zerolog.DebugLevel {
-		// 	log.Debug().Msgf("New message\n%s", m.String())
-		// }
+	// Handle Server requests
+	srv.ServeRequest(func(r *sip.Request) {
+		// We handle here only INVITE and BYE
+		// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
+		if via, exists := r.Via(); exists {
+			newvia := via.Clone()
+			newvia.Host = host
+			newvia.Port = port
+			r.PrependHeader(newvia)
 
-		switch r := m.(type) {
-
-		case *sip.Request:
-			// We handle here only INVITE and BYE
-			// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
-			if via, exists := r.Via(); exists {
-				newvia := via.Clone()
-				newvia.Host = host
-				newvia.Port = port
-				m.PrependHeader(newvia)
-
-				if via.Params.Has("rport") {
-					h, p, _ := net.SplitHostPort(r.Source())
-					via.Params.Add("rport", p)
-					via.Params.Add("received", h)
-				}
+			if via.Params.Has("rport") {
+				h, p, _ := net.SplitHostPort(r.Source())
+				via.Params.Add("rport", p)
+				via.Params.Add("received", h)
 			}
+		}
 
-		case *sip.Response:
-			// This makes no sense anymore
-			if via, exists := r.Via(); exists {
-				if via.Host == host && via.Port == port {
+		rr := &sip.RecordRouteHeader{
+			Address: sip.Uri{
+				Host: host,
+				Port: port,
+				UriParams: sip.HeaderParams{
+					// Transport must be provided as well
+					// https://datatracker.ietf.org/doc/html/rfc5658
+					"transport": transport.NetworkToLower(r.Transport()),
+					"lr":        "",
+				},
+			},
+		}
+
+		r.PrependHeader(rr)
+
+	})
+
+	// Handle any client responses. NOTE this may change in API
+	srv.ServeResponse(func(r *sip.Response) {
+		// This makes no sense anymore
+		if via, exists := r.Via(); exists {
+			if via.Host == host && via.Port == port {
+				// In case it is multipart Via remove only one
+				if via.Next != nil {
+					via.Remove()
+				} else {
 					r.RemoveHeader("Via")
 				}
 			}
-
-		}
-
-		if h := m.GetHeader("Record-Route"); h == nil {
-			// Transport must be provided as well
-			// https://datatracker.ietf.org/doc/html/rfc5658
-			rr := &sip.RecordRouteHeader{
-				Address: sip.Uri{
-					Host: host,
-					Port: port,
-					UriParams: sip.HeaderParams{
-						"transport": transport.NetworkToLower(m.Transport()),
-						"lr":        "",
-					},
-				},
-			}
-
-			m.PrependHeader(rr)
-			// m.AppendHeaderAfter(rr, "Via")
 		}
 	})
 

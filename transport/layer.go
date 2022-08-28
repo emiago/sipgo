@@ -27,7 +27,7 @@ type Layer struct {
 	listenPorts map[string][]int
 	dnsResolver *net.Resolver
 
-	handler sip.MessageHandler
+	handlers []sip.MessageHandler
 
 	cancelOnce sync.Once
 	log        zerolog.Logger
@@ -55,17 +55,19 @@ func NewLayer(
 
 // OnMessage is main function which will be called on any new message by transport layer
 func (l *Layer) OnMessage(h sip.MessageHandler) {
-	if l.handler != nil {
-		// Make sure appending
-		next := l.handler
-		l.handler = func(m sip.Message) {
-			h(m)
-			next(m)
-		}
-		return
-	}
+	// if l.handler != nil {
+	// 	// Make sure appending
+	// 	next := l.handler
+	// 	l.handler = func(m sip.Message) {
+	// 		h(m)
+	// 		next(m)
+	// 	}
+	// 	return
+	// }
 
-	l.handler = h
+	// l.handler = h
+
+	l.handlers = append(l.handlers, h)
 }
 
 // handleMessage is transport layer for handling messages
@@ -76,7 +78,10 @@ func (l *Layer) handleMessage(msg sip.Message) {
 
 	// 18.1.2 Receiving Responses
 	// States that transport should find transaction and if not, it should still forward message to core
-	l.handler(msg)
+	// l.handler(msg)
+	for _, h := range l.handlers {
+		h(msg)
+	}
 }
 
 // ServeUDP will listen on udp connection
