@@ -3,9 +3,7 @@
 Library for writing fast SIP servers in GO language.  
 It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)) optimized for fast parsing.
 
-This project was based on [gosip](https://github.com/ghettovoice/gosip) by project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
-This unfortunately required many design changes, therefore this libraries are not compatible.
-
+### NOTE: PROJECT IS IN DEV, API CAN CHANGE
 ## Examples
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
@@ -26,6 +24,7 @@ srv.OnBye(byeHandler)
 
 // Add listeners
 srv.Listen("udp", "127.0.0.1:5060")
+srv.Listen("tcp", "127.0.0.1:5061")
 ...
 // Start serving
 srv.Serve()
@@ -34,14 +33,16 @@ srv.Serve()
 **TODO** more docs  
 ...
 
-### NOTE: PROJECT IS EXPERIMENTAL, API CAN CHANGE
 
 
+## Credits
 
+This project was based on [gosip](https://github.com/ghettovoice/gosip) by project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
+This unfortunately required many design changes, therefore this libraries are not compatible.
 ## Supported protocols
 
 - [x] UDP
-- [ ] TCP
+- [x] TCP
 - [ ] TLS
 - [ ] WSS
 
