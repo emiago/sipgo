@@ -157,6 +157,7 @@ func (t *UDPTransport) CreateConnection(addr string) (Connection, error) {
 
 func (t *UDPTransport) readConnection(conn net.PacketConn) {
 	buf := make([]byte, UDPbufferSize)
+	defer conn.Close()
 	for {
 		num, raddr, err := conn.ReadFrom(buf)
 
@@ -177,6 +178,7 @@ func (t *UDPTransport) readConnection(conn net.PacketConn) {
 // This should performe better to avoid any interface allocation
 func (t *UDPTransport) readUDPConn(conn *net.UDPConn) {
 	buf := make([]byte, UDPbufferSize)
+	defer conn.Close()
 	for {
 		//ReadFromUDP should make one less allocation
 		num, raddr, err := conn.ReadFromUDP(buf)

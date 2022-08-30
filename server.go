@@ -3,6 +3,7 @@ package sipgo
 import (
 	"context"
 	"net"
+	"strings"
 
 	"github.com/emiraganov/sipgo/sip"
 	"github.com/emiraganov/sipgo/transaction"
@@ -20,6 +21,8 @@ type Server struct {
 	tp          *transport.Layer
 	tx          *transaction.Layer
 	ip          net.IP
+	host        string
+	port        int
 	dnsResolver *net.Resolver
 	userAgent   string
 
@@ -34,6 +37,10 @@ type Server struct {
 
 	requestCallback  func(r *sip.Request)
 	responseCallback func(r *sip.Response)
+
+	// Default server behavior for sending request in preflight
+	AddViaHeader   bool
+	AddRecordRoute bool
 }
 
 type ServerOption func(s *Server) error
@@ -55,8 +62,7 @@ func WithIP(ip string) ServerOption {
 		if err != nil {
 			return err
 		}
-		s.ip = addr.IP
-		return nil
+		return s.setIP(addr.IP)
 	}
 }
 
@@ -95,6 +101,8 @@ func NewServer(options ...ServerOption) (*Server, error) {
 		requestHandlers: make(map[sip.RequestMethod]RequestHandler),
 		listeners:       make(map[string]string),
 		log:             log.Logger.With().Str("caller", "Server").Logger(),
+		AddViaHeader:    true,
+		AddRecordRoute:  true,
 	}
 	for _, o := range options {
 		if err := o(s); err != nil {
@@ -107,13 +115,22 @@ func NewServer(options ...ServerOption) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.ip = v
+		if err := s.setIP(v); err != nil {
+			return nil, err
+		}
 	}
 
 	s.tp = transport.NewLayer(s.dnsResolver)
 	s.tx = transaction.NewLayer(s.tp, s.onRequest)
 
 	return s, nil
+}
+
+// Listen adds listener for serve
+func (srv *Server) setIP(ip net.IP) (err error) {
+	srv.ip = ip
+	srv.host = strings.Split(ip.String(), ":")[0]
+	return err
 }
 
 // Listen adds listener for serve
@@ -154,7 +171,7 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	if handler == nil {
 		srv.log.Warn().Msg("SIP request handler not found")
 		res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
-		if err := srv.Send(res); err != nil {
+		if err := srv.WriteResponse(res); err != nil {
 			srv.log.Error().Msgf("respond '405 Method Not Allowed' failed: %s", err)
 		}
 
@@ -185,17 +202,83 @@ func (srv *Server) TransactionRequest(req *sip.Request) (sip.ClientTransaction, 
 		To consider
 		18.2.1 We could have to change network if message is to large for UDP
 	*/
+	srv.updateRequest(req)
 	return srv.tx.Request(req)
 }
 
-// TransactionReply sends
-func (srv *Server) TransactionReply(res *sip.Response) (sip.ServerTransaction, error) {
-	return srv.tx.Respond(res)
+// TransactionReply is wrapper for calling tx.Respond
+// it handles removing Via header by default
+func (srv *Server) TransactionReply(tx sip.ServerTransaction, res *sip.Response) error {
+	srv.updateResponse(res)
+	return tx.Respond(res)
 }
 
-// Send will proxy message to transport layer. Use it in stateless mode
-func (srv *Server) Send(msg sip.Message) error {
-	return srv.tp.WriteMsg(msg)
+// WriteRequest will proxy message to transport layer. Use it in stateless mode
+func (srv *Server) WriteRequest(r *sip.Request) error {
+	srv.updateRequest(r)
+	return srv.tp.WriteMsg(r)
+}
+
+// WriteResponse will proxy message to transport layer. Use it in stateless mode
+func (srv *Server) WriteResponse(r *sip.Response) error {
+	return srv.tp.WriteMsg(r)
+}
+
+func (srv *Server) updateRequest(r *sip.Request) {
+	// We handle here only INVITE and BYE
+	// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
+	if srv.AddViaHeader {
+		if via, exists := r.Via(); exists {
+			newvia := via.Clone()
+			newvia.Host = srv.host
+			newvia.Port = srv.port
+			r.PrependHeader(newvia)
+
+			if via.Params.Has("rport") {
+				h, p, _ := net.SplitHostPort(r.Source())
+				via.Params.Add("rport", p)
+				via.Params.Add("received", h)
+			}
+		}
+	}
+
+	if srv.AddRecordRoute {
+		rr := &sip.RecordRouteHeader{
+			Address: sip.Uri{
+				Host: srv.host,
+				Port: srv.port,
+				UriParams: sip.HeaderParams{
+					// Transport must be provided as well
+					// https://datatracker.ietf.org/doc/html/rfc5658
+					"transport": transport.NetworkToLower(r.Transport()),
+					"lr":        "",
+				},
+			},
+		}
+
+		r.PrependHeader(rr)
+	}
+
+}
+
+func (srv *Server) updateResponse(r *sip.Response) {
+	if srv.AddViaHeader {
+		srv.RemoveVia(r)
+	}
+}
+
+// RemoveVia can be used in case of sending response.
+func (srv *Server) RemoveVia(r *sip.Response) {
+	if via, exists := r.Via(); exists {
+		if via.Host == srv.host {
+			// In case it is multipart Via remove only one
+			if via.Next != nil {
+				via.Remove()
+			} else {
+				r.RemoveHeader("Via")
+			}
+		}
+	}
 }
 
 // Shutdown gracefully shutdowns SIP server

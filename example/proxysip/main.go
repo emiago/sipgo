@@ -3,14 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
 	"strconv"
 
 	"github.com/emiraganov/sipgo/sip"
-	"github.com/emiraganov/sipgo/transport"
 
 	_ "net/http/pprof"
 
@@ -119,7 +117,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
-
 		clTx, err := srv.TransactionRequest(req)
 		if err != nil {
 			log.Error().Err(err).Msg("RequestWithContext  failed")
@@ -138,7 +135,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 					return
 				}
 				res.SetDestination(req.Source())
-				if err := tx.Respond(res); err != nil {
+				if err := srv.TransactionReply(tx, res); err != nil {
 					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 				}
 
@@ -152,7 +149,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				// Acks can not be send directly trough destination
 				log.Info().Str("m", m.StartLine()).Str("dst", dst).Msg("Proxing ACK")
 				m.SetDestination(dst)
-				srv.Send(m)
+				srv.WriteRequest(m)
 
 			case m := <-tx.Cancels():
 				// Send response imediatelly
@@ -174,55 +171,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			}
 		}
 	}
-
-	// Handle Server requests
-	srv.ServeRequest(func(r *sip.Request) {
-		// We handle here only INVITE and BYE
-		// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
-		if via, exists := r.Via(); exists {
-			newvia := via.Clone()
-			newvia.Host = host
-			newvia.Port = port
-			r.PrependHeader(newvia)
-
-			if via.Params.Has("rport") {
-				h, p, _ := net.SplitHostPort(r.Source())
-				via.Params.Add("rport", p)
-				via.Params.Add("received", h)
-			}
-		}
-
-		rr := &sip.RecordRouteHeader{
-			Address: sip.Uri{
-				Host: host,
-				Port: port,
-				UriParams: sip.HeaderParams{
-					// Transport must be provided as well
-					// https://datatracker.ietf.org/doc/html/rfc5658
-					"transport": transport.NetworkToLower(r.Transport()),
-					"lr":        "",
-				},
-			},
-		}
-
-		r.PrependHeader(rr)
-
-	})
-
-	// Handle any client responses. NOTE this may change in API
-	srv.ServeResponse(func(r *sip.Response) {
-		// This makes no sense anymore
-		if via, exists := r.Via(); exists {
-			if via.Host == host && via.Port == port {
-				// In case it is multipart Via remove only one
-				if via.Next != nil {
-					via.Remove()
-				} else {
-					r.RemoveHeader("Via")
-				}
-			}
-		}
-	})
 
 	var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		// https://www.rfc-editor.org/rfc/rfc3261#section-10.3
@@ -268,7 +216,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			dst = registry.Get(tohead.Address.User)
 		}
 		req.SetDestination(dst)
-		if err := srv.Send(req); err != nil {
+		if err := srv.WriteRequest(req); err != nil {
 			log.Error().Err(err).Msg("Send failed")
 			reply(tx, req, 500, "")
 		}
