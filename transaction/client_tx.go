@@ -293,5 +293,4 @@ func (tx *ClientTx) delete() {
 	}
 	tx.mu.Unlock()
 	tx.log.Debug().Str("tx", tx.Key()).Msg("Destroyed")
-
 }

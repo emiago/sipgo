@@ -281,4 +281,5 @@ func (tx *ServerTx) delete() {
 		tx.timer_1xx = nil
 	}
 	tx.mu.Unlock()
+	tx.log.Debug().Str("tx", tx.Key()).Msg("Destroyed")
 }

@@ -18,6 +18,7 @@ func (tx *ServerTx) inviteStateProcceeding(s FsmInput) FsmInput {
 	case server_input_user_1xx:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actRespond
 	case server_input_user_2xx:
+		// https://www.rfc-editor.org/rfc/rfc6026#section-7.1
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actRespondAccept
 	case server_input_user_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actRespondComplete
@@ -62,6 +63,7 @@ func (tx *ServerTx) inviteStateConfirmed(s FsmInput) FsmInput {
 }
 
 func (tx *ServerTx) inviteStateAccepted(s FsmInput) FsmInput {
+	// https://www.rfc-editor.org/rfc/rfc6026#section-7.1
 	var spinfn FsmState
 	switch s {
 	case server_input_ack:
