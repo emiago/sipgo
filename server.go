@@ -30,13 +30,10 @@ type Server struct {
 	requestHandlers map[sip.RequestMethod]RequestHandler
 	listeners       map[string]string //addr:network
 
-	//Serve request is middleware run before any request received
-	serveMessage func(m sip.Message)
-
 	log zerolog.Logger
 
-	requestCallback  func(r *sip.Request)
-	responseCallback func(r *sip.Response)
+	requestMiddlewares  []func(r *sip.Request)
+	responseMiddlewares []func(r *sip.Response)
 
 	// Default server behavior for sending request in preflight
 	AddViaHeader   bool
@@ -96,13 +93,15 @@ func WithUserAgent(ua string) ServerOption {
 // NewServer creates new instance of SIP server.
 func NewServer(options ...ServerOption) (*Server, error) {
 	s := &Server{
-		userAgent:       "SIPGO",
-		dnsResolver:     net.DefaultResolver,
-		requestHandlers: make(map[sip.RequestMethod]RequestHandler),
-		listeners:       make(map[string]string),
-		log:             log.Logger.With().Str("caller", "Server").Logger(),
-		AddViaHeader:    true,
-		AddRecordRoute:  true,
+		userAgent:           "SIPGO",
+		dnsResolver:         net.DefaultResolver,
+		requestMiddlewares:  make([]func(r *sip.Request), 0),
+		responseMiddlewares: make([]func(r *sip.Response), 0),
+		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
+		listeners:           make(map[string]string),
+		log:                 log.Logger.With().Str("caller", "Server").Logger(),
+		AddViaHeader:        true,
+		AddRecordRoute:      true,
 	}
 	for _, o := range options {
 		if err := o(s); err != nil {
@@ -162,8 +161,8 @@ func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
 
 // handleRequest must be run in seperate goroutine
 func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
-	if srv.requestCallback != nil {
-		srv.requestCallback(req)
+	for _, mid := range srv.requestMiddlewares {
+		mid(req)
 	}
 
 	handler := srv.getHandler(req.Method())
@@ -373,22 +372,17 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 }
 
 // ServeRequest can be used as middleware for preprocessing message
-// It process all received requests and all received responses.
-// NOTE: It can only be called once
 func (srv *Server) ServeRequest(f func(r *sip.Request)) {
-	if srv.requestCallback != nil {
-		panic("request callback can only be assigned once")
-	}
-	srv.requestCallback = f
+	srv.requestMiddlewares = append(srv.requestMiddlewares, f)
 }
 
 // TODO can this handled better?
 func (srv *Server) ServeResponse(f func(m *sip.Response)) {
-	if srv.responseCallback != nil {
-		panic("response callback can only be assigned once")
+	srv.responseMiddlewares = append(srv.responseMiddlewares, f)
+	if len(srv.responseMiddlewares) == 1 {
+		//Register this only once. TODO CAN THIS
+		srv.tp.OnMessage(srv.onTransportMessage)
 	}
-	srv.responseCallback = f
-	srv.tp.OnMessage(srv.onTransportMessage)
 }
 
 func (srv *Server) onTransportMessage(m sip.Message) {
@@ -396,7 +390,9 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 	// this avoids allocations and it forces devs to avoid sip.Message usage
 	switch r := m.(type) {
 	case *sip.Response:
-		srv.responseCallback(r)
+		for _, mid := range srv.responseMiddlewares {
+			mid(r)
+		}
 	}
 }
 
@@ -405,3 +401,24 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 func (srv *Server) TransportLayer() *transport.Layer {
 	return srv.tp
 }
+
+// func (srv *Server) OnDialog(f func(d Dialog)) {
+// 	dialogs := make(map[string]Dialog)
+
+// 	srv.responseMiddlewares = append(srv.responseMiddlewares, func(r *sip.Response) {
+// 		if r.IsInvite() {
+
+// 		}
+
+// 		sip.MakeDialogIDFromMessage()
+// 	})
+
+// 	srv.requestMiddlewares = append(srv.requestMiddlewares, func(r *sip.Request) {
+// 		if r.IsInvite() {
+
+// 		}
+
+// 		sip.MakeDialogIDFromMessage()
+// 	})
+
+// }
