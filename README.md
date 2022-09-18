@@ -95,7 +95,6 @@ TODO...
 - Monitoring
 - Dialog control
 
-
 ## Documentation
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiraganov/sipgo)
 

@@ -1,8 +1,54 @@
 package sipgo
 
 import (
+	"fmt"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/emiraganov/sipgo/parser"
+	"github.com/emiraganov/sipgo/sip"
 )
+
+func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
+	msg, err := parser.ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msg
+}
+
+func createTestInvite(t *testing.T, transport, addr string) (*sip.Request, string, string) {
+	branch := sip.GenerateBranch()
+	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
+	ftag := fmt.Sprintf("%d", time.Now().UnixNano())
+	return testCreateMessage(t, []string{
+		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + addr + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + addr + ">;tag=" + ftag,
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"Call-ID: " + callid,
+		"CSeq: 1 INVITE",
+		"Content-Length: 0",
+		"",
+		"",
+	}).(*sip.Request), callid, ftag
+}
+
+func createTestBye(t *testing.T, transport, addr string, callid string, ftag string, totag string) *sip.Request {
+	branch := sip.GenerateBranch()
+	return testCreateMessage(t, []string{
+		"BYE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + addr + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + addr + ">;tag=" + ftag,
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>;tag=" + totag,
+		"Call-ID: " + callid,
+		"CSeq: 1 INVITE",
+		"Content-Length: 0",
+		"",
+		"",
+	}).(*sip.Request)
+}
 
 func BenchmarkSwitchVsMap(b *testing.B) {
 
@@ -83,5 +129,4 @@ func BenchmarkSwitchVsMap(b *testing.B) {
 			}
 		}
 	})
-
 }
