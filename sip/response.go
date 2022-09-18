@@ -253,9 +253,9 @@ func NewResponseFromRequest(
 	}
 
 	if statusCode == 200 {
-		if _, ok := res.from.Params["tag"]; !ok {
+		if _, ok := res.to.Params["tag"]; !ok {
 			uuid, _ := uuid.NewV4()
-			res.from.Params["tag"] = uuid.String()
+			res.to.Params["tag"] = uuid.String()
 		}
 	}
 
