@@ -3,7 +3,7 @@
 Library for writing fast SIP servers in GO language.  
 It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)) optimized for fast parsing.
 
-### NOTE: PROJECT IS IN DEV, API CAN CHANGE
+**NOTE**: LIB IS IN DEV. API CAN CHANGE
 ## Examples
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
@@ -109,11 +109,6 @@ srv.OnDialog(func(d sip.Dialog) {
 })
 
 ```
-
-
-TODO...
-- Monitoring
-- Dialog control
 
 ## Documentation
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiraganov/sipgo)
