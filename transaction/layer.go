@@ -14,6 +14,14 @@ type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
 type UnhandledResponseHandler func(req *sip.Response)
 type ErrorHandler func(err error)
 
+func defaultRequestHandler(r *sip.Request, tx sip.ServerTransaction) {
+	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
+}
+
+func defaultUnhandledRespHandler(r *sip.Response) {
+	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip response. UnhandledResponseHandler handler not added")
+}
+
 type Layer struct {
 	tpl           *transport.Layer
 	reqHandler    RequestHandler
@@ -25,29 +33,29 @@ type Layer struct {
 	log zerolog.Logger
 }
 
-func NewLayer(tpl *transport.Layer, onrequest RequestHandler) *Layer {
+func NewLayer(tpl *transport.Layer) *Layer {
 	txl := &Layer{
 		tpl:                tpl,
 		clientTransactions: newTransactionStore(),
 		serverTransactions: newTransactionStore(),
 
-		reqHandler: onrequest,
+		reqHandler:    defaultRequestHandler,
+		unRespHandler: defaultUnhandledRespHandler,
 	}
-	txl.log = log.Logger.With().Str("caller", "transcation.Layer").Logger()
-	txl.unRespHandler = txl.defaultUnhandledRespHandler
+	txl.log = log.Logger.With().Str("caller", "transaction.Layer").Logger()
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 	return txl
+}
+
+func (txl *Layer) OnRequest(h RequestHandler) {
+	txl.reqHandler = h
 }
 
 // UnhandledResponseHandler can be used in case missing client transactions for handling response
 // ServerTransaction handle responses by state machine
 func (txl *Layer) UnhandledResponseHandler(f UnhandledResponseHandler) {
 	txl.unRespHandler = f
-}
-
-func (txl *Layer) defaultUnhandledRespHandler(res *sip.Response) {
-	txl.log.Info().Str("msg", res.Short()).Msg("Unhandled sip response")
 }
 
 // handleMessage is entry for handling requests and responses from transport

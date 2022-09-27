@@ -2,7 +2,6 @@ package sipgo
 
 import (
 	"github.com/emiraganov/sipgo/sip"
-	"github.com/emiraganov/sipgo/transaction"
 )
 
 // ServerDialog is extension of Server to support Dialog handling
@@ -13,7 +12,7 @@ type ServerDialog struct {
 }
 
 func NewServerDialog(options ...ServerOption) (*ServerDialog, error) {
-	base, err := NewServer(options...)
+	base, err := newBaseServer(options...)
 	if err != nil {
 		return nil, err
 	}
@@ -23,16 +22,16 @@ func NewServerDialog(options ...ServerOption) (*ServerDialog, error) {
 	}
 
 	// s.tp = transport.NewLayer(s.dnsResolver)
-	// Overwrite transaction layer
-	s.tx = transaction.NewLayer(s.tp, s.onRequest)
+	// Handle our transaction layer requests
+	s.tx.OnRequest(s.onRequestDialog)
 	return s, nil
 }
 
-func (s *ServerDialog) onRequest(r *sip.Request, tx sip.ServerTransaction) {
-	go s.handleRequest(r, tx)
+func (s *ServerDialog) onRequestDialog(r *sip.Request, tx sip.ServerTransaction) {
+	go s.handleRequestDialog(r, tx)
 }
 
-func (s *ServerDialog) handleRequest(r *sip.Request, tx sip.ServerTransaction) {
+func (s *ServerDialog) handleRequestDialog(r *sip.Request, tx sip.ServerTransaction) {
 	switch r.Method() {
 	// Early state
 	// case sip.INVITE:
@@ -55,7 +54,6 @@ func (s *ServerDialog) handleRequest(r *sip.Request, tx sip.ServerTransaction) {
 }
 
 func (s *ServerDialog) publish(r sip.Message, d sip.Dialog) {
-
 	id, err := sip.MakeDialogIDFromMessage(r)
 	if err != nil {
 		s.log.Error().Err(err).Str("startline", r.StartLine()).Msg("Failed to create dialog id")

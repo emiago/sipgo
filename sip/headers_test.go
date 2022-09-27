@@ -1,6 +1,22 @@
 package sip
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestPrependHeader(t *testing.T) {
+	hs := headers{}
+
+	hs.PrependHeader(&ViaHeader{})
+	assert.Equal(t, 1, len(hs.headerOrder))
+
+	v := &ViaHeader{}
+	hs.PrependHeader(v.cloneFirst())
+	assert.Equal(t, 2, len(hs.headerOrder))
+	assert.Equal(t, v, hs.GetHeader("via"))
+}
 
 func BenchmarkHeadersPrepend(b *testing.B) {
 	callid := CallID("asdas")

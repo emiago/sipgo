@@ -91,6 +91,26 @@ srv.OnACK(ackHandler)
 
 ### Dialogs
 
+ServerDialog  is extended type of Server with Dialog support. 
+More features may come.
+
+```go
+srv, err := sipgo.NewServerDialog()
+...
+srv.OnDialog(func(d sip.Dialog) {
+    switch d.State {
+	case sip.DialogStateEstablished:
+		// 200 response
+	case sip.DialogStateConfirmed:
+		// ACK send
+	case sip.DialogStateEnded:
+		// BYE send
+	}
+})
+
+```
+
+
 TODO...
 - Monitoring
 - Dialog control

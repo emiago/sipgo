@@ -92,6 +92,17 @@ func WithUserAgent(ua string) ServerOption {
 
 // NewServer creates new instance of SIP server.
 func NewServer(options ...ServerOption) (*Server, error) {
+	s, err := newBaseServer(options...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle our transaction layer requests
+	s.tx.OnRequest(s.onRequest)
+	return s, nil
+}
+
+func newBaseServer(options ...ServerOption) (*Server, error) {
 	s := &Server{
 		userAgent:           "SIPGO",
 		dnsResolver:         net.DefaultResolver,
@@ -118,10 +129,8 @@ func NewServer(options ...ServerOption) (*Server, error) {
 			return nil, err
 		}
 	}
-
 	s.tp = transport.NewLayer(s.dnsResolver)
-	s.tx = transaction.NewLayer(s.tp, s.onRequest)
-
+	s.tx = transaction.NewLayer(s.tp)
 	return s, nil
 }
 
