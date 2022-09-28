@@ -9,6 +9,7 @@ const (
 	DialogStateEnded
 )
 
+// DialogStateString maps state to string
 func DialogStateString(state int) string {
 	switch state {
 	case DialogStateEstablished:
@@ -24,11 +25,16 @@ func DialogStateString(state int) string {
 	}
 }
 
+// Dialog is data structure represanting dialog
 type Dialog struct {
-	ID    string
+	// ID created by FROM tag, TO tag and Callid
+	ID string
+	// State of dialog. Check more for DialogState... constants
 	State int
 }
 
+// StateString returns string version of state
+// established, confirmed, ended
 func (d *Dialog) StateString() string {
 	return DialogStateString(d.State)
 }

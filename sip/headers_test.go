@@ -19,14 +19,14 @@ func TestPrependHeader(t *testing.T) {
 }
 
 func BenchmarkHeadersPrepend(b *testing.B) {
-	callid := CallID("asdas")
+	callID := CallIDHeader("aaaa")
 	hs := headers{
 		headerOrder: []Header{
 			&ViaHeader{},
 			&FromHeader{},
 			&ToHeader{},
-			&CSeq{},
-			&callid,
+			&CSeqHeader{},
+			&callID,
 			&ContactHeader{},
 		},
 	}

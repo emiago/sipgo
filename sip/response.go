@@ -10,24 +10,6 @@ import (
 )
 
 // Response RFC 3261 - 7.2.
-// type Response interface {
-// 	Message
-// 	StatusCode() StatusCode
-// 	SetStatusCode(code StatusCode)
-// 	Reason() string
-// 	SetReason(reason string)
-// 	// Previous returns previous provisional responses
-// 	Previous() []Response
-// 	SetPrevious(responses []Response)
-// 	/* Common helpers */
-// 	IsProvisional() bool
-// 	IsSuccess() bool
-// 	IsRedirection() bool
-// 	IsClientError() bool
-// 	IsServerError() bool
-// 	IsGlobalError() bool
-// }
-
 type Response struct {
 	MessageData
 	status   StatusCode
@@ -35,6 +17,7 @@ type Response struct {
 	previous []Response
 }
 
+// NewResponse creates base structure of response.
 func NewResponse(
 	sipVersion string,
 	statusCode StatusCode,
@@ -54,6 +37,7 @@ func NewResponse(
 	return res
 }
 
+// Short is textual short version of response
 func (res *Response) Short() string {
 	if res == nil {
 		return "<nil>"
@@ -70,6 +54,7 @@ func (res *Response) Short() string {
 func (res *Response) StatusCode() StatusCode {
 	return res.status
 }
+
 func (res *Response) SetStatusCode(code StatusCode) {
 	res.status = code
 }

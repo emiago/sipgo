@@ -50,14 +50,6 @@ func BenchmarkHeaderParams(b *testing.B) {
 	// })
 
 	// Our version must be faster than GOSIP
-	b.Run("SLICE", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			hp := Params(NewOrderedParams())
-			testParams(b, hp)
-		}
-	})
-
-	// Our version must be faster than GOSIP
 	b.Run("MAP", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			hp := NewParams()

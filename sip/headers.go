@@ -24,10 +24,13 @@ type Header interface {
 	headerClone() Header
 }
 
+// CopyHeader is internal interface for cloning headers.
+// Maybe it will be full exposed later
 type CopyHeader interface {
 	headerClone() Header
 }
 
+// HeaderClone is generic function for cloning header
 func HeaderClone(h Header) Header {
 	return h.headerClone()
 }
@@ -38,11 +41,11 @@ type headers struct {
 	via           *ViaHeader
 	from          *FromHeader
 	to            *ToHeader
-	callid        *CallID
+	callid        *CallIDHeader
 	contact       *ContactHeader
-	cseq          *CSeq
-	contentLength *ContentLength
-	contentType   *ContentType
+	cseq          *CSeqHeader
+	contentLength *ContentLengthHeader
+	contentType   *ContentTypeHeader
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 }
@@ -73,6 +76,8 @@ func (hs *headers) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString("\r\n")
 }
 
+// setHeaderRef should be always called when new header is added
+// it creates fast access to header
 func (hs *headers) setHeaderRef(header Header) {
 	switch m := header.(type) {
 	case *ViaHeader:
@@ -81,9 +86,9 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.from = m
 	case *ToHeader:
 		hs.to = m
-	case *CallID:
+	case *CallIDHeader:
 		hs.callid = m
-	case *CSeq:
+	case *CSeqHeader:
 		hs.cseq = m
 	case *ContactHeader:
 		hs.contact = m
@@ -91,9 +96,9 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.route = m
 	case *RecordRouteHeader:
 		hs.recordRoute = m
-	case *ContentLength:
+	case *ContentLengthHeader:
 		hs.contentLength = m
-	case *ContentType:
+	case *ContentTypeHeader:
 		hs.contentType = m
 
 	}
@@ -128,17 +133,8 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	hs.headerOrder = newOrder
 }
 
-func (hs *headers) appendHeader(name string, header Header) {
-	// if _, ok := hs.headers[name]; ok {
-	// 	// TODO SetNextHeader
-	// 	// hs.headers[name] = append(hs.headers[name], header)
-	// } else {
-	// 	hs.headers[name] = header
-	// 	hs.headerOrder = append(hs.headerOrder, name)
-	// }
-}
-
-// // PrependHeader adds header to the front of header list
+// PrependHeader adds header to the front of header list
+// using as list reduces need of realloc underneath array
 func (hs *headers) PrependHeader(headers ...Header) {
 	offset := len(headers)
 	newOrder := make([]Header, len(hs.headerOrder)+offset)
@@ -152,6 +148,7 @@ func (hs *headers) PrependHeader(headers ...Header) {
 	hs.headerOrder = newOrder
 }
 
+// ReplaceHeader replaces first header with same name
 func (hs *headers) ReplaceHeader(header Header) {
 	for i, h := range hs.headerOrder {
 		if h.Name() == header.Name() {
@@ -162,7 +159,7 @@ func (hs *headers) ReplaceHeader(header Header) {
 	}
 }
 
-// Gets some headers.
+// Headers gets some headers.
 func (hs *headers) Headers() []Header {
 	// hdrs := make([]Header, 0)
 	// for _, key := range hs.headerOrder {
@@ -172,6 +169,7 @@ func (hs *headers) Headers() []Header {
 	return hs.headerOrder
 }
 
+// GetHeaders returns list of headers with same name
 func (hs *headers) GetHeaders(name string) []Header {
 	var hds []Header
 	nameLower := HeaderToLower(name)
@@ -205,6 +203,7 @@ func (hs *headers) getHeader(nameLower string) Header {
 	return nil
 }
 
+// RemoveHeader removes header by name
 func (hs *headers) RemoveHeader(name string) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
@@ -226,7 +225,7 @@ func (hs *headers) CloneHeaders() []Header {
 	return hdrs
 }
 
-func (hs *headers) CallID() (*CallID, bool) {
+func (hs *headers) CallID() (*CallIDHeader, bool) {
 	return hs.callid, hs.callid != nil
 }
 
@@ -242,15 +241,15 @@ func (hs *headers) To() (*ToHeader, bool) {
 	return hs.to, hs.to != nil
 }
 
-func (hs *headers) CSeq() (*CSeq, bool) {
+func (hs *headers) CSeq() (*CSeqHeader, bool) {
 	return hs.cseq, hs.cseq != nil
 }
 
-func (hs *headers) ContentLength() (*ContentLength, bool) {
+func (hs *headers) ContentLength() (*ContentLengthHeader, bool) {
 	return hs.contentLength, hs.contentLength != nil
 }
 
-func (hs *headers) ContentType() (*ContentType, bool) {
+func (hs *headers) ContentType() (*ContentTypeHeader, bool) {
 	return hs.contentType, hs.contentType != nil
 }
 
@@ -266,8 +265,7 @@ func (hs *headers) RecordRoute() (*RecordRouteHeader, bool) {
 	return hs.recordRoute, hs.recordRoute != nil
 }
 
-// Encapsulates a header that gossip does not natively support.
-// This allows header data that is not understood to be parsed by gossip and relayed to the parent application.
+// GenericHeader is generic struct for unknown headers
 type GenericHeader struct {
 	// The name of the header.
 	HeaderName string
@@ -276,7 +274,6 @@ type GenericHeader struct {
 	Contents string
 }
 
-// Convert the header to a flat string representation.
 func (h *GenericHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
@@ -289,7 +286,6 @@ func (h *GenericHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
-// Pull out the h name.
 func (h *GenericHeader) Name() string {
 	return h.HeaderName
 }
@@ -298,7 +294,6 @@ func (h *GenericHeader) Value() string {
 	return h.Contents
 }
 
-// Copy the h.
 func (h *GenericHeader) headerClone() Header {
 	if h == nil {
 		var newHeader *GenericHeader
@@ -317,7 +312,6 @@ type ToHeader struct {
 	DisplayName string
 	Address     Uri
 	// Any parameters present in the header.
-	// Params Params
 	Params HeaderParams
 }
 
@@ -433,7 +427,6 @@ func (h *FromHeader) ValueStringWrite(buffer io.StringWriter) {
 	}
 }
 
-// Copy the header.
 func (h *FromHeader) headerClone() Header {
 	var newFrom *FromHeader
 	if h == nil {
@@ -458,13 +451,15 @@ func (header *FromHeader) Next() Header {
 	return nil
 }
 
+// ContactHeader is Contact header representation
 type ContactHeader struct {
 	// The display name from the header, may be omitted.
 	DisplayName string
 	Address     Uri
 	// Any parameters present in the header.
 	Params HeaderParams
-	Next   *ContactHeader
+	// Next goes to next header if header has multi value
+	Next *ContactHeader
 }
 
 func (h *ContactHeader) String() string {
@@ -561,129 +556,134 @@ func (h *ContactHeader) cloneFirst() *ContactHeader {
 	return newCnt
 }
 
-// CallID - 'Call-ID' header.
-type CallID string
+// CallIDHeader is a Call-ID header presentation
+type CallIDHeader string
 
-func (h *CallID) String() string {
+func (h *CallIDHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *CallID) StringWrite(buffer io.StringWriter) {
+func (h *CallIDHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
-func (h *CallID) Name() string { return "Call-ID" }
+func (h *CallIDHeader) Name() string { return "Call-ID" }
 
-func (h *CallID) Value() string { return string(*h) }
+func (h *CallIDHeader) Value() string { return string(*h) }
 
-func (h *CallID) headerClone() Header {
+func (h *CallIDHeader) headerClone() Header {
 	return h
 }
 
-type CSeq struct {
+// CSeq is CSeq header
+type CSeqHeader struct {
 	SeqNo      uint32
 	MethodName RequestMethod
 }
 
-func (h *CSeq) String() string {
+func (h *CSeqHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *CSeq) StringWrite(buffer io.StringWriter) {
+func (h *CSeqHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
 
-func (h *CSeq) Name() string { return "CSeq" }
+func (h *CSeqHeader) Name() string { return "CSeq" }
 
-func (h *CSeq) Value() string {
+func (h *CSeqHeader) Value() string {
 	return fmt.Sprintf("%d %s", h.SeqNo, h.MethodName)
 }
 
-func (h *CSeq) ValueStringWrite(buffer io.StringWriter) {
+func (h *CSeqHeader) ValueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(strconv.Itoa(int(h.SeqNo)))
 	buffer.WriteString(" ")
 	buffer.WriteString(string(h.MethodName))
 }
 
-func (h *CSeq) headerClone() Header {
+func (h *CSeqHeader) headerClone() Header {
 	if h == nil {
-		var newCSeq *CSeq
+		var newCSeq *CSeqHeader
 		return newCSeq
 	}
 
-	return &CSeq{
+	return &CSeqHeader{
 		SeqNo:      h.SeqNo,
 		MethodName: h.MethodName,
 	}
 }
 
-type MaxForwards uint32
+// MaxForwardsHeader is Max-Forwards header representation
+type MaxForwardsHeader uint32
 
-func (h *MaxForwards) String() string {
+func (h *MaxForwardsHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *MaxForwards) StringWrite(buffer io.StringWriter) {
+func (h *MaxForwardsHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
-func (h *MaxForwards) Name() string { return "Max-Forwards" }
+func (h *MaxForwardsHeader) Name() string { return "Max-Forwards" }
 
-func (h *MaxForwards) Value() string { return strconv.Itoa(int(*h)) }
+func (h *MaxForwardsHeader) Value() string { return strconv.Itoa(int(*h)) }
 
-func (h *MaxForwards) headerClone() Header { return h }
+func (h *MaxForwardsHeader) headerClone() Header { return h }
 
-type Expires uint32
+// ExpiresHeader is Expires header representation
+type ExpiresHeader uint32
 
-func (h *Expires) String() string {
+func (h *ExpiresHeader) String() string {
 	return fmt.Sprintf("%s: %s", h.Name(), h.Value())
 }
 
-func (h *Expires) StringWrite(buffer io.StringWriter) {
+func (h *ExpiresHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(":")
 	buffer.WriteString(h.Value())
 }
 
-func (h *Expires) Name() string { return "Expires" }
+func (h *ExpiresHeader) Name() string { return "Expires" }
 
-func (h Expires) Value() string { return strconv.Itoa(int(h)) }
+func (h ExpiresHeader) Value() string { return strconv.Itoa(int(h)) }
 
-func (h *Expires) headerClone() Header { return h }
+func (h *ExpiresHeader) headerClone() Header { return h }
 
-type ContentLength uint32
+// ContentLengthHeader is Content-Length header representation
+type ContentLengthHeader uint32
 
-func (h ContentLength) String() string {
+func (h ContentLengthHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h ContentLength) StringWrite(buffer io.StringWriter) {
+func (h ContentLengthHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
-func (h *ContentLength) Name() string { return "Content-Length" }
+func (h *ContentLengthHeader) Name() string { return "Content-Length" }
 
-func (h ContentLength) Value() string { return strconv.Itoa(int(h)) }
+func (h ContentLengthHeader) Value() string { return strconv.Itoa(int(h)) }
 
-func (h *ContentLength) headerClone() Header { return h }
+func (h *ContentLengthHeader) headerClone() Header { return h }
 
-// Via header is linked list of multiple via if they are part of one header
+// ViaHeader is Via header representation.
+// It can be linked list of multiple via if they are part of one header
 type ViaHeader struct {
 	// E.g. 'SIP'.
 	ProtocolName string
@@ -798,26 +798,28 @@ func (h *ViaHeader) Remove() {
 	h = r
 }
 
-type ContentType string
+// ContentTypeHeader  is Content-Type header representation.
+type ContentTypeHeader string
 
-func (h *ContentType) String() string {
+func (h *ContentTypeHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ContentType) StringWrite(buffer io.StringWriter) {
+func (h *ContentTypeHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
-func (h *ContentType) Name() string { return "Content-Type" }
+func (h *ContentTypeHeader) Name() string { return "Content-Type" }
 
-func (h ContentType) Value() string { return string(h) }
+func (h ContentTypeHeader) Value() string { return string(h) }
 
-func (h *ContentType) headerClone() Header { return h }
+func (h *ContentTypeHeader) headerClone() Header { return h }
 
+// RouteHeader  is Route header representation.
 type RouteHeader struct {
 	Address Uri
 	Next    *RouteHeader
@@ -876,6 +878,7 @@ func (h *RouteHeader) cloneFirst() *RouteHeader {
 	return newRoute
 }
 
+// RecordRouteHeader is Record-Route header representation.
 type RecordRouteHeader struct {
 	Address Uri
 	Next    *RecordRouteHeader

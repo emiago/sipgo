@@ -69,7 +69,7 @@ type Message interface {
 	ReplaceHeader(header Header)
 	/* Helper getters for common headers */
 	// CallID returns 'Call-ID' header.
-	CallID() (*CallID, bool)
+	CallID() (*CallIDHeader, bool)
 	// Via returns the top 'Via' header field.
 	Via() (*ViaHeader, bool)
 	// From returns 'From' header field.
@@ -77,11 +77,11 @@ type Message interface {
 	// To returns 'To' header field.
 	To() (*ToHeader, bool)
 	// CSeq returns 'CSeq' header field.
-	CSeq() (*CSeq, bool)
+	CSeq() (*CSeqHeader, bool)
 	// ContentLength returns 'Content-Length' header field.
-	ContentLength() (*ContentLength, bool)
+	ContentLength() (*ContentLengthHeader, bool)
 	// ContentType returns 'Content-Type' header field.
-	ContentType() (*ContentType, bool)
+	ContentType() (*ContentTypeHeader, bool)
 	// Route returns 'Route' header field.
 	Route() (*RouteHeader, bool)
 	// RecordRoute returns 'Record-Route' header field.
@@ -118,12 +118,12 @@ func (msg *MessageData) Body() []byte {
 
 // SetBody sets message body, calculates it length and add 'Content-Length' header.
 func (msg *MessageData) SetBody(body []byte) {
-	var length ContentLength
+	var length ContentLengthHeader
 	msg.body = body
 	if body == nil {
-		length = ContentLength(0)
+		length = ContentLengthHeader(0)
 	} else {
-		length = ContentLength(len(body))
+		length = ContentLengthHeader(len(body))
 	}
 
 	hdr, exists := msg.ContentLength()

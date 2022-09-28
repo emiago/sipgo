@@ -46,6 +46,8 @@ func DefaultPort(protocol string) int {
 	}
 }
 
+// MakeDialogIDFromMessage creates dialog ID of message.
+// returns error if callid or to tag or from tag does not exists
 func MakeDialogIDFromMessage(msg Message) (string, error) {
 	callID, ok := msg.CallID()
 	if !ok {

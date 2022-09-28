@@ -249,7 +249,7 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 		}
 	}
 
-	maxForwardsHeader := MaxForwards(70)
+	maxForwardsHeader := MaxForwardsHeader(70)
 	ackRequest.AppendHeader(&maxForwardsHeader)
 	if h, _ := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
@@ -288,7 +288,7 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	viaHop, _ := requestForCancel.Via()
 	cancelReq.AppendHeader(viaHop.Clone())
 	CopyHeaders("Route", requestForCancel, cancelReq)
-	maxForwardsHeader := MaxForwards(70)
+	maxForwardsHeader := MaxForwardsHeader(70)
 	cancelReq.AppendHeader(&maxForwardsHeader)
 
 	if h, _ := requestForCancel.From(); h != nil {

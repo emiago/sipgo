@@ -431,7 +431,7 @@ func parseCallId(headerName string, headerText string) (
 		return
 	}
 
-	var callId = sip.CallID(headerText)
+	var callId = sip.CallIDHeader(headerText)
 
 	return &callId, nil
 }

@@ -6,16 +6,6 @@ import (
 	"strings"
 )
 
-// Port number
-// type Port uint16
-
-// func (port Port) String() string {
-// 	if port == 0 {
-// 		return ""
-// 	}
-// 	return fmt.Sprintf("%d", port)
-// }
-
 // A URI from any schema (e.g. sip:, tel:, callto:)
 type SIPUri interface {
 	// Determine if the two URIs are equal according to the rules in RFC 3261 s. 19.1.4.
@@ -92,6 +82,7 @@ func (uri *Uri) String() string {
 	return buffer.String()
 }
 
+// StringWrite writes uri string to buffer
 func (uri *Uri) StringWrite(buffer io.StringWriter) {
 	// Compulsory protocol identifier.
 	if uri.IsEncrypted() {
@@ -132,11 +123,13 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 	}
 }
 
+// Clone
 func (uri *Uri) Clone() *Uri {
 	c := *uri
 	return &c
 }
 
+// IsEncrypted returns true if uri is SIPS uri
 func (uri *Uri) IsEncrypted() bool {
 	return uri.Encrypted
 }

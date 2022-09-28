@@ -11,7 +11,7 @@ import (
 // Parse a string representation of a CSeq header, returning a slice of at most one CSeq.
 func parseCSeq(headerName string, headerText string) (
 	headers sip.Header, err error) {
-	var cseq sip.CSeq
+	var cseq sip.CSeqHeader
 	ind := strings.IndexAny(headerText, abnfWs)
 	if ind < 1 || len(headerText)-ind < 2 {
 		err = fmt.Errorf(
