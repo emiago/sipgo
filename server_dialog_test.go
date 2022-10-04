@@ -7,7 +7,7 @@ import (
 
 	"github.com/emiraganov/sipgo/fakes"
 	"github.com/emiraganov/sipgo/sip"
-	"github.com/go-playground/assert/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
