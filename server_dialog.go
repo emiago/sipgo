@@ -11,8 +11,8 @@ type ServerDialog struct {
 	onDialog func(d sip.Dialog)
 }
 
-func NewServerDialog(options ...ServerOption) (*ServerDialog, error) {
-	base, err := newBaseServer(options...)
+func NewServerDialog(ua *UserAgent, options ...ServerOption) (*ServerDialog, error) {
+	base, err := newBaseServer(ua, options...)
 	if err != nil {
 		return nil, err
 	}

@@ -2,11 +2,8 @@ package sipgo
 
 import (
 	"context"
-	"net"
-	"strings"
 
 	"github.com/emiraganov/sipgo/sip"
-	"github.com/emiraganov/sipgo/transaction"
 	"github.com/emiraganov/sipgo/transport"
 
 	"github.com/rs/zerolog"
@@ -18,13 +15,7 @@ type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
 
 // Server is a SIP server
 type Server struct {
-	tp          *transport.Layer
-	tx          *transaction.Layer
-	ip          net.IP
-	host        string
-	port        int
-	dnsResolver *net.Resolver
-	userAgent   string
+	*UserAgent
 
 	// requestHandlers map of all registered request handlers
 	requestHandlers map[sip.RequestMethod]RequestHandler
@@ -36,8 +27,7 @@ type Server struct {
 	responseMiddlewares []func(r *sip.Response)
 
 	// Default server behavior for sending request in preflight
-	AddViaHeader   bool
-	AddRecordRoute bool
+	RemoveViaHeader bool
 }
 
 type ServerOption func(s *Server) error
@@ -49,50 +39,9 @@ func WithLogger(logger zerolog.Logger) ServerOption {
 	}
 }
 
-func WithIP(ip string) ServerOption {
-	return func(s *Server) error {
-		host, _, err := net.SplitHostPort(ip)
-		if err != nil {
-			return err
-		}
-		addr, err := net.ResolveIPAddr("ip", host)
-		if err != nil {
-			return err
-		}
-		return s.setIP(addr.IP)
-	}
-}
-
-func WithDNSResolver(r *net.Resolver) ServerOption {
-	return func(s *Server) error {
-		s.dnsResolver = r
-		return nil
-	}
-}
-
-func WithUDPDNSResolver(dns string) ServerOption {
-	return func(s *Server) error {
-		s.dnsResolver = &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				d := net.Dialer{}
-				return d.DialContext(ctx, "udp", dns)
-			},
-		}
-		return nil
-	}
-}
-
-func WithUserAgent(ua string) ServerOption {
-	return func(s *Server) error {
-		s.userAgent = ua
-		return nil
-	}
-}
-
 // NewServer creates new instance of SIP server.
-func NewServer(options ...ServerOption) (*Server, error) {
-	s, err := newBaseServer(options...)
+func NewServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
+	s, err := newBaseServer(ua, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -102,17 +51,16 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-func newBaseServer(options ...ServerOption) (*Server, error) {
+func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	s := &Server{
-		userAgent:           "SIPGO",
-		dnsResolver:         net.DefaultResolver,
+		UserAgent: ua,
+		// userAgent:           "SIPGO",
+		// dnsResolver:         net.DefaultResolver,
 		requestMiddlewares:  make([]func(r *sip.Request), 0),
 		responseMiddlewares: make([]func(r *sip.Response), 0),
 		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
 		listeners:           make(map[string]string),
 		log:                 log.Logger.With().Str("caller", "Server").Logger(),
-		AddViaHeader:        true,
-		AddRecordRoute:      true,
 	}
 	for _, o := range options {
 		if err := o(s); err != nil {
@@ -120,25 +68,7 @@ func newBaseServer(options ...ServerOption) (*Server, error) {
 		}
 	}
 
-	if s.ip == nil {
-		v, err := sip.ResolveSelfIP()
-		if err != nil {
-			return nil, err
-		}
-		if err := s.setIP(v); err != nil {
-			return nil, err
-		}
-	}
-	s.tp = transport.NewLayer(s.dnsResolver)
-	s.tx = transaction.NewLayer(s.tp)
 	return s, nil
-}
-
-// Listen adds listener for serve
-func (srv *Server) setIP(ip net.IP) (err error) {
-	srv.ip = ip
-	srv.host = strings.Split(ip.String(), ":")[0]
-	return err
 }
 
 // Listen adds listener for serve
@@ -203,17 +133,6 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	}
 }
 
-// TransactionRequest sends sip request and initializes client transaction
-// It prepends Via header by default
-func (srv *Server) TransactionRequest(req *sip.Request) (sip.ClientTransaction, error) {
-	/*
-		To consider
-		18.2.1 We could have to change network if message is to large for UDP
-	*/
-	srv.updateRequest(req)
-	return srv.tx.Request(req)
-}
-
 // TransactionReply is wrapper for calling tx.Respond
 // it handles removing Via header by default
 func (srv *Server) TransactionReply(tx sip.ServerTransaction, res *sip.Response) error {
@@ -221,56 +140,13 @@ func (srv *Server) TransactionReply(tx sip.ServerTransaction, res *sip.Response)
 	return tx.Respond(res)
 }
 
-// WriteRequest will proxy message to transport layer. Use it in stateless mode
-func (srv *Server) WriteRequest(r *sip.Request) error {
-	srv.updateRequest(r)
-	return srv.tp.WriteMsg(r)
-}
-
 // WriteResponse will proxy message to transport layer. Use it in stateless mode
 func (srv *Server) WriteResponse(r *sip.Response) error {
 	return srv.tp.WriteMsg(r)
 }
 
-func (srv *Server) updateRequest(r *sip.Request) {
-	// We handle here only INVITE and BYE
-	// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
-	if srv.AddViaHeader {
-		if via, exists := r.Via(); exists {
-			newvia := via.Clone()
-			newvia.Host = srv.host
-			newvia.Port = srv.port
-			r.PrependHeader(newvia)
-
-			if via.Params.Has("rport") {
-				h, p, _ := net.SplitHostPort(r.Source())
-				via.Params.Add("rport", p)
-				via.Params.Add("received", h)
-			}
-		}
-	}
-
-	if srv.AddRecordRoute {
-		rr := &sip.RecordRouteHeader{
-			Address: sip.Uri{
-				Host: srv.host,
-				Port: srv.port,
-				UriParams: sip.HeaderParams{
-					// Transport must be provided as well
-					// https://datatracker.ietf.org/doc/html/rfc5658
-					"transport": transport.NetworkToLower(r.Transport()),
-					"lr":        "",
-				},
-			},
-		}
-
-		r.PrependHeader(rr)
-	}
-
-}
-
 func (srv *Server) updateResponse(r *sip.Response) {
-	if srv.AddViaHeader {
+	if srv.RemoveViaHeader {
 		srv.RemoveVia(r)
 	}
 }

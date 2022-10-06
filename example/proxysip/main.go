@@ -82,13 +82,26 @@ func httpServer(address string) {
 func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	// Prepare all variables we need for our service
 	host, port, _ := sip.ParseAddr(ip)
-	srv, err := sipgo.NewServer(
+	ua, err := sipgo.NewUA(
 		sipgo.WithIP(ip),
 	)
-
 	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup proxy")
+		log.Fatal().Err(err).Msg("Fail to setup user agent")
 	}
+
+	srv, err := sipgo.NewServer(ua)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to setup server handle")
+	}
+
+	client, err := sipgo.NewClient(ua)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to setup client handle")
+	}
+
+	client.AddViaHeader = true   // Adds via header before shiping request
+	client.AddRecordRoute = true // Adds record route header before shiping request
+	srv.RemoveViaHeader = true
 
 	registry := NewRegistry()
 
@@ -117,7 +130,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
-		clTx, err := srv.TransactionRequest(req)
+		clTx, err := client.TransactionRequest(req)
 		if err != nil {
 			log.Error().Err(err).Msg("RequestWithContext  failed")
 			reply(tx, req, 500, "")
@@ -149,7 +162,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				// Acks can not be send directly trough destination
 				log.Info().Str("m", m.StartLine()).Str("dst", dst).Msg("Proxing ACK")
 				m.SetDestination(dst)
-				srv.WriteRequest(m)
+				client.WriteRequest(m)
 
 			case m := <-tx.Cancels():
 				// Send response imediatelly
@@ -216,7 +229,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			dst = registry.Get(tohead.Address.User)
 		}
 		req.SetDestination(dst)
-		if err := srv.WriteRequest(req); err != nil {
+		if err := client.WriteRequest(req); err != nil {
 			log.Error().Err(err).Msg("Send failed")
 			reply(tx, req, 500, "")
 		}

@@ -12,7 +12,10 @@ import (
 )
 
 func TestDialog(t *testing.T) {
-	srv, err := NewServerDialog()
+	ua, err := NewUA()
+	require.Nil(t, err)
+
+	srv, err := NewServerDialog(ua)
 	require.Nil(t, err)
 
 	serverReader, serverWriter := io.Pipe()

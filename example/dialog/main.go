@@ -20,13 +20,20 @@ func main() {
 		TimeFormat: "2006-01-02 15:04:05.000",
 	}).With().Timestamp().Logger().Level(zerolog.InfoLevel)
 
-	srv, err := sipgo.NewServerDialog()
+	ua, _ := sipgo.NewUA()
+
+	srv, err := sipgo.NewServerDialog(ua)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to setup dialog server")
+	}
+	client, err := sipgo.NewClient(ua)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup dialog server")
 	}
 
 	h := &Handler{
 		srv,
+		client,
 		*dst,
 	}
 
@@ -50,6 +57,7 @@ func setupRoutes(srv *sipgo.ServerDialog, h *Handler) {
 
 type Handler struct {
 	s   *sipgo.ServerDialog
+	c   *sipgo.Client
 	dst string
 }
 
@@ -76,7 +84,7 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 	req.SetDestination(dst)
 	// Handle 200 Ack
 	if req.IsAck() {
-		if err := h.s.WriteRequest(req); err != nil {
+		if err := h.c.WriteRequest(req); err != nil {
 			log.Error().Err(err).Msg("Send failed")
 			reply(tx, req, 500, "")
 			return
@@ -85,7 +93,7 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 	}
 
 	// Start client transaction and relay our request
-	clTx, err := h.s.TransactionRequest(req)
+	clTx, err := h.c.TransactionRequest(req)
 	if err != nil {
 		log.Error().Err(err).Msg("RequestWithContext  failed")
 		reply(tx, req, 500, "")
