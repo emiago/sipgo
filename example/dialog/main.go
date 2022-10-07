@@ -93,7 +93,7 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 	}
 
 	// Start client transaction and relay our request
-	clTx, err := h.c.TransactionRequest(req)
+	clTx, err := h.c.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
 	if err != nil {
 		log.Error().Err(err).Msg("RequestWithContext  failed")
 		reply(tx, req, 500, "")
@@ -108,7 +108,8 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 				return
 			}
 			res.SetDestination(req.Source())
-			if err := h.s.TransactionReply(tx, res); err != nil {
+			sipgo.ClientResponseRemoveVia(h.c, res)
+			if err := tx.Respond(res); err != nil {
 				log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 			}
 

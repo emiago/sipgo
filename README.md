@@ -13,11 +13,15 @@ To find out more about performance check the latest results:
 (Contributions are welcome, I would place your results here)
 ## Usage
 
-Lib allows you to write easily stateful proxies, registrar or any sip routing.
+Lib allows you to write easily client or server or to build up stateful proxies, registrar or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
+
+### UAS build
+
 ```go
-srv := sipgo.NewServer()
+ua, _ := sipgo.NewUA() // Build user agent
+srv, _ := sipgo.NewServer(ua) // Creating server handle
 srv.OnRegister(registerHandler)
 srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
@@ -31,6 +35,7 @@ srv.Listen("tcp", "127.0.0.1:5061")
 // Start serving
 srv.Serve()
 ```
+ 
 
 ### Server Transaction
 
@@ -56,13 +61,32 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 
 ```
 
+### Stateless response
+
+```go
+srv := sipgo.NewServer()
+...
+func ackHandler(req *sip.Request, tx sip.ServerTransaction) {
+    res := sip.NewResponseFromRequest(req, code, reason, body)
+    srv.WriteResponse(res)
+}
+srv.OnACK(ackHandler)
+```
+
+
+### UAC build
+```go 
+ua, _ := sipgo.NewUA() // Build user agent
+client, _ := sipgo.NewClient(ua) // Creating client handle
+```
+
 ### Client Transaction
 
 ```go
 
 // Request is either from server request handler or created
 req.SetDestination("10.1.2.3") // Change sip.Request destination
-tx, err := srv.TransactionRequest(req) // Send request and get client transaction handle
+tx, err := client.TransactionRequest(req) // Send request and get client transaction handle
 
 defer tx.Terminate() // Client Transaction must be terminated for cleanup
 ...
@@ -77,25 +101,18 @@ select {
 
 ```
 
-### Stateless response
+## Proxy build
+
+Proxy is combination client and server handle. 
+Checkout `/example` directory for examples how to build simple stateful proxy.
+
+### Dialogs (experiment)
+
+`ServerDialog` is extended type of Server with Dialog support. 
+For now this is in experiment.
 
 ```go
-srv := sipgo.NewServer()
-...
-func ackHandler(req *sip.Request, tx sip.ServerTransaction) {
-    res := sip.NewResponseFromRequest(req, code, reason, body)
-    srv.WriteResponse(res)
-}
-srv.OnACK(ackHandler)
-```
-
-### Dialogs
-
-ServerDialog  is extended type of Server with Dialog support. 
-More features may come.
-
-```go
-srv, err := sipgo.NewServerDialog()
+srv, err := sipgo.NewServerDialog(ua)
 ...
 srv.OnDialog(func(d sip.Dialog) {
     switch d.State {
@@ -109,6 +126,8 @@ srv.OnDialog(func(d sip.Dialog) {
 })
 
 ```
+
+`ClientDialog` TODO...
 
 ## Documentation
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiraganov/sipgo)
