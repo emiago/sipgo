@@ -13,7 +13,7 @@ To find out more about performance check the latest results:
 (Contributions are welcome, I would place your results here)
 ## Usage
 
-Lib allows you to write easily uac, uas and build up stateful proxies, registrar or any sip routing.
+Lib allows you to write easily client or server or to build up stateful proxies, registrar or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
 
