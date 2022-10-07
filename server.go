@@ -133,36 +133,9 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	}
 }
 
-// TransactionReply is wrapper for calling tx.Respond
-// it handles removing Via header by default
-func (srv *Server) TransactionReply(tx sip.ServerTransaction, res *sip.Response) error {
-	srv.updateResponse(res)
-	return tx.Respond(res)
-}
-
 // WriteResponse will proxy message to transport layer. Use it in stateless mode
 func (srv *Server) WriteResponse(r *sip.Response) error {
 	return srv.tp.WriteMsg(r)
-}
-
-func (srv *Server) updateResponse(r *sip.Response) {
-	if srv.RemoveViaHeader {
-		srv.RemoveVia(r)
-	}
-}
-
-// RemoveVia can be used in case of sending response.
-func (srv *Server) RemoveVia(r *sip.Response) {
-	if via, exists := r.Via(); exists {
-		if via.Host == srv.host {
-			// In case it is multipart Via remove only one
-			if via.Next != nil {
-				via.Remove()
-			} else {
-				r.RemoveHeader("Via")
-			}
-		}
-	}
 }
 
 // Shutdown gracefully shutdowns SIP server
@@ -286,24 +259,3 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 func (srv *Server) TransportLayer() *transport.Layer {
 	return srv.tp
 }
-
-// func (srv *Server) OnDialog(f func(d Dialog)) {
-// 	dialogs := make(map[string]Dialog)
-
-// 	srv.responseMiddlewares = append(srv.responseMiddlewares, func(r *sip.Response) {
-// 		if r.IsInvite() {
-
-// 		}
-
-// 		sip.MakeDialogIDFromMessage()
-// 	})
-
-// 	srv.requestMiddlewares = append(srv.requestMiddlewares, func(r *sip.Request) {
-// 		if r.IsInvite() {
-
-// 		}
-
-// 		sip.MakeDialogIDFromMessage()
-// 	})
-
-// }

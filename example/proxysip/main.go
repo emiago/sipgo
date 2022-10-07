@@ -99,10 +99,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		log.Fatal().Err(err).Msg("Fail to setup client handle")
 	}
 
-	client.AddViaHeader = true   // Adds via header before shiping request
-	client.AddRecordRoute = true // Adds record route header before shiping request
-	srv.RemoveViaHeader = true
-
 	registry := NewRegistry()
 
 	var reply = func(tx sip.ServerTransaction, req *sip.Request, code sip.StatusCode, reason string) {
@@ -130,7 +126,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
-		clTx, err := client.TransactionRequest(req)
+		clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
 		if err != nil {
 			log.Error().Err(err).Msg("RequestWithContext  failed")
 			reply(tx, req, 500, "")
@@ -148,7 +144,8 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 					return
 				}
 				res.SetDestination(req.Source())
-				if err := srv.TransactionReply(tx, res); err != nil {
+				sipgo.ClientResponseRemoveVia(client, res) // For now this needs to be called manually
+				if err := tx.Respond(res); err != nil {
 					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 				}
 
