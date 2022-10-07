@@ -77,7 +77,7 @@ srv.OnACK(ackHandler)
 ### UAC build
 ```go 
 ua, _ := sipgo.NewUA() // Build user agent
-client, _ := sipgo.NewClient(ua) // Creating server handle
+client, _ := sipgo.NewClient(ua) // Creating client handle
 ```
 
 ### Client Transaction
