@@ -14,6 +14,9 @@ type Request struct {
 	recipient *Uri
 }
 
+// NewRequest creates base for building sip Request
+// No headers are added. AppendHeader should be called to add Headers.
+// r.SetBody can be called to set proper ContentLength header
 func NewRequest(
 	method RequestMethod,
 	recipient *Uri,
