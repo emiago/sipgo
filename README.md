@@ -147,6 +147,7 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 - [x] UDP
 - [x] TCP
 - [ ] TLS
+- [ ] WS
 - [ ] WSS
 
 
@@ -169,8 +170,4 @@ If you find this project interesting for support or contributing, you can contac
 
 For bugs features pls create [issue](https://github.com/emiraganov/sipgo/issues).
 
-Development:
-- Always benchmark and keep high performance. 
-- Add most used transport protocols
-- Stabilize API and more tests
 
