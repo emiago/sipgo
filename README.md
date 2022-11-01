@@ -4,13 +4,21 @@ Library for writing fast SIP servers in GO language.
 It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)) optimized for fast parsing.
 
 **NOTE**: LIB IS IN DEV. API CAN CHANGE
-## Examples
+
+
+## Performance
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
 (Contributions are welcome, I would place your results here)
+
+## Examples
+
+Stateful proxy [example/proxysip](example/proxysip)  
+Dialog [example/dialog](example/dialog)  
+
 ## Usage
 
 Lib allows you to write easily client or server or to build up stateful proxies, registrar or any sip routing.
@@ -104,7 +112,8 @@ select {
 ## Proxy build
 
 Proxy is combination client and server handle. 
-Checkout `/example` directory for examples how to build simple stateful proxy.
+Checkout `/example/proxysip` for more how to build simple stateful proxy.
+
 
 ### Dialogs (experiment)
 
