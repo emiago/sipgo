@@ -55,8 +55,9 @@ srv.Listen("ws", "127.0.0.1:5080")
 // fire server
 srv.Serve()
 ```
+- Server handle creates listeners and reacts on incoming requests. [More on server transactions](#server-transaction)
+- Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
- 
 
 ### Server Transaction
 
