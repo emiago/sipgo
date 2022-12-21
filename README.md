@@ -43,6 +43,7 @@ srv.OnBye(byeHandler)
 // Add listeners
 srv.Listen("udp", "127.0.0.1:5060")
 srv.Listen("tcp", "127.0.0.1:5061")
+srv.Listen("ws", "127.0.0.1:5080")
 ...
 // fire server
 srv.Serve()

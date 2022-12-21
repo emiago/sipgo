@@ -52,18 +52,18 @@ func (t *TCPTransport) Network() string {
 
 func (t *TCPTransport) Close() error {
 	// return t.connections.Done()
-	var err error
+	var rerr error
 	if t.listener == nil {
 		return nil
 	}
 
 	if err := t.listener.Close(); err != nil {
-		err = fmt.Errorf("err=%w", err)
+		rerr = fmt.Errorf("err=%w", err)
 	}
 
 	t.listener = nil
 	// t.listenerTCP = nil
-	return err
+	return rerr
 }
 
 // TODO

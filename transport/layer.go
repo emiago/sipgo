@@ -154,7 +154,7 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 	case "tls":
 		fallthrough
 	default:
-		return fmt.Errorf("Protocol not supported yet")
+		return fmt.Errorf("protocol not supported yet")
 	}
 
 	// Add transport to list

@@ -80,23 +80,24 @@ func (t *UDPTransport) Network() string {
 
 func (t *UDPTransport) Close() error {
 	// return t.connections.Done()
-	var err error
 	if t.listener == nil {
 		return nil
 	}
 
+	var rerr error
 	if err := t.listener.Close(); err != nil {
-		err = fmt.Errorf("%w", err)
+		rerr = err
 	}
 
 	if err := t.listenerUDP.Close(); err != nil {
-		err = fmt.Errorf("%w", err)
+		rerr = fmt.Errorf("%w.%w", err, rerr)
 	}
 
 	t.listener = nil
 	t.listenerUDP = nil
 	t.conn = nil
-	return err
+
+	return rerr
 }
 
 // TODO
