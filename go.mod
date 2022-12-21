@@ -1,8 +1,9 @@
 module github.com/emiraganov/sipgo
 
-go 1.18
+go 1.19
 
 require (
+	github.com/gobwas/ws v1.1.0
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rs/zerolog v1.26.1
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b
@@ -14,6 +15,8 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect

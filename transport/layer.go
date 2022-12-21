@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -15,6 +16,10 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	ErrNetworkExists = errors.New("network is already served")
 )
 
 func init() {
@@ -97,7 +102,7 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 	return transport.ServeConn(c, l.handleMessage)
 }
 
-// ServeTCP will listen on udp connection
+// ServeTCP will listen on tcp connection
 func (l *Layer) ServeTCP(c net.Listener) error {
 	_, port, err := sip.ParseAddr(c.Addr().String())
 	if err != nil {
@@ -105,6 +110,19 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 	}
 
 	transport := NewTCPTransport(c.Addr().String(), parser.NewParser())
+	l.addTransport(transport, port)
+
+	return transport.ServeConn(c, l.handleMessage)
+}
+
+// ServeWS will listen on ws connection
+func (l *Layer) ServeWS(c net.Listener) error {
+	_, port, err := sip.ParseAddr(c.Addr().String())
+	if err != nil {
+		return err
+	}
+
+	transport := NewWSTransport(c.Addr().String(), parser.NewParser())
 	l.addTransport(transport, port)
 
 	return transport.ServeConn(c, l.handleMessage)
@@ -118,6 +136,11 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 		return err
 	}
 
+	_, exists := l.transports[network]
+	if exists {
+		return ErrNetworkExists
+	}
+
 	p := parser.NewParser()
 
 	var t Transport
@@ -126,6 +149,8 @@ func (l *Layer) Serve(ctx context.Context, network string, addr string) error {
 		t = NewUDPTransport(addr, p)
 	case "tcp":
 		t = NewTCPTransport(addr, p)
+	case "ws":
+		t = NewWSTransport(addr, p)
 	case "tls":
 		fallthrough
 	default:

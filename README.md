@@ -25,24 +25,29 @@ Lib allows you to write easily client or server or to build up stateful proxies,
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
 
-### UAS build
+### UAS/UAC build
 
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
 srv, _ := sipgo.NewServer(ua) // Creating server handle
-srv.OnRegister(registerHandler)
+client, _ := sipgo.NewClient(ua) // Creating client handle
 srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
 srv.OnCancel(cancelHandler)
 srv.OnBye(byeHandler)
 
+// For registrars
+// srv.OnRegister(registerHandler)
+
+
 // Add listeners
 srv.Listen("udp", "127.0.0.1:5060")
 srv.Listen("tcp", "127.0.0.1:5061")
 ...
-// Start serving
+// fire server
 srv.Serve()
 ```
+
  
 
 ### Server Transaction
@@ -69,7 +74,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 
 ```
 
-### Stateless response
+### Server stateless response
 
 ```go
 srv := sipgo.NewServer()
@@ -82,15 +87,13 @@ srv.OnACK(ackHandler)
 ```
 
 
-### UAC build
-```go 
-ua, _ := sipgo.NewUA() // Build user agent
-client, _ := sipgo.NewClient(ua) // Creating client handle
-```
-
 ### Client Transaction
 
+**NOTE**: UA needs server handle and listener on same network before sending request
+
+
 ```go
+client, _ := sipgo.NewClient(ua) // Creating client handle
 
 // Request is either from server request handler or created
 req.SetDestination("10.1.2.3") // Change sip.Request destination
@@ -107,6 +110,15 @@ select {
     return
 }
 
+```
+
+### Client stateless request
+
+```go
+client, _ := sipgo.NewClient(ua) // Creating client handle
+req := sip.NewRequest(method, &recipment, "SIP/2.0")
+// Send request and forget
+client.WriteRequest(req)
 ```
 
 ## Proxy build
@@ -147,7 +159,7 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 - [x] UDP
 - [x] TCP
 - [ ] TLS
-- [ ] WS
+- [x] WS
 - [ ] WSS
 
 

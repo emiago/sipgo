@@ -16,6 +16,7 @@ const (
 	TransportUDP = "UDP"
 	TransportTCP = "TCP"
 	TransportTLS = "TLS"
+	TransportWS  = "WS"
 )
 
 // Protocol implements network specific features.
