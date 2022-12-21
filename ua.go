@@ -5,9 +5,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/emiraganov/sipgo/sip"
-	"github.com/emiraganov/sipgo/transaction"
-	"github.com/emiraganov/sipgo/transport"
+	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/transaction"
+	"github.com/emiago/sipgo/transport"
 )
 
 type UserAgent struct {

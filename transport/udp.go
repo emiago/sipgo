@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/emiraganov/sipgo/parser"
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/parser"
+	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

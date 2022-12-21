@@ -8,11 +8,11 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 
 	_ "net/http/pprof"
 
-	"github.com/emiraganov/sipgo"
+	"github.com/emiago/sipgo"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"

@@ -1,7 +1,7 @@
 package sipgo
 
 import (
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 // ServerDialog is extension of Server to support Dialog handling

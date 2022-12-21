@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 // Parse a string representation of a CSeq header, returning a slice of at most one CSeq.

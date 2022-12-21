@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 
-	"github.com/emiraganov/sipgo"
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo"
+	"github.com/emiago/sipgo/sip"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

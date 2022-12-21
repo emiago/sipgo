@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 const (

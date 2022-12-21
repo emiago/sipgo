@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 type uriFSM func(uri *sip.Uri, s string) (uriFSM, string, error)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 type Connection interface {

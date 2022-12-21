@@ -3,7 +3,7 @@ package transport
 import (
 	"net"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 var (

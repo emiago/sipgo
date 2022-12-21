@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emiraganov/sipgo/fakes"
-	"github.com/emiraganov/sipgo/parser"
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/fakes"
+	"github.com/emiago/sipgo/parser"
+	"github.com/emiago/sipgo/sip"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"

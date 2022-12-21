@@ -1,4 +1,4 @@
-# sipgo
+# SIPGO
 
 Library for writing fast SIP servers in GO language.  
 It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)) optimized for fast parsing.
@@ -152,7 +152,7 @@ srv.OnDialog(func(d sip.Dialog) {
 `ClientDialog` TODO...
 
 ## Documentation
-More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiraganov/sipgo)
+More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
 
 
 ## Supported protocols
@@ -181,6 +181,6 @@ This unfortunately required many design changes, therefore this libraries are no
 If you find this project interesting for support or contributing, you can contact me on
 [mail](emirfreelance91@gmail.com) 
 
-For bugs features pls create [issue](https://github.com/emiraganov/sipgo/issues).
+For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
 
 

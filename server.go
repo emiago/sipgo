@@ -3,8 +3,8 @@ package sipgo
 import (
 	"context"
 
-	"github.com/emiraganov/sipgo/sip"
-	"github.com/emiraganov/sipgo/transport"
+	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

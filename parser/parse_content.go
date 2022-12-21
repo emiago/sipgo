@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 func parseContentLength(headerName string, headerText string) (

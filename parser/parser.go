@@ -1,4 +1,4 @@
-//  Originaly forked from github.com/StefanKopieczek/gossip by @StefanKopieczek
+// Originaly forked from github.com/StefanKopieczek/gossip by @StefanKopieczek
 package parser
 
 import (
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -342,8 +342,9 @@ func isResponse(startLine string) bool {
 }
 
 // Parse the first line of a SIP request, e.g:
-//   INVITE bob@example.com SIP/2.0
-//   REGISTER jane@telco.com SIP/1.0
+//
+//	INVITE bob@example.com SIP/2.0
+//	REGISTER jane@telco.com SIP/1.0
 func ParseRequestLine(requestLine string, recipient *sip.Uri) (
 	method sip.RequestMethod, sipVersion string, err error) {
 	parts := strings.Split(requestLine, " ")
@@ -365,8 +366,9 @@ func ParseRequestLine(requestLine string, recipient *sip.Uri) (
 }
 
 // Parse the first line of a SIP response, e.g:
-//   SIP/2.0 200 OK
-//   SIP/1.0 403 Forbidden
+//
+//	SIP/2.0 200 OK
+//	SIP/1.0 403 Forbidden
 func ParseStatusLine(statusLine string) (
 	sipVersion string, statusCode sip.StatusCode, reasonPhrase string, err error) {
 	parts := strings.Split(statusLine, " ")

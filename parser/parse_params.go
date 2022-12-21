@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/emiraganov/sipgo/sip"
+	"github.com/emiago/sipgo/sip"
 )
 
 const (
