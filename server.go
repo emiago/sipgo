@@ -87,7 +87,7 @@ func (srv *Server) Serve() error {
 func (srv *Server) ServeWithContext(ctx context.Context) error {
 	defer srv.shutdown()
 	for addr, network := range srv.listeners {
-		go srv.tp.Serve(ctx, network, addr)
+		go srv.tp.ListenAndServe(ctx, network, addr)
 	}
 	<-ctx.Done()
 	return ctx.Err()

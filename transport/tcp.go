@@ -47,7 +47,7 @@ func (t *TCPTransport) Addr() string {
 }
 
 func (t *TCPTransport) Network() string {
-	return "tcp"
+	return TransportTCP
 }
 
 func (t *TCPTransport) Close() error {
@@ -68,7 +68,7 @@ func (t *TCPTransport) Close() error {
 
 // TODO
 // This is more generic way to provide listener and it is blocking
-func (t *TCPTransport) Serve(handler sip.MessageHandler) error {
+func (t *TCPTransport) ListenAndServe(handler sip.MessageHandler) error {
 	addr := t.addr
 	laddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -80,12 +80,11 @@ func (t *TCPTransport) Serve(handler sip.MessageHandler) error {
 		return fmt.Errorf("listen tcp error. err=%w", err)
 	}
 
-	return t.ServeConn(conn, handler)
+	return t.Serve(conn, handler)
 }
 
-// serveConn is direct way to provide conn on which this worker will listen
-// UDPReadWorkers are used to create more workers
-func (t *TCPTransport) ServeConn(l net.Listener, handler sip.MessageHandler) error {
+// Serve is direct way to provide conn on which this worker will listen
+func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	if t.listener != nil {
 		return fmt.Errorf("TCP transport instance can only listen on one lection")
 	}
@@ -149,7 +148,7 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
-	t.log.Debug().Str("raddr", addr).Msg("New TCP connection")
+	t.log.Debug().Str("raddr", addr).Msg("New connection")
 	c := &TCPConnection{
 		Conn:     conn,
 		refcount: 1,
@@ -164,14 +163,14 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
 	buf := make([]byte, UDPbufferSize)
 	defer conn.Close()
 	defer t.pool.Del(raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("TCP connection read stopped")
+	defer t.log.Debug().Str("raddr", raddr).Msg("Connection read stopped")
 
 	for {
 		num, err := conn.Read(buf)
 
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
-				t.log.Error().Err(err).Msg("Got TCP error")
+				t.log.Error().Err(err).Msg("Read error")
 			}
 			return
 		}
@@ -202,7 +201,7 @@ func (t *TCPTransport) parse(data []byte, src string) {
 		return
 	}
 
-	msg.SetTransport(TransportTCP)
+	msg.SetTransport(t.Network())
 	msg.SetSource(src)
 	t.handler(msg)
 }
@@ -240,7 +239,7 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Read(b)
 	if SIPDebug {
-		log.Debug().Msgf("TCP read <- %s:\n%s", c.Conn.RemoteAddr(), string(b))
+		log.Debug().Msgf("TCP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(b))
 	}
 	return n, err
 }
@@ -249,7 +248,7 @@ func (c *TCPConnection) Write(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Write(b)
 	if SIPDebug {
-		log.Debug().Msgf("TCP write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
+		log.Debug().Msgf("TCP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(b))
 	}
 	return n, err
 }

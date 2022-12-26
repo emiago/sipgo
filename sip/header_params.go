@@ -55,21 +55,25 @@ func (hp HeaderParams) Keys() []string {
 	return s
 }
 
+// Get returns existing key
 func (hp HeaderParams) Get(key string) (string, bool) {
 	v, ok := hp[key]
 	return v, ok
 }
 
+// Add will add new key:val. If key exists it will be overwriten
 func (hp HeaderParams) Add(key string, val string) Params {
 	hp[key] = val
 	return hp
 }
 
+// Remove removes param with exact key
 func (hp HeaderParams) Remove(key string) Params {
 	delete(hp, key)
 	return hp
 }
 
+// Has checks does key exists
 func (hp HeaderParams) Has(key string) bool {
 	_, exists := hp[key]
 	return exists

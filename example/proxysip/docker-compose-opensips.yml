@@ -21,7 +21,7 @@ services:
 
   uac:
     image: ctaloi/sipp
-    command: -sn uac -r 1000 -rp 1000 -i 127.0.0.3 -ras 127.0.0.1:5060 127.0.0.2:5060
+    command: -sn uac -r 1000 -rp 1000 -i 127.0.0.3 -rsa 127.0.0.1:5060 127.0.0.2:5060
     network_mode: "host"
     cpuset: "5"
     depends_on:

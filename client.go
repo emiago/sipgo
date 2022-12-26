@@ -43,7 +43,12 @@ func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOp
 }
 
 // WriteRequest sends request directly to transport layer
-func (c *Client) WriteRequest(req *sip.Request) error {
+func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) error {
+	for _, o := range options {
+		if err := o(c, req); err != nil {
+			return err
+		}
+	}
 	return c.tp.WriteMsg(req)
 }
 
@@ -56,6 +61,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 		newvia := via.Clone()
 		newvia.Host = c.host
 		newvia.Port = c.port
+		newvia.Params.Add("branch", sip.GenerateBranch())
 		r.PrependHeader(newvia)
 
 		if via.Params.Has("rport") {
@@ -89,14 +95,24 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 // ClientResponseRemoveVia is needed when handling client transaction response, where previously used in
 // TransactionRequest with ClientRequestAddVia
 func ClientResponseRemoveVia(c *Client, r *sip.Response) {
+	var removedFromMulti bool
 	if via, exists := r.Via(); exists {
-		if via.Host == c.host {
-			// In case it is multipart Via remove only one
-			if via.Next != nil {
+		for via != nil {
+			if via.Host == c.host {
 				via.Remove()
-			} else {
-				r.RemoveHeader("Via")
+				removedFromMulti = true
+				break
 			}
+			via = via.Next
 		}
 	}
+
+	if !removedFromMulti {
+		r.RemoveHeaderOn("Via", c.removeViaCallback)
+	}
+}
+
+func (c *Client) removeViaCallback(h sip.Header) bool {
+	via := h.(*sip.ViaHeader)
+	return via.Host == c.host
 }

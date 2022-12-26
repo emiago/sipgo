@@ -75,7 +75,7 @@ func (t *UDPTransport) Addr() string {
 }
 
 func (t *UDPTransport) Network() string {
-	return "udp"
+	return TransportUDP
 }
 
 func (t *UDPTransport) Close() error {
@@ -102,7 +102,7 @@ func (t *UDPTransport) Close() error {
 
 // TODO
 // This is more generic way to provide listener and it is blocking
-func (t *UDPTransport) Serve(handler sip.MessageHandler) error {
+func (t *UDPTransport) ListenAndServe(handler sip.MessageHandler) error {
 	// resolve local UDP endpoint
 	addr := t.addr
 	laddr, err := net.ResolveUDPAddr("udp", addr)
@@ -115,12 +115,12 @@ func (t *UDPTransport) Serve(handler sip.MessageHandler) error {
 		return fmt.Errorf("listen udp error. err=%w", err)
 	}
 
-	return t.ServeConn(udpConn, handler)
+	return t.Serve(udpConn, handler)
 }
 
 // ServeConn is direct way to provide conn on which this worker will listen
 // UDPReadWorkers are used to create more workers
-func (t *UDPTransport) ServeConn(conn net.PacketConn, handler sip.MessageHandler) error {
+func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) error {
 	if t.listener != nil {
 		return fmt.Errorf("UDP transport instance can only listen on one connection")
 	}
@@ -230,6 +230,24 @@ func (c *UDPConnection) Ref(i int) {
 func (c *UDPConnection) Close() error {
 	//Do not allow closing UDP
 	return nil
+}
+
+func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
+	// Some debug hook. TODO move to proper way
+	n, addr, err = c.PacketConn.ReadFrom(b)
+	if SIPDebug {
+		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+	}
+	return n, addr, err
+}
+
+func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+	// Some debug hook. TODO move to proper way
+	n, err = c.PacketConn.WriteTo(b, addr)
+	if SIPDebug {
+		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+	}
+	return n, err
 }
 
 func (c *UDPConnection) WriteMsg(msg sip.Message) error {

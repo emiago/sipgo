@@ -7,7 +7,7 @@ services:
 
     # image: golang:latest
     # command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -debug
-    command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -debug
+    command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -debug
     # stdin_open: true
     # command: bash
     # working_dir: /usr/src/sipgo
@@ -31,7 +31,7 @@ services:
 
   uas:
     image: ctaloi/sipp
-    command: -sn uas -t tn -i 10.5.0.20:5060 -trace_msg -trace_calldebug -trace_err -trace_logs
+    command: -sn uas -t tn -i 10.5.0.20:5060 -max_socket 10 -trace_msg -trace_calldebug -trace_err -trace_logs
     # network_mode: "host"
     cpuset: "4"
     networks:
@@ -40,7 +40,8 @@ services:
 
   uac:
     image: ctaloi/sipp
-    command: -sn uac -t tn -r 1 -rp 3000 -i 10.5.0.30 10.5.0.10:5060 -trace_msg
+    # command: -sn uac -t tn -r 1 -rp 3000 -i 10.5.0.30 10.5.0.10:5060 -trace_msg
+    command: -sn uac -t tn -r 1 -rp 3000 -i 10.5.0.30 -max_socket 10 -rsa 10.5.0.10:5060 10.5.0.20:5060
     # command: -sn uac -t tn -r 1 -rp 3000 -i 10.5.0.30 10.5.0.20:5060 -trace_msg
     # network_mode: "host"
     cpuset: "5"

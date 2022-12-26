@@ -49,7 +49,7 @@ func (t *WSTransport) Addr() string {
 }
 
 func (t *WSTransport) Network() string {
-	return "ws"
+	return TransportWS
 }
 
 func (t *WSTransport) Close() error {
@@ -68,7 +68,7 @@ func (t *WSTransport) Close() error {
 }
 
 // This is more generic way to provide listener and it is blocking
-func (t *WSTransport) Serve(handler sip.MessageHandler) error {
+func (t *WSTransport) ListenAndServe(handler sip.MessageHandler) error {
 	addr := t.addr
 	laddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -80,12 +80,11 @@ func (t *WSTransport) Serve(handler sip.MessageHandler) error {
 		return fmt.Errorf("listen tcp error. err=%w", err)
 	}
 
-	return t.ServeConn(conn, handler)
+	return t.Serve(conn, handler)
 }
 
-// serveConn is direct way to provide conn on which this worker will listen
-// UDPReadWorkers are used to create more workers
-func (t *WSTransport) ServeConn(l net.Listener, handler sip.MessageHandler) error {
+// Serve is direct way to provide conn on which this worker will listen
+func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	if t.listener != nil {
 		return fmt.Errorf("TCP transport instance can only listen on one lection")
 	}

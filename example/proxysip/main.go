@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/transport"
 
 	_ "net/http/pprof"
 
@@ -43,7 +44,7 @@ func main() {
 
 	if *debflag {
 		log.Logger = log.Logger.Level(zerolog.DebugLevel)
-		// transport.SIPDebug = true
+		transport.SIPDebug = true
 	}
 
 	log.Info().Int("cpus", runtime.NumCPU()).Msg("Runtime")
@@ -52,6 +53,11 @@ func main() {
 
 	srv := setupSipProxy(*dst, *extIP)
 	// Add listener
+
+	if *transportType == "tcp" {
+		// srv.TransportLayer().ConnectionReuse = false
+	}
+
 	srv.Listen(*transportType, *extIP)
 	if err := srv.Serve(); err != nil {
 		log.Error().Err(err).Msg("Fail to start sip server")
@@ -122,6 +128,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			reply(tx, req, 404, "Not found")
 			return
 		}
+
+		// if req.Method() == sip.BYE {
+		// 	reply(tx, req, 200, "OK")
+		// 	time.Sleep(1 * time.Second)
+		// }
 		// NOTE: Send Trying here
 
 		req.SetDestination(dst)
@@ -143,6 +154,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				if !more {
 					return
 				}
+
+				// if req.Method() == sip.BYE {
+				// 	return
+				// }
+
 				res.SetDestination(req.Source())
 				sipgo.ClientResponseRemoveVia(client, res) // For now this needs to be called manually
 				if err := tx.Respond(res); err != nil {
@@ -226,7 +242,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			dst = registry.Get(tohead.Address.User)
 		}
 		req.SetDestination(dst)
-		if err := client.WriteRequest(req); err != nil {
+		if err := client.WriteRequest(req, sipgo.ClientRequestAddVia); err != nil {
 			log.Error().Err(err).Msg("Send failed")
 			reply(tx, req, 500, "")
 		}

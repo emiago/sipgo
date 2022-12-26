@@ -216,6 +216,20 @@ func (hs *headers) RemoveHeader(name string) {
 	}
 }
 
+// RemoveHeader removes header by name
+func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) {
+	// name = HeaderToLower(name)
+	// delete(hs.headers, name)
+	// update order slice
+	for idx, entry := range hs.headerOrder {
+		if entry.Name() == name {
+			if f(entry) {
+				hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
+			}
+		}
+	}
+}
+
 // CloneHeaders returns all cloned headers in slice.
 func (hs *headers) CloneHeaders() []Header {
 	hdrs := make([]Header, 0)
@@ -793,9 +807,14 @@ func (h *ViaHeader) cloneFirst() *ViaHeader {
 }
 
 func (h *ViaHeader) Remove() {
-	r := h.Next
-	h.Next = nil //Let garbage collect
-	h = r
+	if h.Next == nil {
+		h = nil
+		return
+	}
+	*h = *h.Next
+	// next := h.Next
+	// h.Next = nil //Let garbage collect
+	// h = next
 }
 
 // ContentTypeHeader  is Content-Type header representation.
