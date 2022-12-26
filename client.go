@@ -57,19 +57,25 @@ type ClientRequestOption func(c *Client, req *sip.Request) error
 // ClientRequestAddVia is option for adding via header
 // https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
-	if via, exists := r.Via(); exists {
-		newvia := via.Clone()
-		newvia.Host = c.host
-		newvia.Port = c.port
-		newvia.Params.Add("branch", sip.GenerateBranch())
-		r.PrependHeader(newvia)
+	newvia := &sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       r.Transport(),
+		Host:            c.host,
+		Port:            c.port,
+		Params:          sip.NewParams(),
+		Next:            nil,
+	}
+	newvia.Params.Add("branch", sip.GenerateBranch())
 
+	if via, exists := r.Via(); exists {
 		if via.Params.Has("rport") {
 			h, p, _ := net.SplitHostPort(r.Source())
 			via.Params.Add("rport", p)
 			via.Params.Add("received", h)
 		}
 	}
+	r.PrependHeader(newvia)
 	return nil
 }
 

@@ -31,7 +31,7 @@ services:
 
   uas:
     image: ctaloi/sipp
-    command: -sn uas -t tn -i 10.5.0.20:5060 -max_socket 10 -trace_msg -trace_calldebug -trace_err -trace_logs
+    command: -sn uas -t tn -i 10.5.0.20:5060 -max_socket 10 -trace_msg -trace_calldebug -trace_err -trace_logs -trace_error_codes
     # network_mode: "host"
     cpuset: "4"
     networks:

@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -37,15 +38,17 @@ func main() {
 		runtime.MemProfileRate = 64
 	}
 
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: "2006-01-02 15:04:05.000",
-	}).With().Timestamp().Logger().Level(zerolog.InfoLevel)
-
+	lev := zerolog.InfoLevel
 	if *debflag {
-		log.Logger = log.Logger.Level(zerolog.DebugLevel)
+		lev = zerolog.DebugLevel
 		transport.SIPDebug = true
 	}
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
+	log.Logger = zerolog.New(zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.StampMicro,
+	}).With().Timestamp().Logger().Level(lev)
 
 	log.Info().Int("cpus", runtime.NumCPU()).Msg("Runtime")
 	log.Info().Msg("Server routes setuped")

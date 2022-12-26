@@ -100,14 +100,29 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentLength = m
 	case *ContentTypeHeader:
 		hs.contentType = m
-
 	}
 }
 
 // Add the given header.
 func (hs *headers) AppendHeader(header Header) {
 	hs.headerOrder = append(hs.headerOrder, header)
-	hs.setHeaderRef(header)
+	// update only if no multiple headers. TODO find this better
+	switch m := header.(type) {
+	case *ViaHeader:
+		if hs.via == nil {
+			hs.via = m
+		}
+	case *RouteHeader:
+		if hs.route == nil {
+			hs.route = m
+		}
+	case *RecordRouteHeader:
+		if hs.recordRoute == nil {
+			hs.recordRoute = m
+		}
+	default:
+		hs.setHeaderRef(header)
+	}
 
 	// name := HeaderToLower(header.Name())
 	// hs.appendHeader(name, header)
@@ -208,12 +223,25 @@ func (hs *headers) RemoveHeader(name string) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
 	// update order slice
+	foundIdx := -1
 	for idx, entry := range hs.headerOrder {
 		if entry.Name() == name {
+			foundIdx = idx
 			hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
 			break
 		}
 	}
+
+	// Update refs
+	if foundIdx > 0 {
+		for _, entry := range hs.headerOrder[foundIdx:] {
+			if entry.Name() == name {
+				hs.setHeaderRef(entry)
+				break
+			}
+		}
+	}
+
 }
 
 // RemoveHeader removes header by name
@@ -221,10 +249,22 @@ func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
 	// update order slice
+	foundIdx := -1
 	for idx, entry := range hs.headerOrder {
 		if entry.Name() == name {
 			if f(entry) {
+				foundIdx = idx
 				hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
+			}
+		}
+	}
+
+	// Update refs
+	if foundIdx > 0 {
+		for _, entry := range hs.headerOrder[foundIdx:] {
+			if entry.Name() == name {
+				hs.setHeaderRef(entry)
+				break
 			}
 		}
 	}

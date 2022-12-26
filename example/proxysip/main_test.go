@@ -12,6 +12,7 @@ import (
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -196,6 +197,7 @@ func TestMain(m *testing.M) {
 	if *debug {
 		logruser.SetLevel(logrus.TraceLevel)
 		log.Logger = log.Logger.With().Logger().Level(zerolog.DebugLevel)
+		transport.SIPDebug = true
 	}
 
 	m.Run()
@@ -249,6 +251,7 @@ func TestInviteCallUDP(t *testing.T) {
 }
 
 func TestInviteCallTCP(t *testing.T) {
+	transport.SIPDebug = true
 	p := parser.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	serverReader2, serverWriter2 := io.Pipe()
@@ -299,6 +302,7 @@ func TestInviteCallTCP(t *testing.T) {
 	listener.Conns <- serverC2
 
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
+
 	go srv.TransportLayer().ServeTCP(listener)
 	inviteScenario(t, client1, client2, p)
 }

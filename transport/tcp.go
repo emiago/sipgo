@@ -47,6 +47,7 @@ func (t *TCPTransport) Addr() string {
 }
 
 func (t *TCPTransport) Network() string {
+	// return "tcp"
 	return TransportTCP
 }
 
