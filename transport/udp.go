@@ -90,7 +90,7 @@ func (t *UDPTransport) Close() error {
 	}
 
 	if err := t.listenerUDP.Close(); err != nil {
-		rerr = fmt.Errorf("%w.%w", err, rerr)
+		rerr = fmt.Errorf("%s.%w", err.Error(), rerr)
 	}
 
 	t.listener = nil
@@ -230,6 +230,10 @@ func (c *UDPConnection) Ref(i int) {
 func (c *UDPConnection) Close() error {
 	//Do not allow closing UDP
 	return nil
+}
+
+func (c *UDPConnection) TryClose() (int, error) {
+	return 0, c.Close()
 }
 
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {

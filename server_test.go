@@ -35,8 +35,8 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       transport,
-		Host:            recipment.Host,
-		Port:            recipment.Port,
+		Host:            sender.Host,
+		Port:            sender.Port,
 		Params:          params,
 	})
 	req.AppendHeader(&sip.FromHeader{

@@ -229,15 +229,28 @@ func (c *WSConnection) Ref(i int) {
 
 func (c *WSConnection) Close() error {
 	c.mu.Lock()
+	c.refcount = 0
+	c.mu.Unlock()
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS doing hard close")
+	return c.Conn.Close()
+}
+
+func (c *WSConnection) TryClose() (int, error) {
+	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
 	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS reference decrement")
 	if ref > 0 {
-		return nil
+		return ref, nil
+	}
+
+	if ref < 0 {
+		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS ref went negative")
+		return 0, nil
 	}
 	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS closing")
-	return c.Conn.Close()
+	return ref, c.Conn.Close()
 }
 
 func (c *WSConnection) Read(b []byte) (n int, err error) {

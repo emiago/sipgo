@@ -162,8 +162,17 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string) Connection {
 // This should performe better to avoid any interface allocation
 func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
 	buf := make([]byte, UDPbufferSize)
-	defer conn.Close()
-	defer t.pool.Del(raddr)
+
+	defer func() {
+		// Delete connection from pool only when closed
+		ref, _ := conn.TryClose()
+		if ref > 0 {
+			return
+		}
+		t.pool.Del(raddr)
+	}()
+	// defer conn.Close()
+	// defer t.pool.Del(raddr)
 	defer t.log.Debug().Str("raddr", raddr).Msg("Connection read stopped")
 
 	for {
@@ -225,15 +234,29 @@ func (c *TCPConnection) Ref(i int) {
 
 func (c *TCPConnection) Close() error {
 	c.mu.Lock()
+	c.refcount = 0
+	c.mu.Unlock()
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", 0).Msg("TCP doing hard close")
+	return c.Conn.Close()
+}
+
+func (c *TCPConnection) TryClose() (int, error) {
+	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("TCP reference decrement")
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference decrement")
 	if ref > 0 {
-		return nil
+		return ref, nil
 	}
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("TCP closing")
-	return c.Conn.Close()
+
+	if ref < 0 {
+		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP ref went negative")
+		return 0, nil
+	}
+
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP closing")
+	return ref, c.Conn.Close()
 }
 
 func (c *TCPConnection) Read(b []byte) (n int, err error) {

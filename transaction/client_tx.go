@@ -271,7 +271,7 @@ func (tx *ClientTx) delete() {
 		// Maybe there is better way
 		tx.onTerminate(tx.key)
 
-		if err := tx.conn.Close(); err != nil {
+		if _, err := tx.conn.TryClose(); err != nil {
 			tx.log.Info().Err(err).Msg("Closing connection returned error")
 		}
 	})

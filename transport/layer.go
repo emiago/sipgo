@@ -301,7 +301,7 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		}
 
 		// Reference counting should prevent us closing connection too early
-		defer conn.Close()
+		defer conn.TryClose()
 
 		// RFC 3261 - 18.2.2.
 	case *sip.Response:

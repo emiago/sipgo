@@ -59,6 +59,21 @@ srv.Serve()
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
 
+
+## Stateful Proxy build
+
+Proxy is combination client and server handle that creates server/client transaction.
+Forwarding request is done via client handle:
+```go
+// Start client transaction and relay our request. Add Via and Record-Route header
+clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+// None transaction request
+err := client.WriteRequest(req, sipgo.ClientRequestAddVia)
+```
+
+Checkout `/example/proxysip` for more how to build simple stateful proxy.
+
+
 ### Server Transaction
 
 Server transaction is passed on handler
@@ -129,12 +144,6 @@ req := sip.NewRequest(method, &recipment, "SIP/2.0")
 // Send request and forget
 client.WriteRequest(req)
 ```
-
-## Proxy build
-
-Proxy is combination client and server handle. 
-Checkout `/example/proxysip` for more how to build simple stateful proxy.
-
 
 ### Dialogs (experiment)
 

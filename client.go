@@ -55,7 +55,7 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 type ClientRequestOption func(c *Client, req *sip.Request) error
 
 // ClientRequestAddVia is option for adding via header
-// https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
+// Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
 	newvia := &sip.ViaHeader{
 		ProtocolName:    "SIP",
@@ -80,6 +80,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 }
 
 // ClientRequestAddRecordRoute is option for adding record route header
+// Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
 func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 	rr := &sip.RecordRouteHeader{
 		Address: sip.Uri{
@@ -98,27 +99,55 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 	return nil
 }
 
+// TODO
+// Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
+func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
+	// TODO
+	return nil
+}
+
 // ClientResponseRemoveVia is needed when handling client transaction response, where previously used in
 // TransactionRequest with ClientRequestAddVia
 func ClientResponseRemoveVia(c *Client, r *sip.Response) {
-	var removedFromMulti bool
-	if via, exists := r.Via(); exists {
-		for via != nil {
-			if via.Host == c.host {
-				via.Remove()
-				removedFromMulti = true
-				break
-			}
-			via = via.Next
-		}
-	}
+	// var removedFromMulti bool
+	// Faster access TODO
+	// if via, exists := r.Via(); exists {
+	// 	prevvia := via
+	// 	for via != nil {
+	// 		if via.Host == c.host {
 
-	if !removedFromMulti {
-		r.RemoveHeaderOn("Via", c.removeViaCallback)
-	}
+	// 			removedFromMulti = true
+	// 			break
+	// 		}
+	// 		via = via.Next
+	// 		prevvia = via
+	// 	}
+	// }
+	// if !removedFromMulti {
+	// 	r.RemoveHeaderOn("Via", c.removeViaCallback)
+	// }
+
+	r.RemoveHeaderOn("Via", c.removeViaCallback)
 }
 
 func (c *Client) removeViaCallback(h sip.Header) bool {
 	via := h.(*sip.ViaHeader)
+
+	// Check is this multivalue
+	// If yes then just remove that value
+	// TODO can this be done better
+	if via.Next != nil {
+		prevvia := via
+		for via != nil {
+			if via.Host == c.host {
+				prevvia.Next = via.Next
+				via.Next = nil
+				return false
+			}
+			prevvia = via
+			via = via.Next
+		}
+	}
+
 	return via.Host == c.host
 }

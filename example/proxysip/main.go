@@ -109,6 +109,16 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	}
 
 	registry := NewRegistry()
+	var getDestination = func(req *sip.Request) string {
+		tohead, _ := req.To()
+		dst := registry.Get(tohead.Address.User)
+
+		if dst == "" {
+			return proxydst
+		}
+
+		return dst
+	}
 
 	var reply = func(tx sip.ServerTransaction, req *sip.Request, code sip.StatusCode, reason string) {
 		resp := sip.NewResponseFromRequest(req, code, reason, nil)
@@ -121,11 +131,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	var route = func(req *sip.Request, tx sip.ServerTransaction) {
 		// If we are proxying to asterisk or other proxy -dst must be set
 		// Otherwise we will look on our registration entries
-		dst := proxydst
-		if proxydst == "" {
-			tohead, _ := req.To()
-			dst = registry.Get(tohead.Address.User)
-		}
+		dst := getDestination(req)
 
 		if dst == "" {
 			reply(tx, req, 404, "Not found")
@@ -239,11 +245,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	}
 
 	var ackHandler = func(req *sip.Request, tx sip.ServerTransaction) {
-		dst := proxydst
-		if proxydst == "" {
-			tohead, _ := req.To()
-			dst = registry.Get(tohead.Address.User)
-		}
+		dst := getDestination(req)
 		req.SetDestination(dst)
 		if err := client.WriteRequest(req, sipgo.ClientRequestAddVia); err != nil {
 			log.Error().Err(err).Msg("Send failed")

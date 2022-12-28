@@ -13,7 +13,7 @@ func TestPrependHeader(t *testing.T) {
 	assert.Equal(t, 1, len(hs.headerOrder))
 
 	v := &ViaHeader{}
-	hs.PrependHeader(v.cloneFirst())
+	hs.PrependHeader(v.cloneMe())
 	assert.Equal(t, 2, len(hs.headerOrder))
 	assert.Equal(t, v, hs.GetHeader("via"))
 }

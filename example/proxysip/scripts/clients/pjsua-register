@@ -1,0 +1,48 @@
+#!/bin/sh
+
+SIP_USERNAME=$1
+
+if [ "${SIP_USERNAME}" == "" ]; then
+  echo "Missing CLI argument: SIP_USERNAME. Exiting"
+  exit 1
+fi
+
+SIP_SERVER_HOST=${SIP_SERVER_HOST:-localhost}
+SIP_SERVER_PORT=5060
+SIP_PASSWORD=${SIP_PASSWORD:-asterisk}
+# udp, tcp
+SIP_TRANSPORT=${SIP_TRANSPORT:-udp}
+SIP_REGISTER_TIMEOUT=${SIP_REGISTER_TIMEOUT:-30}
+
+# random ports in a range
+LOCAL_PORT=$(shuf -i 50001-55999 -n 1)
+RTP_PORT=$(shuf -i 56001-59999 -n 1)
+
+pjsua \
+  --log-level=0 \
+  --app-log-level=0 \
+  --no-stderr \
+  --null-audio \
+  --snd-auto-close=0 \
+  --max-calls=15 \
+  --no-vad \
+  --use-compact-form \
+  --reg-timeout=$SIP_REGISTER_TIMEOUT \
+  --rereg-delay=$SIP_REGISTER_TIMEOUT \
+  --use-srtp=0 \
+  --srtp-secure=0 \
+  --rtcp-mux \
+  --use-timer=1 \
+  --reg-use-proxy=3 \
+  --auto-update-nat=1 \
+  --disable-stun \
+  --local-port=${LOCAL_PORT} \
+  --rtp-port=${RTP_PORT} \
+  --realm="*" \
+  --registrar="sip:${SIP_SERVER_HOST}:${SIP_SERVER_PORT};transport=${SIP_TRANSPORT}" \
+  --proxy="sip:${SIP_SERVER_HOST}:${SIP_SERVER_PORT};transport=${SIP_TRANSPORT}" \
+  --outbound="sip:${SIP_SERVER_HOST}:${SIP_SERVER_PORT};transport=${SIP_TRANSPORT}" \
+  --id="sip:${SIP_USERNAME}@${SIP_SERVER_HOST}:${SIP_SERVER_PORT};transport=${SIP_TRANSPORT}" \
+  --username="${SIP_USERNAME}" \
+  --password="${SIP_PASSWORD}"
+

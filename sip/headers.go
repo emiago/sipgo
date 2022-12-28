@@ -245,7 +245,7 @@ func (hs *headers) RemoveHeader(name string) {
 }
 
 // RemoveHeader removes header by name
-func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) {
+func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) (removed bool) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
 	// update order slice
@@ -255,12 +255,13 @@ func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) {
 			if f(entry) {
 				foundIdx = idx
 				hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
+				break
 			}
 		}
 	}
 
 	// Update refs
-	if foundIdx > 0 {
+	if removed = foundIdx > 0; removed {
 		for _, entry := range hs.headerOrder[foundIdx:] {
 			if entry.Name() == name {
 				hs.setHeaderRef(entry)
@@ -268,7 +269,24 @@ func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) {
 			}
 		}
 	}
+	return
 }
+
+// func (hs *headers) RemoveViaByHost(host string) {
+// 	via := hs.via
+// 	if via.Next != nil {
+// 		prevvia := via
+// 		for via != nil {
+// 			if via.Host == host {
+// 				prevvia.Next = via.Next
+// 				via.Next = nil
+// 				return
+// 			}
+// 			prevvia = via
+// 			via = via.Next
+// 		}
+// 	}
+// }
 
 // CloneHeaders returns all cloned headers in slice.
 func (hs *headers) CloneHeaders() []Header {
@@ -815,17 +833,21 @@ func (h *ViaHeader) headerClone() Header {
 }
 
 func (h *ViaHeader) Clone() *ViaHeader {
-	newHop := h.cloneFirst()
+	newHop := h.cloneMe()
 
 	newNext := newHop
-	for next := h.Next; next != nil; next = next.Next {
-		newNext.Next = next.cloneFirst()
-		newNext = newNext.Next
+	tmp := h.Next
+	for tmp != nil {
+		clone := tmp.cloneMe()
+		newNext.Next = clone
+
+		newNext = clone
+		tmp = tmp.Next
 	}
 	return newHop
 }
 
-func (h *ViaHeader) cloneFirst() *ViaHeader {
+func (h *ViaHeader) cloneMe() *ViaHeader {
 	var newHop *ViaHeader
 	if h == nil {
 		return newHop
@@ -844,17 +866,6 @@ func (h *ViaHeader) cloneFirst() *ViaHeader {
 		newHop.Params = h.Params.clone()
 	}
 	return newHop
-}
-
-func (h *ViaHeader) Remove() {
-	if h.Next == nil {
-		h = nil
-		return
-	}
-	*h = *h.Next
-	// next := h.Next
-	// h.Next = nil //Let garbage collect
-	// h = next
 }
 
 // ContentTypeHeader  is Content-Type header representation.
