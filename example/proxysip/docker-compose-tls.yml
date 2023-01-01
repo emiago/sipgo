@@ -1,0 +1,44 @@
+version: "2.4"
+
+services:
+  proxy:
+    build:
+      context: ../../
+
+    # image: golang:latest
+    # command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -debug
+    command: go run ./example/proxysip -t tcp -ip=10.5.0.10:5060 -dst 10.5.0.20:5060 -cert=certs/localhost.dev.cert.pem -key=certs/localhost.dev.key.pem -rootpems=certs/ca/localtesting_ca.crt.pem -debug
+    # stdin_open: true
+    # command: bash
+    # working_dir: /usr/src/sipgo
+    volumes:
+      - ../../../sipgo:/go/sipgo
+
+    cpus: 4.0
+    cpuset: "0,1,2,3"
+
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.10
+
+    # mem_limit: 4G
+    # network_mode: "host"
+    environment:
+      - GOMAXPROCS=4 # Go does not match this by default
+      # - GODEBUG=madvdontneed=0
+      # - GODEBUG=madvdontneed=1,gctrace=1
+      # - GOGC=70
+
+  uas: # TODO
+
+  uac:
+    # TODO
+
+
+networks:
+  mynet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1

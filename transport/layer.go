@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -131,28 +130,10 @@ func (l *Layer) ServeWS(c net.Listener) error {
 }
 
 // ServeTLS will listen on tcp connection. rootPems can be nil if there is no need for client use
-func (l *Layer) ServeTLS(c net.Listener, certFile string, keyFile string, rootPems []byte) error {
+func (l *Layer) ServeTLS(c net.Listener, conf *tls.Config) error {
 	_, port, err := sip.ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
-	}
-
-	roots := x509.NewCertPool()
-	if rootPems != nil {
-		ok := roots.AppendCertsFromPEM(rootPems)
-		if !ok {
-			return fmt.Errorf("failed to parse root certificate")
-		}
-	}
-
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return fmt.Errorf("fail to load cert. err=%w", err)
-	}
-
-	conf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
 	}
 
 	transport := NewTLSTransport(c.Addr().String(), parser.NewParser(), conf)
@@ -200,7 +181,7 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 
 // Serve on any tls network. This function will block
 // Network supported: tcp
-func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr string, certFile string, keyFile string, rootPems []byte) error {
+func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	network = strings.ToLower(network)
 	_, port, err := sip.ParseAddr(addr)
 	if err != nil {
@@ -214,27 +195,9 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 
 	p := parser.NewParser()
 
-	roots := x509.NewCertPool()
-	if rootPems != nil {
-		ok := roots.AppendCertsFromPEM(rootPems)
-		if !ok {
-			return fmt.Errorf("failed to parse root certificate")
-		}
-	}
-
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return fmt.Errorf("fail to load cert. err=%w", err)
-	}
-
-	conf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
-	}
-
 	var t Transport
 	switch network {
-	case "tcp":
+	case "tcp", "tls":
 		t = NewTLSTransport(addr, p, conf)
 	// case "ws":
 	// 	t = NewWSTransport(addr, p)
@@ -243,13 +206,14 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 	}
 
 	// Add transport to list
-	l.addTransport(t, "tls", port)
+	l.addTransport(t, t.Network(), port)
 
 	err = t.ListenAndServe(l.handleMessage)
 	return err
 }
 
 func (l *Layer) addTransport(t Transport, network string, port int) {
+	network = NetworkToLower(network)
 	if _, ok := l.listenPorts[network]; !ok {
 		if l.listenPorts[network] == nil {
 			l.listenPorts[network] = make([]int, 0)

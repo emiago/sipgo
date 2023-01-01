@@ -1,3 +1,6 @@
 /TODO.md
 /proxysip
 /.vscode
+certs
+*.pcap
+/self-signed-root-ca-and-certificates.sh

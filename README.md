@@ -45,19 +45,23 @@ srv.OnBye(byeHandler)
 
 // For registrars
 // srv.OnRegister(registerHandler)
-
-
-// Add listeners
-srv.Listen("udp", "127.0.0.1:5060")
-srv.Listen("tcp", "127.0.0.1:5061")
-srv.Listen("ws", "127.0.0.1:5080")
-...
-// fire server
-srv.Serve()
+go srv.ListenAndServe(ctx, "tcp", "127.0.0.1:5061")
+go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
+go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
+<-ctx.Done()
 ```
 - Server handle creates listeners and reacts on incoming requests. [More on server transactions](#server-transaction)
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
+
+
+#### TLS transports
+```go 
+// TLS
+conf :=  sipgo.GenerateTLSConfig(certFile, keyFile , rootPems []byte)
+srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
+
+```
 
 
 ## Stateful Proxy build
@@ -176,7 +180,7 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 
 - [x] UDP
 - [x] TCP
-- [ ] TLS
+- [x] TLS
 - [x] WS
 - [ ] WSS
 

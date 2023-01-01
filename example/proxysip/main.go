@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime"
@@ -30,6 +32,9 @@ func main() {
 	extIP := flag.String("ip", "127.0.0.1:5060", "My exernal ip")
 	dst := flag.String("dst", "", "Destination pbx, sip server")
 	transportType := flag.String("t", "udp", "Transport, default will be determined by request")
+	certFile := flag.String("cert", "", "")
+	keyFile := flag.String("key", "", "")
+	rootPems := flag.String("rootpems", "", "")
 	flag.Parse()
 
 	if *pprof {
@@ -61,8 +66,30 @@ func main() {
 		// srv.TransportLayer().ConnectionReuse = false
 	}
 
-	srv.Listen(*transportType, *extIP)
-	if err := srv.Serve(); err != nil {
+	if *certFile != "" {
+		rootPems, err := ioutil.ReadFile(*rootPems)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Fail to read rootpems")
+		}
+		conf, err := sipgo.GenerateTLSConfig(*certFile, *keyFile, rootPems)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Fail to generate conf")
+		}
+
+		// keylog, err := os.OpenFile("key.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		// if err != nil {
+		// 	log.Fatal().Err(err).Msg("Fail to open keylogd")
+		// }
+
+		// conf.KeyLogWriter =
+
+		if err := srv.ListenAndServeTLS(context.TODO(), *transportType, *extIP, conf); err != nil {
+			log.Error().Err(err).Msg("Fail to start sip server")
+			return
+		}
+	}
+
+	if err := srv.ListenAndServe(context.TODO(), *transportType, *extIP); err != nil {
 		log.Error().Err(err).Msg("Fail to start sip server")
 		return
 	}

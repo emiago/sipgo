@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -30,10 +31,8 @@ func TestWebsocket(t *testing.T) {
 		<-tx.Done()
 	})
 
-	srv.Listen("ws", "127.0.0.1:5060")
-
 	go func() {
-		if err := srv.Serve(); err != nil {
+		if err := srv.ListenAndServe(context.TODO(), "ws", "127.0.0.1:5060"); err != nil {
 			log.Error().Err(err).Msg("Fail to serve")
 		}
 	}()
@@ -45,9 +44,8 @@ func TestWebsocket(t *testing.T) {
 
 	csrv, err := NewServer(ua) // Create server handle
 	require.Nil(t, err)
-	csrv.Listen("ws", "127.0.0.2:5060")
 	go func() {
-		if err := csrv.Serve(); err != nil {
+		if err := csrv.ListenAndServe(context.TODO(), "ws", "127.0.0.2:5060"); err != nil {
 			log.Error().Err(err).Msg("Fail to serve")
 		}
 	}()

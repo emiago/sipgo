@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -40,8 +41,7 @@ func main() {
 	setupRoutes(srv, h)
 
 	log.Info().Str("ip", *extIP).Str("dst", *dst).Msg("Starting server")
-	srv.Listen("udp", *extIP)
-	if err := srv.Serve(); err != nil {
+	if err := srv.ListenAndServe(context.TODO(), "udp", *extIP); err != nil {
 		log.Error().Err(err).Msg("Fail to serve")
 	}
 }

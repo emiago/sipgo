@@ -19,20 +19,22 @@ var ()
 
 // TCP transport implementation
 type TCPTransport struct {
-	addr     string
-	listener net.Listener
-	parser   parser.SIPParser
-	handler  sip.MessageHandler
-	log      zerolog.Logger
+	addr      string
+	transport string
+	listener  net.Listener
+	parser    parser.SIPParser
+	handler   sip.MessageHandler
+	log       zerolog.Logger
 
 	pool ConnectionPool
 }
 
 func NewTCPTransport(addr string, par parser.SIPParser) *TCPTransport {
 	p := &TCPTransport{
-		addr:   addr,
-		parser: par,
-		pool:   NewConnectionPool(),
+		addr:      addr,
+		parser:    par,
+		pool:      NewConnectionPool(),
+		transport: "tcp",
 	}
 	p.log = log.Logger.With().Str("caller", "transport<TCP>").Logger()
 	return p
@@ -48,7 +50,7 @@ func (t *TCPTransport) Addr() string {
 
 func (t *TCPTransport) Network() string {
 	// return "tcp"
-	return TransportTCP
+	return t.transport
 }
 
 func (t *TCPTransport) Close() error {

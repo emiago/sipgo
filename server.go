@@ -2,6 +2,9 @@ package sipgo
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -19,15 +22,11 @@ type Server struct {
 
 	// requestHandlers map of all registered request handlers
 	requestHandlers map[sip.RequestMethod]RequestHandler
-	listeners       map[string]string //addr:network
 
 	log zerolog.Logger
 
 	requestMiddlewares  []func(r *sip.Request)
 	responseMiddlewares []func(r *sip.Response)
-
-	// Default server behavior for sending request in preflight
-	RemoveViaHeader bool
 }
 
 type ServerOption func(s *Server) error
@@ -59,7 +58,6 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		requestMiddlewares:  make([]func(r *sip.Request), 0),
 		responseMiddlewares: make([]func(r *sip.Response), 0),
 		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
-		listeners:           make(map[string]string),
 		log:                 log.Logger.With().Str("caller", "Server").Logger(),
 	}
 	for _, o := range options {
@@ -71,26 +69,14 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-// Listen adds listener for serve
-func (srv *Server) Listen(network string, addr string) {
-	srv.listeners[addr] = network
-}
-
-// Serve will fire all listeners
-func (srv *Server) Serve() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	return srv.ServeWithContext(ctx)
-}
-
 // Serve will fire all listeners. Ctx allows canceling
-func (srv *Server) ServeWithContext(ctx context.Context) error {
-	defer srv.shutdown()
-	for addr, network := range srv.listeners {
-		go srv.tp.ListenAndServe(ctx, network, addr)
-	}
-	<-ctx.Done()
-	return ctx.Err()
+func (srv *Server) ListenAndServe(ctx context.Context, network string, addr string) error {
+	return srv.tp.ListenAndServe(ctx, network, addr)
+}
+
+// Serve will fire all listeners that are secured. Ctx allows canceling
+func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
+	return srv.tp.ListenAndServeTLS(ctx, network, addr, conf)
 }
 
 // onRequest gets request from Transaction layer
@@ -258,4 +244,28 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 // Can be used for modifying
 func (srv *Server) TransportLayer() *transport.Layer {
 	return srv.tp
+}
+
+// GenerateTLSConfig creates basic tls.Config that you can pass for ServerTLS
+// It needs rootPems for client side
+func GenerateTLSConfig(certFile string, keyFile string, rootPems []byte) (*tls.Config, error) {
+	roots := x509.NewCertPool()
+	if rootPems != nil {
+		ok := roots.AppendCertsFromPEM(rootPems)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate")
+		}
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("fail to load cert. err=%w", err)
+	}
+
+	conf := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      roots,
+	}
+
+	return conf, nil
 }
