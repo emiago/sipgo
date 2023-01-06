@@ -58,21 +58,26 @@ go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 #### TLS transports
 ```go 
 // TLS
-conf :=  sipgo.GenerateTLSConfig(certFile, keyFile , rootPems []byte)
+conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
-
 ```
 
 
 ## Stateful Proxy build
 
-Proxy is combination client and server handle that creates server/client transaction.
+Proxy is combination client and server handle that creates server/client transaction. They need to share
+same ua same like uac/uas build.
 Forwarding request is done via client handle:
 ```go
-// Start client transaction and relay our request. Add Via and Record-Route header
-clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
-// None transaction request
-err := client.WriteRequest(req, sipgo.ClientRequestAddVia)
+
+srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+    req.SetDestination("10.1.2.3") // Change sip.Request destination
+    // Start client transaction and relay our request. Add Via and Record-Route header
+    clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+    // Send back response
+    res := <-cltx.Responses()
+    tx.Respond(res)
+})
 ```
 
 Checkout `/example/proxysip` for more how to build simple stateful proxy.
