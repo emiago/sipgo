@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime"
@@ -32,9 +31,6 @@ func main() {
 	extIP := flag.String("ip", "127.0.0.1:5060", "My exernal ip")
 	dst := flag.String("dst", "", "Destination pbx, sip server")
 	transportType := flag.String("t", "udp", "Transport, default will be determined by request")
-	certFile := flag.String("cert", "", "")
-	keyFile := flag.String("key", "", "")
-	rootPems := flag.String("rootpems", "", "")
 	flag.Parse()
 
 	if *pprof {
@@ -60,35 +56,6 @@ func main() {
 	go httpServer(":8080")
 
 	srv := setupSipProxy(*dst, *extIP)
-	// Add listener
-
-	if *transportType == "tcp" {
-		// srv.TransportLayer().ConnectionReuse = false
-	}
-
-	if *certFile != "" {
-		rootPems, err := ioutil.ReadFile(*rootPems)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Fail to read rootpems")
-		}
-		conf, err := sipgo.GenerateTLSConfig(*certFile, *keyFile, rootPems)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Fail to generate conf")
-		}
-
-		// keylog, err := os.OpenFile("key.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
-		// if err != nil {
-		// 	log.Fatal().Err(err).Msg("Fail to open keylogd")
-		// }
-
-		// conf.KeyLogWriter =
-
-		if err := srv.ListenAndServeTLS(context.TODO(), *transportType, *extIP, conf); err != nil {
-			log.Error().Err(err).Msg("Fail to start sip server")
-			return
-		}
-	}
-
 	if err := srv.ListenAndServe(context.TODO(), *transportType, *extIP); err != nil {
 		log.Error().Err(err).Msg("Fail to start sip server")
 		return
@@ -165,12 +132,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			return
 		}
 
-		// if req.Method() == sip.BYE {
-		// 	reply(tx, req, 200, "OK")
-		// 	time.Sleep(1 * time.Second)
-		// }
-		// NOTE: Send Trying here
-
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
 		clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
@@ -190,10 +151,6 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				if !more {
 					return
 				}
-
-				// if req.Method() == sip.BYE {
-				// 	return
-				// }
 
 				res.SetDestination(req.Source())
 				sipgo.ClientResponseRemoveVia(client, res) // For now this needs to be called manually
