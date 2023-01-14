@@ -23,7 +23,7 @@ type TLSTransport struct {
 
 func NewTLSTransport(addr string, par parser.SIPParser, tlsConf *tls.Config) *TLSTransport {
 	tcptrans := NewTCPTransport(addr, par)
-	tcptrans.transport = "tls" //Override transport
+	tcptrans.transport = TransportTLS //Override transport
 	p := &TLSTransport{
 		TCPTransport: tcptrans,
 	}

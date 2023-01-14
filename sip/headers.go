@@ -77,6 +77,7 @@ func (hs *headers) StringWrite(buffer io.StringWriter) {
 }
 
 // setHeaderRef should be always called when new header is added
+// it should point to TOPMOST header value
 // it creates fast access to header
 func (hs *headers) setHeaderRef(header Header) {
 	switch m := header.(type) {

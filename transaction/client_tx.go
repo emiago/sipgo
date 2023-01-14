@@ -183,9 +183,7 @@ func (tx *ClientTx) cancel() {
 		tx.lastErr = err
 		tx.mu.Unlock()
 
-		go func() {
-			tx.spinFsm(client_input_transport_err)
-		}()
+		go tx.spinFsm(client_input_transport_err)
 	}
 }
 
@@ -207,9 +205,7 @@ func (tx *ClientTx) ack() {
 		tx.lastErr = err
 		tx.mu.Unlock()
 
-		go func() {
-			tx.spinFsm(client_input_transport_err)
-		}()
+		go tx.spinFsm(client_input_transport_err)
 	}
 }
 
@@ -241,9 +237,7 @@ func (tx *ClientTx) resend() {
 
 	if err != nil {
 		tx.log.Debug().Err(err).Str("req", tx.Origin().StartLine()).Msg("Fail to resend request")
-		go func() {
-			tx.spinFsm(client_input_transport_err)
-		}()
+		go tx.spinFsm(client_input_transport_err)
 	}
 }
 

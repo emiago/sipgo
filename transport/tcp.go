@@ -34,7 +34,7 @@ func NewTCPTransport(addr string, par parser.SIPParser) *TCPTransport {
 		addr:      addr,
 		parser:    par,
 		pool:      NewConnectionPool(),
-		transport: "tcp",
+		transport: TransportTCP,
 	}
 	p.log = log.Logger.With().Str("caller", "transport<TCP>").Logger()
 	return p
@@ -143,6 +143,14 @@ func (t *TCPTransport) createConnection(raddr *net.TCPAddr) (Connection, error) 
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
+	// if err := conn.SetKeepAlive(true); err != nil {
+	// 	return nil, fmt.Errorf("%s keepalive err=%w", t, err)
+	// }
+
+	// if err := conn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+	// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
+	// }
+
 	c := t.initConnection(conn, addr)
 	return c, nil
 }
@@ -230,15 +238,14 @@ func (c *TCPConnection) Ref(i int) {
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference increment")
-
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference increment")
 }
 
 func (c *TCPConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", 0).Msg("TCP doing hard close")
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", 0).Msg("TCP doing hard close")
 	return c.Conn.Close()
 }
 
@@ -247,17 +254,17 @@ func (c *TCPConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference decrement")
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference decrement")
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP ref went negative")
+		log.Warn().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP ref went negative")
 		return 0, nil
 	}
 
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP closing")
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP closing")
 	return ref, c.Conn.Close()
 }
 
