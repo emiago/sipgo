@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/emiago/sipgo/sip"
 )
@@ -17,28 +18,39 @@ type Connection interface {
 	TryClose() (int, error)
 }
 
-type Conn struct {
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		b := new(bytes.Buffer)
+		// b.Grow(2048)
+		return b
+	},
+}
+
+type conn struct {
 	net.Conn
 }
 
-func (c *Conn) Ref(i int) {
+func (c *conn) Ref(i int) {
 	// Not used so far
 }
 
-func (c *Conn) TryClose() (int, error) {
+func (c *conn) TryClose() (int, error) {
 	// Not used so far
 	return 0, c.Conn.Close()
 }
 
-func (c *Conn) String() string {
+func (c *conn) String() string {
 	return c.LocalAddr().Network() + ":" + c.LocalAddr().String()
 }
 
-func (c *Conn) WriteMsg(msg sip.Message) error {
+func (c *conn) WriteMsg(msg sip.Message) error {
 	return c.WriteMsgTo(msg, msg.Destination())
 }
 
-func (c *Conn) WriteMsgTo(msg sip.Message, raddr string) error {
+func (c *conn) WriteMsgTo(msg sip.Message, raddr string) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()

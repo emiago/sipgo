@@ -2,8 +2,6 @@ package sip
 
 import (
 	"io"
-
-	uuid "github.com/satori/go.uuid"
 )
 
 type MessageHandler func(msg Message)
@@ -32,12 +30,6 @@ const (
 	UPDATE    RequestMethod = "UPDATE"
 	PUBLISH   RequestMethod = "PUBLISH"
 )
-
-type MessageID string
-
-func NextMessageID() MessageID {
-	return MessageID(uuid.Must(uuid.NewV4()).String())
-}
 
 type Message interface {
 	// Start line returns message start line.

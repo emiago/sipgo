@@ -153,23 +153,23 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 		return nil, err
 	}
 
+	// TODO remove this check
 	if conn == nil {
 		return nil, fmt.Errorf("somethings is wrong")
 	}
 
+	// TODO
 	tx := NewClientTx(key, req, conn, txl.log)
 	if err != nil {
 		return nil, err
 	}
-
-	// logger := log.AddFieldsFrom(txl.log, req, tx)
-	// logger.Debug("client transaction created")
 
 	// Avoid allocations of anonymous functions
 	tx.OnTerminate(txl.clientTxTerminate)
 	txl.clientTransactions.put(tx.Key(), tx)
 
 	if err := tx.Init(); err != nil {
+		txl.clientTxTerminate(tx.key) //Force termination here
 		return nil, err
 	}
 

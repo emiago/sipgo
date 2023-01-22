@@ -19,14 +19,12 @@ type ClientTx struct {
 	timer_d_time time.Duration // Current duration of timer D.
 	timer_d      *time.Timer
 	timer_m      *time.Timer
-	reliable     bool
 
 	mu        sync.RWMutex
 	closeOnce sync.Once
 }
 
 func NewClientTx(key string, origin *sip.Request, conn transport.Connection, logger zerolog.Logger) *ClientTx {
-	origin = prepareClientRequest(origin)
 	tx := &ClientTx{}
 	tx.key = key
 	// tx.conn = tpl
@@ -38,47 +36,23 @@ func NewClientTx(key string, origin *sip.Request, conn transport.Connection, log
 	tx.log = logger
 
 	tx.origin = origin
-	tx.reliable = transport.IsReliable(origin.Transport())
 	return tx
-}
-
-func prepareClientRequest(origin *sip.Request) *sip.Request {
-	if viaHop, ok := origin.Via(); ok {
-		if viaHop.Params == nil {
-			viaHop.Params = sip.NewParams()
-		}
-		if !viaHop.Params.Has("branch") {
-			viaHop.Params.Add("branch", sip.GenerateBranch())
-		}
-	} else {
-		viaHop = &sip.ViaHeader{
-			ProtocolName:    "SIP",
-			ProtocolVersion: "2.0",
-			Params: sip.NewParams().
-				Add("branch", sip.GenerateBranch()).(sip.HeaderParams),
-		}
-
-		origin.PrependHeader(viaHop)
-	}
-
-	return origin
 }
 
 func (tx *ClientTx) Init() error {
 	tx.initFSM()
 
-	if err := tx.conn.WriteMsg(tx.Origin()); err != nil {
-		tx.log.Debug().Err(err).Str("req", tx.Origin().StartLine()).Msg("Fail to write request on init")
-		tx.mu.Lock()
-		tx.lastErr = err
-		tx.mu.Unlock()
-
-		tx.spinFsm(client_input_transport_err)
-
+	if err := tx.conn.WriteMsg(tx.origin); err != nil {
+		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to write request on init")
+		// tx.mu.Lock()
+		// tx.lastErr = err
+		// tx.mu.Unlock()
+		// tx.spinFsm(client_input_transport_err)
 		return err
 	}
 
-	if tx.reliable {
+	reliable := transport.IsReliable(tx.origin.Transport())
+	if reliable {
 		tx.mu.Lock()
 		tx.timer_d_time = 0
 		tx.mu.Unlock()
@@ -107,12 +81,7 @@ func (tx *ClientTx) Init() error {
 		tx.spinFsm(client_input_timer_b)
 	})
 	tx.mu.Unlock()
-
-	tx.mu.RLock()
-	err := tx.lastErr
-	tx.mu.RUnlock()
-
-	return err
+	return nil
 }
 
 func (tx *ClientTx) Receive(res *sip.Response) error {
@@ -159,7 +128,7 @@ func (tx *ClientTx) Terminate() {
 }
 
 func (tx *ClientTx) cancel() {
-	if !tx.Origin().IsInvite() {
+	if !tx.origin.IsInvite() {
 		return
 	}
 
@@ -167,14 +136,14 @@ func (tx *ClientTx) cancel() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	cancelRequest := sip.NewCancelRequest(tx.Origin())
+	cancelRequest := sip.NewCancelRequest(tx.origin)
 	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
 		var lastRespStr string
 		if lastResp != nil {
 			lastRespStr = lastResp.Short()
 		}
 		tx.log.Error().
-			Str("invite_request", tx.Origin().Short()).
+			Str("invite_request", tx.origin.Short()).
 			Str("invite_response", lastRespStr).
 			Str("cancel_request", cancelRequest.Short()).
 			Msgf("send CANCEL request failed: %s", err)
@@ -192,11 +161,11 @@ func (tx *ClientTx) ack() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	ack := sip.NewAckRequest(tx.Origin(), lastResp, nil)
+	ack := sip.NewAckRequest(tx.origin, lastResp, nil)
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().
-			Str("invite_request", tx.Origin().Short()).
+			Str("invite_request", tx.origin.Short()).
 			Str("invite_response", lastResp.Short()).
 			Str("cancel_request", ack.Short()).
 			Msgf("send ACK request failed: %s", err)
@@ -212,7 +181,7 @@ func (tx *ClientTx) ack() {
 // Initialises the correct kind of FSM based on request method.
 func (tx *ClientTx) initFSM() {
 	tx.fsmMu.Lock()
-	if tx.Origin().IsInvite() {
+	if tx.origin.IsInvite() {
 		tx.fsmState = tx.inviteStateCalling
 	} else {
 		tx.fsmState = tx.stateCalling
@@ -229,14 +198,14 @@ func (tx *ClientTx) resend() {
 
 	// tx.log.Debug("resend origin request")
 
-	err := tx.conn.WriteMsg(tx.Origin())
+	err := tx.conn.WriteMsg(tx.origin)
 
 	tx.mu.Lock()
 	tx.lastErr = err
 	tx.mu.Unlock()
 
 	if err != nil {
-		tx.log.Debug().Err(err).Str("req", tx.Origin().StartLine()).Msg("Fail to resend request")
+		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to resend request")
 		go tx.spinFsm(client_input_transport_err)
 	}
 }

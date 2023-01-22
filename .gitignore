@@ -4,3 +4,5 @@
 certs
 *.pcap
 /self-signed-root-ca-and-certificates.sh
+/example/goproxy
+/example/astscale

@@ -2,10 +2,9 @@ package transport
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
-	"strings"
-	"sync"
 
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
@@ -20,29 +19,11 @@ var (
 	UDPReadWorkers int = 1
 
 	UDPbufferSize uint16 = 65535
+
+	UDPMTUSize = 1500
+
+	ErrUDPMTUCongestion = errors.New("size of packet larger than MTU")
 )
-
-var strBuilderPool = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		b := new(strings.Builder)
-		// b.Grow(2048)
-		return b
-	},
-}
-
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		b := new(bytes.Buffer)
-		// b.Grow(2048)
-		return b
-	},
-}
 
 // UDP transport implementation
 type UDPTransport struct {
@@ -266,6 +247,10 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 	buf.Reset()
 	msg.StringWrite(buf)
 	data := buf.Bytes()
+
+	if len(data) > UDPMTUSize-200 {
+		return ErrUDPMTUCongestion
+	}
 
 	n, err := c.WriteTo(data, raddr)
 	if err != nil {

@@ -6,38 +6,6 @@ import (
 	"strings"
 )
 
-// A URI from any schema (e.g. sip:, tel:, callto:)
-type SIPUri interface {
-	// Determine if the two URIs are equal according to the rules in RFC 3261 s. 19.1.4.
-	// Equals(other interface{}) bool
-	String() string
-	// Clone() Uri
-
-	IsEncrypted() bool
-	// GetUser() string
-	// SetUser(user string)
-	// GetPassword() string
-	// SetPassword(pass string)
-	// GetHost() string
-	// SetHost(host string)
-	// GetPort() int //It is -1 if not set
-	// SetPort(int)
-	// UriParams() Params
-	// SetUriParams(params Params)
-	// Headers() Params
-	// SetHeaders(params Params)
-	// // Return true if and only if the URI is the special wildcard URI '*'; that is, if it is
-	// // a WildcardUri struct.
-	// IsWildcard() bool
-}
-
-// A URI from a schema suitable for inclusion in a Contact: header.
-// The only such URIs are sip/sips URIs and the special wildcard URI '*'.
-// hold this interface to not break other code
-type ContactUri interface {
-	SIPUri
-}
-
 type Uri struct {
 	// True if and only if the URI is a SIPS URI.
 	Encrypted bool
