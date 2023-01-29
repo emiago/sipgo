@@ -5,9 +5,14 @@ import (
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func Init() {
+	uuid.EnableRandPool()
+}
 
 type Client struct {
 	*UserAgent
@@ -32,7 +37,13 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 }
 
 // TransactionRequest uses transaction layer to send request
+// Customizing req can be done via options. NOTE: this overrides default header construction
 func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
+	if len(options) == 0 {
+		clientRequestBuildReq(c, req)
+		return c.tx.Request(req)
+	}
+
 	for _, o := range options {
 		if err := o(c, req); err != nil {
 			return nil, err
@@ -42,7 +53,13 @@ func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOp
 }
 
 // WriteRequest sends request directly to transport layer
+// Customizing req can be done via options same like TransactionRequest
 func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) error {
+	if len(options) == 0 {
+		clientRequestBuildReq(c, req)
+		return c.tp.WriteMsg(req)
+	}
+
 	for _, o := range options {
 		if err := o(c, req); err != nil {
 			return err
@@ -52,6 +69,62 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 }
 
 type ClientRequestOption func(c *Client, req *sip.Request) error
+
+func clientRequestBuildReq(c *Client, req *sip.Request) error {
+	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.1
+	// A valid SIP request formulated by a UAC MUST, at a minimum, contain
+	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
+	// and Via;
+	ClientRequestAddVia(c, req)
+
+	from := sip.FromHeader{
+		DisplayName: c.name,
+		Address: sip.Uri{
+			User:      c.name,
+			Host:      c.host,
+			Port:      c.port,
+			UriParams: sip.NewParams(),
+			Headers:   sip.NewParams(),
+		},
+	}
+	req.AppendHeader(&from)
+
+	to := sip.ToHeader{
+		Address: sip.Uri{
+			Encrypted: req.Recipient.Encrypted,
+			User:      req.Recipient.User,
+			Host:      req.Recipient.Host,
+			Port:      req.Recipient.Port,
+			UriParams: req.Recipient.UriParams,
+			Headers:   req.Recipient.Headers,
+		},
+	}
+	req.AppendHeader(&to)
+
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+
+	callid := sip.CallIDHeader(uuid.String())
+	req.AppendHeader(&callid)
+
+	// TODO consider atomic increase cseq within Dialog
+	cseq := sip.CSeqHeader{
+		SeqNo:      1,
+		MethodName: req.Method,
+	}
+	req.AppendHeader(&cseq)
+
+	maxfwd := sip.MaxForwardsHeader(70)
+	req.AppendHeader(&maxfwd)
+
+	if req.Body() == nil {
+		req.SetBody(nil)
+	}
+
+	return nil
+}
 
 // ClientRequestAddVia is option for adding via header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6

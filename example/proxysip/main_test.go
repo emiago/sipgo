@@ -115,7 +115,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 					continue
 				}
 
-				if req, ok := resReceived.(*sip.Request); ok && req.Method() == sip.ACK {
+				if req, ok := resReceived.(*sip.Request); ok && req.Method == sip.ACK {
 					require.Nil(t, err)
 					t.Log("CLIENT2: Received ACK. Call established")
 					assert.Equal(t, ackReq.StartLine(), resReceived.StartLine())

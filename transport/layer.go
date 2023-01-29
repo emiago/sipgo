@@ -337,7 +337,7 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		c, _ = l.getConnection(network, addr)
 		if c != nil {
 			//Increase reference. This should prevent client connection early drop
-			l.log.Debug().Str("req", req.Method().String()).Msg("Connection ref increment")
+			l.log.Debug().Str("req", req.Method.String()).Msg("Connection ref increment")
 			c.Ref(1)
 			return c, nil
 		}

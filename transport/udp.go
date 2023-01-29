@@ -90,7 +90,6 @@ func (t *UDPTransport) ListenAndServe(handler sip.MessageHandler) error {
 	if err != nil {
 		return fmt.Errorf("fail to resolve address. err=%w", err)
 	}
-
 	udpConn, err := net.ListenUDP("udp", laddr)
 	if err != nil {
 		return fmt.Errorf("listen udp error. err=%w", err)
@@ -110,6 +109,7 @@ func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) er
 	t.listener = conn
 
 	t.handler = handler
+
 	/*
 		Multiple readers makes problem, which can delay writing response
 	*/
@@ -129,11 +129,26 @@ func (t *UDPTransport) ResolveAddr(addr string) (net.Addr, error) {
 
 // GetConnection will return same listener connection
 func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
+
 	return t.conn, nil
 }
 
 // CreateConnection will return same listener connection
 func (t *UDPTransport) CreateConnection(addr string) (Connection, error) {
+	// TODO. Handle connected vs nonconnected udp
+	// Normal client can not reuse this connection
+	// https://dadrian.io/blog/posts/udp-in-go/
+	// raddr, err := net.ResolveUDPAddr("udp", addr)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// conn, err := net.DialUDP("udp", nil, raddr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return &UDPConnection{conn}, err
+
 	return t.conn, nil
 }
 
@@ -254,7 +269,7 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 
 	n, err := c.WriteTo(data, raddr)
 	if err != nil {
-		return fmt.Errorf("conn %s write err=%w", c, err)
+		return fmt.Errorf("udp conn %s err. %w", c.LocalAddr().String(), err)
 	}
 
 	if n == 0 {

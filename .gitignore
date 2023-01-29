@@ -6,3 +6,5 @@ certs
 /self-signed-root-ca-and-certificates.sh
 /example/goproxy
 /example/astscale
+/example/auth
+/go.work

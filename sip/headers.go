@@ -343,7 +343,6 @@ type GenericHeader struct {
 	// The name of the header.
 	HeaderName string
 	// The contents of the header, including any parameters.
-	// This is transparent data that is not natively understood by gossip.
 	Contents string
 }
 

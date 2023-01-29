@@ -143,7 +143,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		defer clTx.Terminate()
 
 		// Keep monitoring transactions, and proxy client responses to server transaction
-		log.Debug().Str("req", req.Method().String()).Msg("Starting transaction")
+		log.Debug().Str("req", req.Method.String()).Msg("Starting transaction")
 		for {
 			select {
 
@@ -159,7 +159,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				}
 
 				// Early terminate
-				if req.Method() == sip.BYE {
+				if req.Method == sip.BYE {
 					// We will call client Terminate
 					return
 				}
@@ -177,15 +177,15 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				clTx.Cancel()
 
 			case err := <-clTx.Errors():
-				log.Error().Err(err).Str("caller", req.Method().String()).Msg("Client Transaction Error")
+				log.Error().Err(err).Str("caller", req.Method.String()).Msg("Client Transaction Error")
 				return
 
 			case err := <-tx.Errors():
-				log.Error().Err(err).Str("caller", req.Method().String()).Msg("Server transaction error")
+				log.Error().Err(err).Str("caller", req.Method.String()).Msg("Server transaction error")
 				return
 
 			case <-tx.Done():
-				log.Debug().Str("req", req.Method().String()).Msg("Transaction done")
+				log.Debug().Str("req", req.Method.String()).Msg("Transaction done")
 				return
 			}
 		}

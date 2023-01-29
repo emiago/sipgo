@@ -32,7 +32,7 @@ func (s *ServerDialog) onRequestDialog(r *sip.Request, tx sip.ServerTransaction)
 }
 
 func (s *ServerDialog) handleRequestDialog(r *sip.Request, tx sip.ServerTransaction) {
-	switch r.Method() {
+	switch r.Method {
 	// Early state
 	// case sip.INVITE:
 

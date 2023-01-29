@@ -222,3 +222,11 @@ func ResolveSelfIP() (net.IP, error) {
 	}
 	return nil, errors.New("server not connected to any network")
 }
+
+func NonceWrite(buf []byte) {
+	const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	length := len(letterBytes)
+	for i := range buf {
+		buf[i] = letterBytes[rand.Intn(length)]
+	}
+}

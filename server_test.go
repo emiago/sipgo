@@ -153,7 +153,7 @@ func TestUDPUAS(t *testing.T) {
 	// Register all handlers
 	for _, method := range allmethods {
 		srv.OnRequest(method, func(req *sip.Request, tx sip.ServerTransaction) {
-			t.Log("New " + req.Method().String())
+			t.Log("New " + req.Method.String())
 			// Make all responses
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			tx.Respond(res)
@@ -230,7 +230,7 @@ func TestTCPUAS(t *testing.T) {
 	// Register all handlers
 	for _, method := range allmethods {
 		srv.OnRequest(method, func(req *sip.Request, tx sip.ServerTransaction) {
-			t.Log("New " + req.Method().String())
+			t.Log("New " + req.Method.String())
 			// Make all responses
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			tx.Respond(res)

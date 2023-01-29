@@ -90,7 +90,7 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 		mid(req)
 	}
 
-	handler := srv.getHandler(req.Method())
+	handler := srv.getHandler(req.Method)
 
 	if handler == nil {
 		srv.log.Warn().Msg("SIP request handler not found")

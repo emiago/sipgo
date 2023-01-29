@@ -106,7 +106,7 @@ func (tx *ServerTx) receiveRequest(req *sip.Request) (FsmInput, error) {
 	}
 
 	switch {
-	case req.Method() == tx.origin.Method():
+	case req.Method == tx.origin.Method:
 		return server_input_request, nil
 	case req.IsAck(): // ACK for non-2xx response
 		tx.lastAck = req
