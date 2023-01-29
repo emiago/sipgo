@@ -1,7 +1,6 @@
 package sipgo
 
 import (
-	"context"
 	"net"
 	"strings"
 
@@ -30,7 +29,7 @@ func WithUserAgent(ua string) UserAgentOption {
 	}
 }
 
-func WithIP(ip string) UserAgentOption {
+func WithUserAgentIP(ip string) UserAgentOption {
 	return func(s *UserAgent) error {
 		host, _, err := net.SplitHostPort(ip)
 		if err != nil {
@@ -44,48 +43,35 @@ func WithIP(ip string) UserAgentOption {
 	}
 }
 
-func WithDNSResolver(r *net.Resolver) UserAgentOption {
+func WithUserAgentDNSResolver(r *net.Resolver) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.dnsResolver = r
 		return nil
 	}
 }
 
-func WithUDPDNSResolver(dns string) ServerOption {
-	return func(s *Server) error {
-		s.dnsResolver = &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				d := net.Dialer{}
-				return d.DialContext(ctx, "udp", dns)
-			},
-		}
-		return nil
-	}
-}
-
 func NewUA(options ...UserAgentOption) (*UserAgent, error) {
-	s := &UserAgent{}
+	ua := &UserAgent{}
 
 	for _, o := range options {
-		if err := o(s); err != nil {
+		if err := o(ua); err != nil {
 			return nil, err
 		}
 	}
 
-	if s.ip == nil {
+	if ua.ip == nil {
 		v, err := sip.ResolveSelfIP()
 		if err != nil {
 			return nil, err
 		}
-		if err := s.setIP(v); err != nil {
+		if err := ua.setIP(v); err != nil {
 			return nil, err
 		}
 	}
 
-	s.tp = transport.NewLayer(s.dnsResolver)
-	s.tx = transaction.NewLayer(s.tp)
-	return s, nil
+	ua.tp = transport.NewLayer(ua.dnsResolver)
+	ua.tx = transaction.NewLayer(ua.tp)
+	return ua, nil
 }
 
 // Listen adds listener for serve

@@ -10,7 +10,7 @@ import (
 )
 
 func TestClientRequestOptions(t *testing.T) {
-	ua, err := NewUA(WithIP("10.0.0.0:5060"))
+	ua, err := NewUA(WithUserAgentIP("10.0.0.0:5060"))
 	require.Nil(t, err)
 
 	c, err := NewClient(ua)

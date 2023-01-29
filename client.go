@@ -28,7 +28,6 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 		}
 	}
 
-	// c.tx = transaction.NewLayer(c.tp)
 	return c, nil
 }
 

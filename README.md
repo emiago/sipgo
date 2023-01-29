@@ -29,7 +29,7 @@ Dialog [example/dialog](example/dialog)
 
 ## Usage
 
-Lib allows you to write easily client or server or to build up stateful proxies, registrar or any sip routing.
+Lib allows you to write easily sip servers(or clients) or to build up stateful proxies, registrar or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
 
@@ -53,7 +53,6 @@ go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 ```
 - Server handle creates listeners and reacts on incoming requests. [More on server transactions](#server-transaction)
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
-
 
 
 #### TLS transports

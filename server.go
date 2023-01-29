@@ -31,7 +31,7 @@ type Server struct {
 
 type ServerOption func(s *Server) error
 
-func WithLogger(logger zerolog.Logger) ServerOption {
+func WithServerLogger(logger zerolog.Logger) ServerOption {
 	return func(s *Server) error {
 		s.log = logger
 		return nil
