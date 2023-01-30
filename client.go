@@ -138,9 +138,11 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 		Params:          sip.NewParams(),
 		Next:            nil,
 	}
-	newvia.Params.Add("branch", sip.GenerateBranch())
+	// NOTE: Consider lenght of branch configurable
+	newvia.Params.Add("branch", sip.GenerateBranchN(16))
 
 	if via, exists := r.Via(); exists {
+		// newvia.Params.Add("branch", via.Params["branch"])
 		if via.Params.Has("rport") {
 			h, p, _ := net.SplitHostPort(r.Source())
 			via.Params.Add("rport", p)

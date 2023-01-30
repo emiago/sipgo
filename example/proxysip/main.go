@@ -159,10 +159,10 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				}
 
 				// Early terminate
-				if req.Method == sip.BYE {
-					// We will call client Terminate
-					return
-				}
+				// if req.Method == sip.BYE {
+				// 	// We will call client Terminate
+				// 	return
+				// }
 
 			case m := <-tx.Acks():
 				// Acks can not be send directly trough destination

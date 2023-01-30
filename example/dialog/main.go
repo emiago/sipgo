@@ -120,18 +120,18 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 			clTx.Cancel()
 
 		case err := <-clTx.Errors():
-			log.Error().Err(err).Str("caller", req.Method().String()).Msg("Client Transaction Error")
+			log.Error().Err(err).Str("caller", req.Method.String()).Msg("Client Transaction Error")
 			return
 
 		case err := <-tx.Errors():
-			log.Error().Err(err).Str("caller", req.Method().String()).Msg("Server transaction error")
+			log.Error().Err(err).Str("caller", req.Method.String()).Msg("Server transaction error")
 			return
 
 		case <-tx.Done():
-			log.Debug().Str("req", req.Method().String()).Msg("Transaction done")
+			log.Debug().Str("req", req.Method.String()).Msg("Transaction done")
 			return
 		case <-clTx.Done():
-			log.Debug().Str("req", req.Method().String()).Msg("Client Transaction done")
+			log.Debug().Str("req", req.Method.String()).Msg("Client Transaction done")
 			return
 		}
 	}

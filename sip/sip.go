@@ -22,10 +22,21 @@ const (
 
 // GenerateBranch returns random unique branch ID.
 func GenerateBranch() string {
-	return strings.Join([]string{
-		RFC3261BranchMagicCookie,
-		RandString(32),
-	}, ".")
+	return GenerateBranchN(16)
+}
+
+// GenerateBranchN returns random unique branch ID in format MagicCookie.<n chars>
+func GenerateBranchN(n int) string {
+	sb := &strings.Builder{}
+	generateBranchStringWrite(sb, n)
+	return sb.String()
+}
+
+func generateBranchStringWrite(sb *strings.Builder, n int) {
+	sb.Grow(len(RFC3261BranchMagicCookie) + 33)
+	sb.WriteString(RFC3261BranchMagicCookie)
+	sb.WriteString(".")
+	RandStringBytesMask(sb, 32)
 }
 
 // DefaultPort returns protocol default port by network.

@@ -145,7 +145,7 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 	}
 
 	if _, exists := txl.clientTransactions.get(key); exists {
-		return nil, fmt.Errorf("transaction already exists")
+		return nil, fmt.Errorf("transaction %q already exists", key)
 	}
 
 	conn, err := txl.tpl.ClientRequestConnection(req)
