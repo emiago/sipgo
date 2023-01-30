@@ -77,47 +77,59 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// and Via;
 	ClientRequestAddVia(c, req)
 
-	from := sip.FromHeader{
-		DisplayName: c.name,
-		Address: sip.Uri{
-			User:      c.name,
-			Host:      c.host,
-			Port:      c.port,
-			UriParams: sip.NewParams(),
-			Headers:   sip.NewParams(),
-		},
-	}
-	req.AppendHeader(&from)
-
-	to := sip.ToHeader{
-		Address: sip.Uri{
-			Encrypted: req.Recipient.Encrypted,
-			User:      req.Recipient.User,
-			Host:      req.Recipient.Host,
-			Port:      req.Recipient.Port,
-			UriParams: req.Recipient.UriParams,
-			Headers:   req.Recipient.Headers,
-		},
-	}
-	req.AppendHeader(&to)
-
-	uuid, err := uuid.NewRandom()
-	if err != nil {
-		return err
+	if _, exists := req.From(); !exists {
+		from := sip.FromHeader{
+			DisplayName: c.name,
+			Address: sip.Uri{
+				User:      c.name,
+				Host:      c.host,
+				Port:      c.port,
+				UriParams: sip.NewParams(),
+				Headers:   sip.NewParams(),
+			},
+		}
+		req.AppendHeader(&from)
 	}
 
-	callid := sip.CallIDHeader(uuid.String())
-	req.AppendHeader(&callid)
-
-	// TODO consider atomic increase cseq within Dialog
-	cseq := sip.CSeqHeader{
-		SeqNo:      1,
-		MethodName: req.Method,
+	if _, exists := req.To(); !exists {
+		to := sip.ToHeader{
+			Address: sip.Uri{
+				Encrypted: req.Recipient.Encrypted,
+				User:      req.Recipient.User,
+				Host:      req.Recipient.Host,
+				Port:      req.Recipient.Port,
+				UriParams: req.Recipient.UriParams,
+				Headers:   req.Recipient.Headers,
+			},
+		}
+		req.AppendHeader(&to)
 	}
-	req.AppendHeader(&cseq)
 
-	maxfwd := sip.MaxForwardsHeader(70)
-	req.AppendHeader(&maxfwd)
+	if _, exists := req.CallID(); !exists {
+		uuid, err := uuid.NewRandom()
+		if err != nil {
+			return err
+		}
+
+		callid := sip.CallIDHeader(uuid.String())
+		req.AppendHeader(&callid)
+
+	}
+
+	if _, exists := req.CSeq(); !exists {
+		// TODO consider atomic increase cseq within Dialog
+		cseq := sip.CSeqHeader{
+			SeqNo:      1,
+			MethodName: req.Method,
+		}
+		req.AppendHeader(&cseq)
+	}
+
+	// TODO: Add MaxForwads shortcut
+	if h := req.GetHeader("Max-Forwards"); h == nil {
+		maxfwd := sip.MaxForwardsHeader(70)
+		req.AppendHeader(&maxfwd)
+	}
 
 	if req.Body() == nil {
 		req.SetBody(nil)
