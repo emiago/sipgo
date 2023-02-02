@@ -33,7 +33,7 @@ type UDPTransport struct {
 	listenerUDP *net.UDPConn // TODO consider removing this. There is maybe none benefit if we use if instead interface
 	parser      parser.SIPParser
 	handler     sip.MessageHandler
-	conn        Connection
+	conn        *UDPConnection
 
 	log zerolog.Logger
 }
@@ -116,9 +116,9 @@ func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) er
 
 	t.conn = &UDPConnection{conn}
 	for i := 0; i < UDPReadWorkers-1; i++ {
-		go t.readConnection(conn)
+		go t.readConnection(t.conn)
 	}
-	t.readConnection(conn)
+	t.readConnection(t.conn)
 
 	return nil
 }
@@ -152,7 +152,7 @@ func (t *UDPTransport) CreateConnection(addr string) (Connection, error) {
 	return t.conn, nil
 }
 
-func (t *UDPTransport) readConnection(conn net.PacketConn) {
+func (t *UDPTransport) readConnection(conn *UDPConnection) {
 	buf := make([]byte, UDPbufferSize)
 	defer conn.Close()
 	for {

@@ -155,7 +155,7 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 
 	// TODO remove this check
 	if conn == nil {
-		return nil, fmt.Errorf("somethings is wrong")
+		return nil, fmt.Errorf("connection is nil")
 	}
 
 	// TODO

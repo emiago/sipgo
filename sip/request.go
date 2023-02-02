@@ -313,7 +313,7 @@ func cloneRequest(req *Request) *Request {
 	// 	newReq.AppendHeader(h)
 	// }
 
-	newReq.SetBody(req.Body())
+	// newReq.SetBody(req.Body())
 	newReq.SetTransport(req.Transport())
 	newReq.SetSource(req.Source())
 	newReq.SetDestination(req.Destination())

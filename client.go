@@ -38,6 +38,7 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 
 // TransactionRequest uses transaction layer to send request
 // Customizing req can be done via options. NOTE: this overrides default header construction
+// NOTE: request can be edited. Pass req.Clone() to avoid this
 func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
@@ -54,6 +55,7 @@ func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOp
 
 // WriteRequest sends request directly to transport layer
 // Customizing req can be done via options same like TransactionRequest
+// NOTE: request can be edited. Pass req.Clone() to avoid this
 func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) error {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
