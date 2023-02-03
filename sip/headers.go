@@ -48,6 +48,7 @@ type headers struct {
 	contentType   *ContentTypeHeader
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
+	maxForwards   *MaxForwardsHeader
 }
 
 func (hs *headers) String() string {
@@ -101,6 +102,8 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentLength = m
 	case *ContentTypeHeader:
 		hs.contentType = m
+	case *MaxForwardsHeader:
+		hs.maxForwards = m
 	}
 }
 
@@ -336,6 +339,10 @@ func (hs *headers) Route() (*RouteHeader, bool) {
 
 func (hs *headers) RecordRoute() (*RecordRouteHeader, bool) {
 	return hs.recordRoute, hs.recordRoute != nil
+}
+
+func (hs *headers) MaxForwards() (*MaxForwardsHeader, bool) {
+	return hs.maxForwards, hs.maxForwards != nil
 }
 
 // GenericHeader is generic struct for unknown headers

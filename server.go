@@ -31,6 +31,7 @@ type Server struct {
 
 type ServerOption func(s *Server) error
 
+// WithServerLogger allows customizing server logger
 func WithServerLogger(logger zerolog.Logger) ServerOption {
 	return func(s *Server) error {
 		s.log = logger
@@ -38,7 +39,9 @@ func WithServerLogger(logger zerolog.Logger) ServerOption {
 	}
 }
 
-// NewServer creates new instance of SIP server.
+// NewServer creates new instance of SIP server handle.
+// Allows creating server transaction handlers
+// It uses User Agent transport and transaction layer
 func NewServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	s, err := newBaseServer(ua, options...)
 	if err != nil {
@@ -218,15 +221,6 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 // ServeRequest can be used as middleware for preprocessing message
 func (srv *Server) ServeRequest(f func(r *sip.Request)) {
 	srv.requestMiddlewares = append(srv.requestMiddlewares, f)
-}
-
-// TODO can this handled better?
-func (srv *Server) ServeResponse(f func(m *sip.Response)) {
-	srv.responseMiddlewares = append(srv.responseMiddlewares, f)
-	if len(srv.responseMiddlewares) == 1 {
-		//Register this only once. TODO CAN THIS
-		srv.tp.OnMessage(srv.onTransportMessage)
-	}
 }
 
 func (srv *Server) onTransportMessage(m sip.Message) {

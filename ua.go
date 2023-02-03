@@ -22,6 +22,8 @@ type UserAgent struct {
 
 type UserAgentOption func(s *UserAgent) error
 
+// WithUserAgent changes user agent name
+// Default: sipgo
 func WithUserAgent(ua string) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.name = ua
@@ -29,6 +31,8 @@ func WithUserAgent(ua string) UserAgentOption {
 	}
 }
 
+// WithUserAgentIP sets local IP that will be used in building request
+// If not used IP will be resolved
 func WithUserAgentIP(ip string) UserAgentOption {
 	return func(s *UserAgent) error {
 		host, _, err := net.SplitHostPort(ip)
@@ -43,6 +47,7 @@ func WithUserAgentIP(ip string) UserAgentOption {
 	}
 }
 
+// WithUserAgentDNSResolver allows customizing default DNS resolver for transport layer
 func WithUserAgentDNSResolver(r *net.Resolver) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.dnsResolver = r
@@ -50,8 +55,13 @@ func WithUserAgentDNSResolver(r *net.Resolver) UserAgentOption {
 	}
 }
 
+// NewUA creates User Agent
+// User Agent will create transport and transaction layer
+// Check options for customizing user agent
 func NewUA(options ...UserAgentOption) (*UserAgent, error) {
-	ua := &UserAgent{}
+	ua := &UserAgent{
+		name: "sipgo",
+	}
 
 	for _, o := range options {
 		if err := o(ua); err != nil {

@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/gobwas/ws v1.1.0
+	github.com/google/uuid v1.3.0
 	github.com/prometheus/client_golang v1.12.0
 	github.com/rs/zerolog v1.28.0
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b
@@ -18,7 +19,6 @@ require (
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect

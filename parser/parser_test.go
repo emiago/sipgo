@@ -154,6 +154,17 @@ func TestParseHeaders(t *testing.T) {
 		unordered := header[:strings.Index(header, ";")] + ";lr;transport=tls>"
 		assert.True(t, hstr == header || hstr == unordered, hstr)
 	})
+
+	t.Run("MaxForwards", func(t *testing.T) {
+		header := "Max-Forwards: 70"
+		h, err := parser.ParseHeader(header)
+		require.Nil(t, err, err)
+
+		exp := sip.MaxForwardsHeader(70)
+		assert.IsType(t, &exp, h)
+		assert.Equal(t, "70", h.Value())
+		assert.Equal(t, header, h.String())
+	})
 }
 
 func BenchmarkParserHeaders(b *testing.B) {

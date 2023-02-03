@@ -9,6 +9,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClientRequestBuild(t *testing.T) {
+	ua, err := NewUA(WithUserAgentIP("10.0.0.0:5060"))
+	require.Nil(t, err)
+
+	c, err := NewClient(ua)
+	require.Nil(t, err)
+
+	recipment := sip.Uri{
+		User: "bob",
+		Host: "10.2.2.2",
+		Port: 5060,
+	}
+	req := sip.NewRequest(sip.OPTIONS, &recipment, "SIP/2.0")
+	clientRequestBuildReq(c, req)
+
+	from, exists := req.From()
+	assert.True(t, exists)
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@10.0.0.0>", from.Value())
+
+	to, exists := req.To()
+	assert.True(t, exists)
+	assert.Equal(t, "<"+recipment.String()+">", to.Value())
+
+	callid, exists := req.CallID()
+	assert.True(t, exists)
+	assert.NotEmpty(t, callid.Value())
+
+	cseq, exists := req.CSeq()
+	assert.True(t, exists)
+	assert.Equal(t, "1 OPTIONS", cseq.Value())
+
+	maxfwd, exists := req.MaxForwards()
+	assert.True(t, exists)
+	assert.Equal(t, "70", maxfwd.Value())
+
+	clen, exists := req.ContentLength()
+	assert.True(t, exists)
+	assert.Equal(t, "0", clen.Value())
+}
+
 func TestClientRequestOptions(t *testing.T) {
 	ua, err := NewUA(WithUserAgentIP("10.0.0.0:5060"))
 	require.Nil(t, err)

@@ -30,18 +30,18 @@ const maxCseq = 2147483647
 type HeaderParser func(headerName string, headerData string) (sip.Header, error)
 
 var headersParsers = map[string]HeaderParser{
-	"to":      parseToAddressHeader,
-	"t":       parseToAddressHeader,
-	"from":    parseFromAddressHeader,
-	"f":       parseFromAddressHeader,
-	"contact": parseContactAddressHeader,
-	"m":       parseContactAddressHeader,
-	"call-id": parseCallId,
-	"i":       parseCallId,
-	"cseq":    parseCSeq,
-	"via":     parseViaHeader,
-	"v":       parseViaHeader,
-	// "max-forwards": parseMaxForwards,
+	"to":             parseToAddressHeader,
+	"t":              parseToAddressHeader,
+	"from":           parseFromAddressHeader,
+	"f":              parseFromAddressHeader,
+	"contact":        parseContactAddressHeader,
+	"m":              parseContactAddressHeader,
+	"call-id":        parseCallId,
+	"i":              parseCallId,
+	"cseq":           parseCSeq,
+	"via":            parseViaHeader,
+	"v":              parseViaHeader,
+	"max-forwards":   parseMaxForwards,
 	"content-length": parseContentLength,
 	// "l":              parseContentLength,
 	// "expires":        parseExpires,
@@ -436,4 +436,14 @@ func parseCallId(headerName string, headerText string) (
 	var callId = sip.CallIDHeader(headerText)
 
 	return &callId, nil
+}
+
+func parseMaxForwards(headerName string, headerText string) (header sip.Header, err error) {
+	val, err := strconv.ParseUint(headerText, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	maxfwd := sip.MaxForwardsHeader(val)
+	return &maxfwd, nil
 }

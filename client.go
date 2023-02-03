@@ -21,6 +21,15 @@ type Client struct {
 
 type ClientOption func(c *Client) error
 
+// WithServerLogger allows customizing client logger
+func WithClientLogger(logger zerolog.Logger) ClientOption {
+	return func(s *Client) error {
+		s.log = logger
+		return nil
+	}
+}
+
+// NewClient creates client handle for user agent
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
@@ -36,9 +45,13 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-// TransactionRequest uses transaction layer to send request
-// Customizing req can be done via options. NOTE: this overrides default header construction
-// NOTE: request can be edited. Pass req.Clone() to avoid this
+// TransactionRequest uses transaction layer to send request and returns transaction
+// By default the following header fields will be added if not exist:
+// To, From, CSeq, Call-ID, Max-Forwards, Via
+// Passing custom options will override this behavior.
+// This is useful when using client handle in proxy building
+//
+// NOTE: request will not be cloned and header adding will be present after this action
 func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
@@ -54,8 +67,8 @@ func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOp
 }
 
 // WriteRequest sends request directly to transport layer
-// Customizing req can be done via options same like TransactionRequest
-// NOTE: request can be edited. Pass req.Clone() to avoid this
+// Behavior is same as TransactionRequest
+// Non-transaction ACK request should be passed like this
 func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) error {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
@@ -127,8 +140,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		req.AppendHeader(&cseq)
 	}
 
-	// TODO: Add MaxForwads shortcut
-	if h := req.GetHeader("Max-Forwards"); h == nil {
+	if _, exists := req.MaxForwards(); !exists {
 		maxfwd := sip.MaxForwardsHeader(70)
 		req.AppendHeader(&maxfwd)
 	}
