@@ -265,7 +265,7 @@ func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) (removed b
 	}
 
 	// Update refs
-	if removed = foundIdx > 0; removed {
+	if foundIdx > 0 {
 		for _, entry := range hs.headerOrder[foundIdx:] {
 			if entry.Name() == name {
 				hs.setHeaderRef(entry)
@@ -770,10 +770,9 @@ type ViaHeader struct {
 	ProtocolVersion string
 	Transport       string
 	Host            string
-	// The port for this via hop. This is stored as a pointer type, since it is an optional field.
-	Port   int
-	Params HeaderParams
-	Next   *ViaHeader
+	Port            int // This is optional
+	Params          HeaderParams
+	Next            *ViaHeader
 }
 
 func (hop *ViaHeader) SentBy() string {

@@ -25,10 +25,9 @@ const abnfWs = " \t"
 const maxCseq = 2147483647
 
 // A HeaderParser is any function that turns raw header data into one or more Header objects.
-// The HeaderParser will receive arguments of the form ("max-forwards", "70").
-// It should return a slice of headers, which should have length > 1 unless it also returns an error.
 type HeaderParser func(headerName string, headerData string) (sip.Header, error)
 
+// This needs to kept minimalistic in order to avoid overhead of parsing
 var headersParsers = map[string]HeaderParser{
 	"to":             parseToAddressHeader,
 	"t":              parseToAddressHeader,
@@ -43,20 +42,11 @@ var headersParsers = map[string]HeaderParser{
 	"v":              parseViaHeader,
 	"max-forwards":   parseMaxForwards,
 	"content-length": parseContentLength,
-	// "l":              parseContentLength,
-	// "expires":        parseExpires,
-	// "user-agent":     parseUserAgent,
-	// "allow":          parseAllow,
-	"content-type": parseContentType,
-	// "c":              parseContentType,
-	// "accept":         parseAccept,
-	// "require":        parseRequire,
-	// "supported":      parseSupported,
-	// "k":              parseSupported,
-	"route":        parseRouteHeader,
-	"record-route": parseRecordRouteHeader,
-	//"content-encoding","e"
-	//"subject":          "s",
+	"l":              parseContentLength,
+	"content-type":   parseContentType,
+	"c":              parseContentType,
+	"route":          parseRouteHeader,
+	"record-route":   parseRecordRouteHeader,
 }
 
 var bufReader = sync.Pool{
