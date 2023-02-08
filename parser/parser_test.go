@@ -246,7 +246,22 @@ func BenchmarkParserHeaders(b *testing.B) {
 func TestParseRequest(t *testing.T) {
 	branch := sip.GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
+	parser := NewParser()
+	t.Run("NoCRLF", func(t *testing.T) {
+		// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
+		// In case of missing CRLF
+		for _, msgstr := range []string{
+			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
+			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\n",
+			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n",
+			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
+		} {
+			_, err := parser.Parse([]byte(msgstr))
+			assert.Equal(t, ErrLineNoCRLF, err)
+		}
+	})
 
+	// Full message
 	rawMsg := []string{
 		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
 		"Via: SIP/2.0/UDP 127.0.0.2:5060;branch=" + branch,
@@ -255,14 +270,37 @@ func TestParseRequest(t *testing.T) {
 		"Call-ID: " + callid,
 		"CSeq: 1 INVITE",
 		"Contact: <sip:alice@127.0.0.2:5060;expires=3600>",
-		"Content-Length: 0",
+		"Content-Type: application/sdp",
+		"Content-Length: 562",
 		"",
-		"",
+		"v=0",
+		"o=- 3884881090 3884881090 IN IP4 192.168.178.22",
+		"s=pjmedia",
+		"b=AS:84",
+		"t=0 0",
+		"a=X-nat:0",
+		"m=audio 58804 RTP/AVP 96 97 98 99 3 0 8 9 120 121 122",
+		"c=IN IP4 192.168.178.22",
+		"b=TIAS:64000",
+		"a=sendrecv",
+		"a=rtpmap:96 speex/16000",
+		"a=rtpmap:97 speex/8000",
+		"a=rtpmap:98 speex/32000",
+		"a=rtpmap:99 iLBC/8000",
+		"a=fmtp:99 mode=30",
+		"a=rtpmap:120 telephone-event/16000",
+		"a=fmtp:120 0-16",
+		"a=rtpmap:121 telephone-event/8000",
+		"a=fmtp:121 0-16",
+		"a=rtpmap:122 telephone-event/32000",
+		"a=fmtp:122 0-16",
+		"a=ssrc:1129373754 cname:2ab364994c4b0b3f",
+		"a=rtcp:58805 IN IP4 192.168.178.22",
+		"a=rtcp-mux",
 	}
 
 	msgstr := strings.Join(rawMsg, "\r\n")
 
-	parser := NewParser()
 	msg, err := parser.Parse([]byte(msgstr))
 	require.Nil(t, err)
 
@@ -283,22 +321,29 @@ func TestParseRequest(t *testing.T) {
 }
 
 func TestRegisterRequestFail(t *testing.T) {
-	m := `REGISTER sip:10.5.0.10:5060;transport=udp SIP/2.0
-v: SIP/2.0/UDP 10.5.0.1:51477;rport;branch=z9hG4bKPj55659194-de09-497e-8cd0-978755d148bc
-Route: <sip:10.5.0.10:5060;transport=udp;lr>
-Route: <sip:10.5.0.10:5060;transport=udp;lr>
-Max-Forwards: 70
-f: <sip:test@10.5.0.10>;tag=171a9361-dd7b-49a8-831b-16691c419860
-t: <sip:test@10.5.0.10>
-i: 6d3e7e31-f58e-4d7e-8bc3-1c7efa230424
-CSeq: 10330 REGISTER
-User-Agent: PJSUA v2.10 Linux-5.14.4.18/x86_64/glibc-2.31
-m: <sip:test@10.5.0.1:51477;ob>
-Expires: 30
-Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
-l:  0`
+	rawMsg := []string{
+		"REGISTER sip:10.5.0.10:5060;transport=udp SIP/2.0",
+		"v: SIP/2.0/UDP 10.5.0.1:51477;rport;branch=z9hG4bKPj55659194-de09-497e-8cd0-978755d148bc",
+		"Route: <sip:10.5.0.10:5060;transport=udp;lr>",
+		"Route: <sip:10.5.0.10:5060;transport=udp;lr>",
+		"Max-Forwards: 70",
+		"f: <sip:test@10.5.0.10>;tag=171a9361-dd7b-49a8-831b-16691c419860",
+		"t: <sip:test@10.5.0.10>",
+		"i: 6d3e7e31-f58e-4d7e-8bc3-1c7efa230424",
+		"CSeq: 10330 REGISTER",
+		"User-Agent: PJSUA v2.10 Linux-5.14.4.18/x86_64/glibc-2.31",
+		"m: <sip:test@10.5.0.1:51477;ob>",
+		"Expires: 30",
+		"Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
+		"l:  0",
+		"",
+		"",
+	}
+
+	data := []byte(strings.Join(rawMsg, "\r\n"))
+
 	parser := NewParser()
-	msg, err := parser.Parse([]byte(m))
+	msg, err := parser.Parse(data)
 	require.Nil(t, err, err)
 
 	c := msg.GetHeader("Contact").(*sip.ContactHeader)

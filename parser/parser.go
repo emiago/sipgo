@@ -24,6 +24,10 @@ const abnfWs = " \t"
 // C.f. RFC 3261 S. 8.1.1.5.
 const maxCseq = 2147483647
 
+var (
+	ErrLineNoCRLF = errors.New("line has no CRLF")
+)
+
 // A HeaderParser is any function that turns raw header data into one or more Header objects.
 type HeaderParser func(headerName string, headerData string) (sip.Header, error)
 
@@ -180,21 +184,6 @@ func ParseLine(startLine string) (msg sip.Message, err error) {
 	return nil, fmt.Errorf("transmission beginning '%s' is not a SIP message", startLine)
 }
 
-func nextLineFast(reader *bytes.Buffer) (line []byte, err error) {
-	line, err = reader.ReadBytes('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	lenline := len(line)
-	if lenline > 1 && line[lenline-2] == '\r' {
-		line = line[:lenline-2]
-		return line, err
-
-	}
-	return nil, fmt.Errorf("fail to read")
-}
-
 func nextLine(reader *bytes.Buffer) (line string, err error) {
 	// Scan full line without buffer
 	// If we need to continue then try to grow
@@ -207,58 +196,21 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 		return "", err
 	}
 
-	lenline := len(line)
 	// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
 	// The start-line, each message-header line, and the empty line MUST be
 	// terminated by a carriage-return line-feed sequence (CRLF).  Note that
 	// the empty line MUST be present even if the message-body is not.
-	if lenline > 1 && line[lenline-2] == '\r' {
-		line = line[:lenline-2]
-		return line, nil
+	lenline := len(line)
+	if lenline < 2 {
+		return line, ErrLineNoCRLF
 	}
 
+	if line[lenline-2] != '\r' {
+		return line, ErrLineNoCRLF
+	}
+
+	line = line[:lenline-2]
 	return line, nil
-
-	// This is now slow part
-	var buffer strings.Builder
-	var data string
-	var b byte
-	buffer.WriteString(line)
-
-	for {
-		// bufio.ScanLines()
-		data, err = reader.ReadString('\r')
-		if err != nil {
-			if lenline > 0 && errors.Is(err, io.EOF) {
-				// Non found \r means we only have normal breaks
-				return line, nil
-			}
-
-			return "", err
-		}
-
-		buffer.WriteString(data)
-
-		b, err = reader.ReadByte()
-		if err != nil {
-			return "", err
-		}
-
-		buffer.WriteByte(b)
-		if b != '\n' {
-			continue
-		}
-
-		line = buffer.String()
-		// STILL NOT SURE DO WE NEED TO DO THIS
-		if strings.Contains(abnfWs, line[0:1]) {
-			buffer.WriteString(" ")
-			continue
-		}
-
-		line = line[:len(line)-2]
-		return line, nil
-	}
 }
 
 func nextChunk(reader *bytes.Buffer, buf []byte) (n int, err error) {

@@ -133,6 +133,7 @@ func (srv *Server) shutdown() {
 	srv.tx.Close()
 	// stop transport layer
 	srv.tp.Close()
+
 }
 
 // OnRequest registers new request callback. Can be used as generic way to add handler

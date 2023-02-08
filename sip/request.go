@@ -68,6 +68,9 @@ func (req *Request) String() string {
 }
 
 func (req *Request) StringWrite(buffer io.StringWriter) {
+	// 	The start-line, each message-header line, and the empty line MUST be
+	//  terminated by a carriage-return line-feed sequence (CRLF).  Note that
+	//  the empty line MUST be present even if the message-body is not.
 	req.StartLineWrite(buffer)
 	buffer.WriteString("\r\n")
 	// Write the headers.
@@ -76,6 +79,7 @@ func (req *Request) StringWrite(buffer io.StringWriter) {
 	if req.body != nil {
 		buffer.WriteString("\r\n")
 		buffer.WriteString(string(req.body))
+		return
 	}
 	buffer.WriteString("\r\n")
 }
