@@ -156,7 +156,6 @@ func TestUDPUAS(t *testing.T) {
 			t.Log("New " + req.Method.String())
 			// Make all responses
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-			t.Log(res.String())
 			tx.Respond(res)
 		})
 	}
