@@ -208,6 +208,10 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 	}
 
 	lenline := len(line)
+	// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
+	// The start-line, each message-header line, and the empty line MUST be
+	// terminated by a carriage-return line-feed sequence (CRLF).  Note that
+	// the empty line MUST be present even if the message-body is not.
 	if lenline > 1 && line[lenline-2] == '\r' {
 		line = line[:lenline-2]
 		return line, nil
