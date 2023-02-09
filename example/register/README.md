@@ -1,6 +1,14 @@
 # register
 
 This example provides example of running simple registry and client with Digest auth.
+It has some external dependency so it is a submodule.
+To run in from root use workspace:
+```sh
+go work init 
+go work use .
+go work use ./example/register
+```
+
 
 ## Running server:
 
