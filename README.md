@@ -25,6 +25,7 @@ To find out more about performance check the latest results:
 ## Examples
 
 Stateful proxy [example/proxysip](example/proxysip)  
+Register with authentication [example/register](example/register) 
 Dialog [example/dialog](example/dialog)  
 
 ## Usage
@@ -176,6 +177,30 @@ srv.OnDialog(func(d sip.Dialog) {
 ```
 
 `ClientDialog` TODO...
+
+## SIP Debug
+
+You can have full SIP messages dumped from transport into Debug level message.
+
+Example:
+```go
+transport.SIPDebug = true
+```
+
+```
+Feb 24 23:32:26.493191 DBG UDP read 10.10.0.10:5060 <- 10.10.0.100:5060:
+SIP/2.0 100 Trying
+Via: SIP/2.0/UDP 10.10.0.10:5060;rport=5060;received=10.10.0.10;branch=z9hG4bK.G3nCwpXAKJQ0T2oZUII70wuQx9NeXc61;alias
+Via: SIP/2.0/UDP 10.10.1.1:5060;branch=z9hG4bK-1-1-0
+Record-Route: <sip:10.10.0.10;transport=udp;lr>
+Call-ID: 1-1@10.10.1.1
+From: "sipp" <sip:sipp@10.10.1.1>;tag=1SIPpTag001
+To: "uac" <sip:uac@10.10.0.10>
+CSeq: 1 INVITE
+Server: Asterisk PBX 18.16.0
+Content-Length:  0
+```
+
 
 ## Documentation
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
