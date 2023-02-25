@@ -182,7 +182,8 @@ func TestUDPUAS(t *testing.T) {
 		data := client1.TestRequest(t, []byte(rstr))
 		res, err := p.Parse(data)
 		assert.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", res.StartLine())
+
+		assert.Equal(t, "SIP/2.0 200 OK", res.(*sip.Response).StartLine())
 	}
 }
 
@@ -259,7 +260,7 @@ func TestTCPUAS(t *testing.T) {
 		data := client1.TestRequest(t, []byte(rstr))
 		res, err := p.Parse(data)
 		assert.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", res.StartLine())
+		assert.Equal(t, "SIP/2.0 200 OK", res.(*sip.Response).StartLine())
 	}
 }
 

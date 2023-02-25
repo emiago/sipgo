@@ -56,7 +56,7 @@ func (s *ServerDialog) handleRequestDialog(r *sip.Request, tx sip.ServerTransact
 func (s *ServerDialog) publish(r sip.Message, d sip.Dialog) {
 	id, err := sip.MakeDialogIDFromMessage(r)
 	if err != nil {
-		s.log.Error().Err(err).Str("startline", r.StartLine()).Msg("Failed to create dialog id")
+		s.log.Error().Err(err).Str("msg", sip.MessageShortString(r)).Msg("Failed to create dialog id")
 		return
 	}
 

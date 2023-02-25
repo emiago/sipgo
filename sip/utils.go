@@ -254,3 +254,14 @@ func NonceWrite(buf []byte) {
 		buf[i] = letterBytes[rand.Intn(length)]
 	}
 }
+
+// MessageShortString dumps short version of msg. Used only for logging
+func MessageShortString(msg Message) string {
+	switch m := msg.(type) {
+	case *Request:
+		return m.Short()
+	case *Response:
+		return m.Short()
+	}
+	return "Unknown message type"
+}

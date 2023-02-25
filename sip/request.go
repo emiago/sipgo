@@ -113,9 +113,8 @@ func (req *Request) Transport() string {
 	}
 
 	uri := req.Recipient
-	if hdr := req.GetHeader("Route"); hdr != nil {
-		routeHeader := hdr.(*RouteHeader)
-		uri = &routeHeader.Address
+	if hdr, exists := req.Route(); exists {
+		uri = &hdr.Address
 	}
 
 	if uri != nil {
@@ -184,9 +183,8 @@ func (req *Request) Destination() string {
 	}
 
 	var uri *Uri
-	if hdr := req.GetHeader("Route"); hdr != nil {
-		routeHeader := hdr.(*RouteHeader)
-		uri = &routeHeader.Address
+	if hdr, exists := req.Route(); exists {
+		uri = &hdr.Address
 
 	}
 	if uri == nil {

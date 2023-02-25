@@ -89,7 +89,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 			res := client2.TestReadConn(t)
 			inviteReqRec, err := p.Parse(res)
 			require.Nil(t, err)
-			assert.Equal(t, inviteReqRec.StartLine(), inviteReq.StartLine())
+			assert.Equal(t, inviteReqRec.(*sip.Request).StartLine(), inviteReq.(*sip.Request).StartLine())
 
 			// trying := sip.NewResponseFromRequest("", inviteReqRec.(sip.Request), 180, "Ringing", "")
 
@@ -118,14 +118,14 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 				if req, ok := resReceived.(*sip.Request); ok && req.Method == sip.ACK {
 					require.Nil(t, err)
 					t.Log("CLIENT2: Received ACK. Call established")
-					assert.Equal(t, ackReq.StartLine(), resReceived.StartLine())
+					assert.Equal(t, ackReq.(*sip.Request).StartLine(), req.StartLine())
 					continue
 				}
 
 				// RECEIVE BYE
 				req, ok := resReceived.(*sip.Request)
-				require.True(t, ok, resReceived.Short())
-				assert.Equal(t, byeReq.StartLine(), req.StartLine())
+				require.True(t, ok, req.Short())
+				assert.Equal(t, byeReq.(*sip.Request).StartLine(), req.StartLine())
 
 				t.Log("CLIENT2 BYE: Send 200 OK")
 				ok200 := sip.NewResponseFromRequest(req, 200, "OK", nil)
@@ -145,12 +145,12 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 		t.Log("CLIENT1 INVITE: Got response")
 		trying, err := p.Parse(res)
 		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 100 Trying", trying.StartLine())
+		assert.Equal(t, "SIP/2.0 100 Trying", trying.(*sip.Response).StartLine())
 
 		res = client1.TestReadConn(t)
 		inviteOK, err := p.Parse(res)
 		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", inviteOK.StartLine())
+		assert.Equal(t, "SIP/2.0 200 OK", inviteOK.(*sip.Response).StartLine())
 	}
 
 	// SEND ACK
@@ -167,7 +167,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 		t.Log("CLIENT1 BYE: Got response")
 		byeOK, err := p.Parse(res)
 		require.Nil(t, err)
-		assert.Equal(t, "SIP/2.0 200 OK", byeOK.StartLine())
+		assert.Equal(t, "SIP/2.0 200 OK", byeOK.(*sip.Response).StartLine())
 	}
 
 }
@@ -365,7 +365,7 @@ func TestRegisterTCP(t *testing.T) {
 	res200, err := p.Parse(res)
 	require.Nil(t, err)
 	t.Log(res200.String())
-	assert.Equal(t, "SIP/2.0 200 OK", res200.StartLine())
+	assert.Equal(t, "SIP/2.0 200 OK", res200.(*sip.Response).StartLine())
 }
 
 func BenchmarkInviteCall(t *testing.B) {

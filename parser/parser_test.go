@@ -309,7 +309,7 @@ func TestParseRequest(t *testing.T) {
 	to, exists := msg.To()
 	require.True(t, exists)
 
-	contact := msg.GetHeader("Contact")
+	contact := msg.GetHeaders("Contact")
 	require.NotNil(t, contact)
 
 	assert.Equal(t, "127.0.0.2:5060", from.Address.Host+":"+strconv.Itoa(from.Address.Port))
@@ -345,8 +345,10 @@ func TestRegisterRequestFail(t *testing.T) {
 	parser := NewParser()
 	msg, err := parser.Parse(data)
 	require.Nil(t, err, err)
+	req := msg.(*sip.Request)
 
-	c := msg.GetHeader("Contact").(*sip.ContactHeader)
+	c, exists := req.Contact()
+	require.True(t, exists)
 	assert.Equal(t, "test", c.Address.User)
 }
 

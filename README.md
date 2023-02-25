@@ -24,9 +24,9 @@ To find out more about performance check the latest results:
 
 ## Examples
 
-Stateful proxy [example/proxysip](example/proxysip)  
-Register with authentication [example/register](example/register) 
-Dialog [example/dialog](example/dialog)  
+- Stateful proxy [example/proxysip](example/proxysip)  
+- Register with authentication [example/register](example/register)  
+- Dialog [example/dialog](example/dialog)  
 
 ## Usage
 
