@@ -101,6 +101,7 @@ func (p *Parser) Parse(data []byte) (msg sip.Message, err error) {
 	reader := bufReader.Get().(*bytes.Buffer)
 	defer bufReader.Put(reader)
 	reader.Reset()
+	// panic if data too large
 	reader.Write(data)
 
 	startLine, err := nextLine(reader)

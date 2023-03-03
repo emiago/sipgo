@@ -24,8 +24,23 @@ func ParseUri(uriStr string, uri *sip.Uri) (err error) {
 	return
 }
 
+/*
+INVITE sip:bob@biloxi.com SIP/2.0
+Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKnashds8
+Max-Forwards: 70
+To: Bob <sip:bob@biloxi.com>
+From: Alice <sip:alice@atlanta.com>;tag=1928301774
+Call-ID: a84b4c76e66710
+CSeq: 314159 INVITE
+Contact: <sip:alice@pc33.atlanta.com>
+Content-Type: application/sdp
+Content-Length: 142
+*/
+
+// sip:bob@biloxi.com
 func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
 	switch s[0] {
+	// Sips:
 	case 'S', 's':
 		if s[3] == 'S' || s[3] == 's' {
 			uri.Encrypted = true
@@ -39,6 +54,7 @@ func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return nil, "", fmt.Errorf("uri is not sip")
 }
 
+// bob:password@biloxi.com
 func uriStateUser(uri *sip.Uri, s string) (uriFSM, string, error) {
 	var userend int = 0
 	for i, c := range s {
@@ -71,6 +87,7 @@ func uriStatePassword(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return nil, "", fmt.Errorf("missing @")
 }
 
+// biloxi.com:port
 func uriStateHost(uri *sip.Uri, s string) (uriFSM, string, error) {
 	for i, c := range s {
 		if c == ':' {

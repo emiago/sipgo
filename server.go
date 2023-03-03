@@ -96,23 +96,29 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	handler := srv.getHandler(req.Method)
 
 	if handler == nil {
-		srv.log.Warn().Msg("SIP request handler not found")
+		srv.log.Warn().Msgf("SIP request[%s] handler not found", req.Method.String())
 		res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
 		if err := srv.WriteResponse(res); err != nil {
 			srv.log.Error().Msgf("respond '405 Method Not Allowed' failed: %s", err)
 		}
 
-		for {
-			select {
-			case <-tx.Done():
-				return
-			case err, ok := <-tx.Errors():
-				if !ok {
-					return
-				}
-				srv.log.Warn().Msgf("error from SIP server transaction %s: %s", tx, err)
-			}
+		if tx != nil {
+			tx.Terminate()
 		}
+		return
+		// for {
+		// 	select {
+		// 	case <-tx.Done():
+		// 		srv.log.Warn().Msgf("recv tx.Done() tx:%s", tx)
+		// 		return
+		// 	case err, ok := <-tx.Errors():
+		// 		srv.log.Warn().Msgf("recv tx.Errors() tx:%s, err:%s", tx, err)
+		// 		if !ok {
+		// 			return
+		// 		}
+		// 		srv.log.Warn().Msgf("error from SIP server transaction %s: %s", tx, err)
+		// 	}
+		// }
 	}
 
 	handler(req, tx)

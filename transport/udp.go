@@ -172,28 +172,6 @@ func (t *UDPTransport) readConnection(conn *UDPConnection) {
 	}
 }
 
-// This should performe better to avoid any interface allocation
-func (t *UDPTransport) readUDPConn(conn *net.UDPConn) {
-	buf := make([]byte, UDPbufferSize)
-	defer conn.Close()
-	for {
-		//ReadFromUDP should make one less allocation
-		num, raddr, err := conn.ReadFromUDP(buf)
-
-		if err != nil {
-			t.log.Error().Err(err)
-			return
-		}
-
-		data := buf[:num]
-		if len(bytes.Trim(data, "\x00")) == 0 {
-			continue
-		}
-
-		t.parse(data, raddr.String())
-	}
-}
-
 func (t *UDPTransport) parse(data []byte, src string) {
 	// Check is keep alive
 	if len(data) <= 4 {

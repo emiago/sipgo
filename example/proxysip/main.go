@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strconv"
 	"time"
 
 	"github.com/emiago/sipgo/sip"
@@ -84,7 +83,7 @@ func httpServer(address string) {
 
 func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	// Prepare all variables we need for our service
-	host, port, _ := sip.ParseAddr(ip)
+	// host, port, _ := sip.ParseAddr(ip)
 	ua, err := sipgo.NewUA(
 		sipgo.WithUserAgentIP(ip),
 	)
@@ -191,38 +190,38 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		}
 	}
 
-	var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
-		// https://www.rfc-editor.org/rfc/rfc3261#section-10.3
-		cont, exists := req.Contact()
-		if !exists {
-			reply(tx, req, 404, "Missing address of record")
-			return
-		}
+	// var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+	// 	// https://www.rfc-editor.org/rfc/rfc3261#section-10.3
+	// 	cont, exists := req.Contact()
+	// 	if !exists {
+	// 		reply(tx, req, 404, "Missing address of record")
+	// 		return
+	// 	}
 
-		// We have a list of uris
-		uri := cont.Address
-		if uri.Host == host && uri.Port == port {
-			reply(tx, req, 401, "Contact address not provided")
-			return
-		}
+	// 	// We have a list of uris
+	// 	uri := cont.Address
+	// 	if uri.Host == host && uri.Port == port {
+	// 		reply(tx, req, 401, "Contact address not provided")
+	// 		return
+	// 	}
 
-		addr := uri.Host + ":" + strconv.Itoa(uri.Port)
+	// 	addr := uri.Host + ":" + strconv.Itoa(uri.Port)
 
-		registry.Add(uri.User, addr)
-		log.Debug().Msgf("Contact added %s -> %s", uri.User, addr)
+	// 	registry.Add(uri.User, addr)
+	// 	log.Debug().Msgf("Contact added %s -> %s", uri.User, addr)
 
-		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-		// log.Debug().Msgf("Sending response: \n%s", res.String())
+	// 	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+	// 	// log.Debug().Msgf("Sending response: \n%s", res.String())
 
-		// URI params must be reset or this should be regenetad
-		cont.Address.UriParams = sip.NewParams()
-		cont.Address.UriParams.Add("transport", req.Transport())
+	// 	// URI params must be reset or this should be regenetad
+	// 	cont.Address.UriParams = sip.NewParams()
+	// 	cont.Address.UriParams.Add("transport", req.Transport())
 
-		if err := tx.Respond(res); err != nil {
-			log.Error().Err(err).Msg("Sending REGISTER OK failed")
-			return
-		}
-	}
+	// 	if err := tx.Respond(res); err != nil {
+	// 		log.Error().Err(err).Msg("Sending REGISTER OK failed")
+	// 		return
+	// 	}
+	// }
 
 	var inviteHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		route(req, tx)
@@ -245,7 +244,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		route(req, tx)
 	}
 
-	srv.OnRegister(registerHandler)
+	// srv.OnRegister(registerHandler)
 	srv.OnInvite(inviteHandler)
 	srv.OnAck(ackHandler)
 	srv.OnCancel(cancelHandler)
