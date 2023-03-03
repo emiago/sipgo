@@ -102,17 +102,21 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 			srv.log.Error().Msgf("respond '405 Method Not Allowed' failed: %s", err)
 		}
 
-		for {
-			select {
-			case <-tx.Done():
-				return
-			case err, ok := <-tx.Errors():
-				if !ok {
-					return
-				}
-				srv.log.Warn().Msgf("error from SIP server transaction %s: %s", tx, err)
-			}
+		if tx != nil {
+			tx.Terminate()
 		}
+		return
+		// for {
+		// 	select {
+		// 	case <-tx.Done():
+		// 		return
+		// 	case err, ok := <-tx.Errors():
+		// 		if !ok {
+		// 			return
+		// 		}
+		// 		srv.log.Warn().Msgf("error from SIP server transaction %s: %s", tx, err)
+		// 	}
+		// }
 	}
 
 	handler(req, tx)
