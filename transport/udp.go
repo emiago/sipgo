@@ -28,12 +28,11 @@ var (
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
-	addr        string
-	listener    net.PacketConn
-	listenerUDP *net.UDPConn // TODO consider removing this. There is maybe none benefit if we use if instead interface
-	parser      parser.SIPParser
-	handler     sip.MessageHandler
-	conn        *UDPConnection
+	addr     string
+	listener net.PacketConn
+	parser   parser.SIPParser
+	handler  sip.MessageHandler
+	conn     *UDPConnection
 
 	log zerolog.Logger
 }
@@ -70,12 +69,7 @@ func (t *UDPTransport) Close() error {
 		rerr = err
 	}
 
-	if err := t.listenerUDP.Close(); err != nil {
-		rerr = fmt.Errorf("%s.%w", err.Error(), rerr)
-	}
-
 	t.listener = nil
-	t.listenerUDP = nil
 	t.conn = nil
 
 	return rerr

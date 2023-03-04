@@ -13,6 +13,7 @@ import (
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/transaction"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -111,11 +112,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestUDPUAS(t *testing.T) {
+	// Detect any goleaks
 	ua, err := NewUA()
 	require.Nil(t, err)
 
 	srv, err := NewServer(ua)
 	require.Nil(t, err)
+	defer srv.Close()
 
 	p := parser.NewParser()
 
@@ -151,9 +154,11 @@ func TestUDPUAS(t *testing.T) {
 	}
 
 	// Register all handlers
+	var serverTxs []sip.ServerTransaction
 	for _, method := range allmethods {
 		srv.OnRequest(method, func(req *sip.Request, tx sip.ServerTransaction) {
 			t.Log("New " + req.Method.String())
+			serverTxs = append(serverTxs, tx)
 			// Make all responses
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			tx.Respond(res)
@@ -185,6 +190,24 @@ func TestUDPUAS(t *testing.T) {
 
 		assert.Equal(t, "SIP/2.0 200 OK", res.(*sip.Response).StartLine())
 	}
+
+	// Test SIP NON allowed
+	srv.unhandledHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+		serverTxs = append(serverTxs, tx)
+		srv.defaultUnhandledHandler(req, tx)
+	}
+
+	req := createSimpleRequest("NONALLOWED", sender, recipment, "UDP")
+	data := client1.TestRequest(t, []byte(req.String()))
+	res, err := p.Parse(data)
+	assert.Nil(t, err)
+	assert.Equal(t, "SIP/2.0 405 Method Not Allowed", res.(*sip.Response).StartLine())
+
+	// Check are all server transaction dead
+	for _, tx := range serverTxs {
+		t.Logf("Waiting tx %q termination", tx.(*transaction.ServerTx).Key())
+		<-tx.Done()
+	}
 }
 
 func TestTCPUAS(t *testing.T) {
@@ -193,6 +216,7 @@ func TestTCPUAS(t *testing.T) {
 
 	srv, err := NewServer(ua)
 	require.Nil(t, err)
+	defer srv.Close()
 
 	p := parser.NewParser()
 
@@ -229,9 +253,11 @@ func TestTCPUAS(t *testing.T) {
 	}
 
 	// Register all handlers
+	var serverTxs []sip.ServerTransaction
 	for _, method := range allmethods {
 		srv.OnRequest(method, func(req *sip.Request, tx sip.ServerTransaction) {
 			t.Log("New " + req.Method.String())
+			serverTxs = append(serverTxs, tx)
 			// Make all responses
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			tx.Respond(res)
@@ -261,6 +287,24 @@ func TestTCPUAS(t *testing.T) {
 		res, err := p.Parse(data)
 		assert.Nil(t, err)
 		assert.Equal(t, "SIP/2.0 200 OK", res.(*sip.Response).StartLine())
+	}
+
+	// Test SIP NON allowed
+	srv.unhandledHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+		serverTxs = append(serverTxs, tx)
+		srv.defaultUnhandledHandler(req, tx)
+	}
+
+	req := createSimpleRequest("NONALLOWED", sender, recipment, "TCP")
+	data := client1.TestRequest(t, []byte(req.String()))
+	res, err := p.Parse(data)
+	assert.Nil(t, err)
+	assert.Equal(t, "SIP/2.0 405 Method Not Allowed", res.(*sip.Response).StartLine())
+
+	// Check are all server transaction dead
+	for _, tx := range serverTxs {
+		t.Logf("Waiting tx %q termination", tx.(*transaction.ServerTx).Key())
+		<-tx.Done()
 	}
 }
 

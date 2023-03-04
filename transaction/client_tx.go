@@ -32,7 +32,7 @@ func NewClientTx(key string, origin *sip.Request, conn transport.Connection, log
 	// buffer chan - about ~10 retransmit responses
 	tx.responses = make(chan *sip.Response)
 	tx.errs = make(chan error)
-	tx.done = make(chan bool)
+	tx.done = make(chan struct{})
 	tx.log = logger
 
 	tx.origin = origin

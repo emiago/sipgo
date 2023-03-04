@@ -21,7 +21,8 @@ type Server struct {
 	*UserAgent
 
 	// requestHandlers map of all registered request handlers
-	requestHandlers map[sip.RequestMethod]RequestHandler
+	requestHandlers  map[sip.RequestMethod]RequestHandler
+	unhandledHandler RequestHandler
 
 	log zerolog.Logger
 
@@ -69,6 +70,9 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		}
 	}
 
+	// TODO have this exported as option
+	s.unhandledHandler = s.defaultUnhandledHandler
+
 	return s, nil
 }
 
@@ -94,27 +98,6 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	}
 
 	handler := srv.getHandler(req.Method)
-
-	if handler == nil {
-		srv.log.Warn().Msg("SIP request handler not found")
-		res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
-		if err := srv.WriteResponse(res); err != nil {
-			srv.log.Error().Msgf("respond '405 Method Not Allowed' failed: %s", err)
-		}
-
-		for {
-			select {
-			case <-tx.Done():
-				return
-			case err, ok := <-tx.Errors():
-				if !ok {
-					return
-				}
-				srv.log.Warn().Msgf("error from SIP server transaction %s: %s", tx, err)
-			}
-		}
-	}
-
 	handler(req, tx)
 	if tx != nil {
 		// Must be called to prevent any transaction leaks
@@ -128,12 +111,11 @@ func (srv *Server) WriteResponse(r *sip.Response) error {
 }
 
 // Shutdown gracefully shutdowns SIP server
-func (srv *Server) shutdown() {
+func (srv *Server) Close() {
 	// stop transaction layer
 	srv.tx.Close()
 	// stop transport layer
 	srv.tp.Close()
-
 }
 
 // OnRequest registers new request callback. Can be used as generic way to add handler
@@ -214,9 +196,18 @@ func (srv *Server) OnPublish(handler RequestHandler) {
 func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler) {
 	handler, ok := srv.requestHandlers[method]
 	if !ok {
-		return nil
+		return srv.unhandledHandler
 	}
 	return handler
+}
+
+func (srv *Server) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransaction) {
+	srv.log.Warn().Msg("SIP request handler not found")
+	res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
+	// Send response directly and let transaction terminate
+	if err := srv.WriteResponse(res); err != nil {
+		srv.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
+	}
 }
 
 // ServeRequest can be used as middleware for preprocessing message

@@ -43,7 +43,7 @@ func NewServerTx(key string, origin *sip.Request, conn transport.Connection, log
 	tx.acks = make(chan *sip.Request)
 	tx.cancels = make(chan *sip.Request)
 	tx.errs = make(chan error)
-	tx.done = make(chan bool)
+	tx.done = make(chan struct{})
 	tx.log = logger
 	tx.origin = origin
 	tx.reliable = transport.IsReliable(origin.Transport())

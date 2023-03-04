@@ -20,7 +20,7 @@ type commonTx struct {
 
 	errs    chan error
 	lastErr error
-	done    chan bool
+	done    chan struct{}
 
 	//State machine control
 	fsmMu    sync.RWMutex
@@ -64,7 +64,7 @@ func (tx *commonTx) Errors() <-chan error {
 	return tx.errs
 }
 
-func (tx *commonTx) Done() <-chan bool {
+func (tx *commonTx) Done() <-chan struct{} {
 	return tx.done
 }
 
