@@ -20,8 +20,8 @@ proxysip:
 
 # Stress testing UDP with sipp (sipgo and opensips)
 
-*SIPGO can handle a lot of calls in sec, and lot of performance improvements are done.*  
-We are comparing with `opensips` (C based) so you can find similar configuration for opensips, handling simple proxy behavior.
+*SIPGO can handle a lot of calls in sec, and lot of performance improvements is done.*  
+We are comparing with `opensips` (C based) and you can find similar configuration for opensips, which has a simple proxy behavior.
 
 **NOTE**: *Consider this test results are not `100%` accurate. They probably need better setup, but for now they are added for some overview.*
 
@@ -34,10 +34,10 @@ In stress testing we are looking:
 
 ## Setup
 
-`docker-compose` is used for quickly running proxy and sipp. You check more in docker-compose.yml about configuration.
-`sipp` are used standard `uac` and `uas` scenarios. 
+`docker-compose` is used for quickly running proxy and sipp. You can check more in docker-compose.yml about configuration.
+`sipp` is used with `uac` and `uas` scenario. All traffic is proxied from uac to uas. 
 
-This can be simply rerun with docker-compose:
+Running with docker-compose:
 
 ```
 # Run this in 3 terminals
@@ -63,7 +63,7 @@ but higher memory usage shoud be expected.
 
 ### NOTE
 
-If you are using containers, GOMAXPROCS is important to much cpu quota. Alternative use ubers automaxprocs
+If you are using containers, GOMAXPROCS is important for cpu quota. As alternative use uber's automaxprocs
 ```
 import _ "go.uber.org/automaxprocs"
 ```
