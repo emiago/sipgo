@@ -5,8 +5,8 @@ type Transaction interface {
 	Terminate()
 	// Done when transaction fsm terminates. Can be called multiple times
 	Done() <-chan struct{}
-	// Any errors will be passed via this channel
-	Errors() <-chan error
+	// Last error. Useful to check when transaction terminates
+	Err() error
 }
 
 type ServerTransaction interface {

@@ -2,7 +2,6 @@
 package transaction
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -247,19 +246,13 @@ func (tx *ServerTx) actFinal() FsmInput {
 
 // Inform user of transport error
 func (tx *ServerTx) actTransErr() FsmInput {
-	// tx.Log().Debug("actTrans_err")
-
-	tx.transportErr()
-
+	tx.log.Debug().Err(tx.Err()).Msg("Transport error. Transaction will terminate")
 	return server_input_delete
 }
 
 // Inform user of timeout error
 func (tx *ServerTx) actTimeout() FsmInput {
-	// tx.Log().Debug("actTimeout")
-
-	tx.timeoutErr()
-
+	tx.log.Debug().Err(tx.Err()).Msg("Timed out. Transaction will terminate")
 	return server_input_delete
 }
 
@@ -324,19 +317,4 @@ func (tx *ServerTx) actConfirm() FsmInput {
 func (tx *ServerTx) actCancel() FsmInput {
 	tx.passCancel()
 	return FsmInputNone
-}
-
-func (tx *ServerTx) transportErr() {
-	tx.mu.RLock()
-	err := tx.lastErr
-	tx.mu.RUnlock()
-
-	err = fmt.Errorf("transaction failed to send %s: %w", tx.key, err)
-
-	go tx.sendErr(err)
-}
-
-func (tx *ServerTx) timeoutErr() {
-	err := fmt.Errorf("transaction timed out")
-	go tx.sendErr(err)
 }

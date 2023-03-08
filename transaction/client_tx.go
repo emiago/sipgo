@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ func NewClientTx(key string, origin *sip.Request, conn transport.Connection, log
 	tx.conn = conn
 	// buffer chan - about ~10 retransmit responses
 	tx.responses = make(chan *sip.Response)
-	tx.errs = make(chan error)
 	tx.done = make(chan struct{})
 	tx.log = logger
 
@@ -78,6 +78,9 @@ func (tx *ClientTx) Init() error {
 	// Timer B - timeout
 	tx.mu.Lock()
 	tx.timer_b = time.AfterFunc(Timer_B, func() {
+		tx.mu.Lock()
+		tx.lastErr = fmt.Errorf("transaction timed out by Timer_B")
+		tx.mu.Unlock()
 		tx.spinFsm(client_input_timer_b)
 	})
 	tx.mu.Unlock()
@@ -125,6 +128,13 @@ func (tx *ClientTx) Terminate() {
 	}
 
 	tx.delete()
+}
+
+func (tx *ClientTx) Err() error {
+	tx.mu.RLock()
+	err := tx.lastErr
+	tx.mu.RUnlock()
+	return err
 }
 
 func (tx *ClientTx) cancel() {

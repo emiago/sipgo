@@ -176,15 +176,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				// Cancel client transacaction without waiting. This will send CANCEL request
 				clTx.Cancel()
 
-			case err := <-clTx.Errors():
-				log.Error().Err(err).Str("caller", req.Method.String()).Msg("Client Transaction Error")
-				return
-
-			case err := <-tx.Errors():
-				log.Error().Err(err).Str("caller", req.Method.String()).Msg("Server transaction error")
-				return
-
 			case <-tx.Done():
+				if err := tx.Err(); err != nil {
+					log.Error().Err(err).Str("req", req.Method.String()).Msg("Transaction done with error")
+					return
+				}
 				log.Debug().Str("req", req.Method.String()).Msg("Transaction done")
 				return
 			}

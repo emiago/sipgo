@@ -100,6 +100,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
         case m := <-tx.Cancels(): // Handle Cancel 
         case <-tx.Done():
             // Signal transaction is done. 
+            // Check any errors with tx.Err() to have more info why terminated
             return
     }
 
