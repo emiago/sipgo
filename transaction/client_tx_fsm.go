@@ -1,7 +1,6 @@
 package transaction
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -344,10 +343,6 @@ func (tx *ClientTx) actAck() FsmInput {
 }
 
 func (tx *ClientTx) actTransErr() FsmInput {
-	// tx.Log().Debug("actTransErr")
-
-	tx.transportErr()
-
 	tx.mu.Lock()
 
 	if tx.timer_a != nil {
@@ -361,10 +356,6 @@ func (tx *ClientTx) actTransErr() FsmInput {
 }
 
 func (tx *ClientTx) actTimeout() FsmInput {
-	// tx.Log().Debug("actTimeout")
-
-	tx.timeoutErr()
-
 	tx.mu.Lock()
 
 	if tx.timer_a != nil {
@@ -434,25 +425,4 @@ func (tx *ClientTx) actDelete() FsmInput {
 	tx.delete()
 
 	return FsmInputNone
-}
-
-func (tx *ClientTx) transportErr() {
-	tx.mu.RLock()
-	err := tx.lastErr
-	tx.mu.RUnlock()
-
-	err = fmt.Errorf("transaction failed to send %s: %w", tx.origin.Short(), err)
-	select {
-	case <-tx.done:
-	case tx.errs <- err:
-	}
-}
-
-func (tx *ClientTx) timeoutErr() {
-	err := fmt.Errorf("transaction timed out tx=%s", tx.key)
-
-	select {
-	case <-tx.done:
-	case tx.errs <- err:
-	}
 }

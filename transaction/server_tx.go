@@ -42,7 +42,6 @@ func NewServerTx(key string, origin *sip.Request, conn transport.Connection, log
 	// about ~10 retransmits
 	tx.acks = make(chan *sip.Request)
 	tx.cancels = make(chan *sip.Request)
-	tx.errs = make(chan error)
 	tx.done = make(chan struct{})
 	tx.log = logger
 	tx.origin = origin
@@ -222,15 +221,15 @@ func (tx *ServerTx) passResp() error {
 	return nil
 }
 
-func (tx *ServerTx) sendErr(err error) {
-	select {
-	case <-tx.done:
-	case tx.errs <- err:
-	}
-}
-
 func (tx *ServerTx) Terminate() {
 	tx.delete()
+}
+
+func (tx *ServerTx) Err() error {
+	tx.mu.RLock()
+	err := tx.lastErr
+	tx.mu.RUnlock()
+	return err
 }
 
 // func (tx *ServerTx) OnTerminate(f func()) {

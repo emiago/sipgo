@@ -18,7 +18,6 @@ type commonTx struct {
 	conn     transport.Connection
 	lastResp *sip.Response
 
-	errs    chan error
 	lastErr error
 	done    chan struct{}
 
@@ -54,15 +53,6 @@ func (tx *commonTx) Key() string {
 // func (tx *commonTx) Transport() sip.Transport {
 // 	return tx.tpl
 // }
-
-// Errors can be passed via channel. Channel is created on first call of this function
-func (tx *commonTx) Errors() <-chan error {
-	if tx.errs != nil {
-		return tx.errs
-	}
-	tx.errs = make(chan error)
-	return tx.errs
-}
 
 func (tx *commonTx) Done() <-chan struct{} {
 	return tx.done
