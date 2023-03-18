@@ -15,7 +15,6 @@ type Header interface {
 	// Name returns header name.
 	Name() string
 	Value() string
-	// Clone() Header
 	String() string
 	// StringWrite is better way to reuse single buffer
 	StringWrite(w io.StringWriter)
@@ -107,7 +106,7 @@ func (hs *headers) setHeaderRef(header Header) {
 	}
 }
 
-// Add the given header.
+// AppendHeader adds header at end of header list
 func (hs *headers) AppendHeader(header Header) {
 	hs.headerOrder = append(hs.headerOrder, header)
 	// update only if no multiple headers. TODO find this better
@@ -127,11 +126,10 @@ func (hs *headers) AppendHeader(header Header) {
 	default:
 		hs.setHeaderRef(header)
 	}
-
-	// name := HeaderToLower(header.Name())
-	// hs.appendHeader(name, header)
 }
 
+// AppendHeaderAfter adds header after specified header. In case header does not exist normal AppendHeader is called
+// Use it only if you need it
 func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	ind := -1
 	for i, h := range hs.headerOrder {
@@ -189,6 +187,8 @@ func (hs *headers) Headers() []Header {
 }
 
 // GetHeaders returns list of headers with same name
+// Use lower case to avoid allocs
+// Headers are pointers, always Clone them for change
 func (hs *headers) GetHeaders(name string) []Header {
 	var hds []Header
 	nameLower := HeaderToLower(name)
@@ -200,7 +200,7 @@ func (hs *headers) GetHeaders(name string) []Header {
 	return hds
 }
 
-// Return Header if exists, otherwise nil is returned
+// GetHeader returns Header if exists, otherwise nil is returned
 // Use lower case to avoid allocs
 // Headers are pointers, always Clone them for change
 func (hs *headers) GetHeader(name string) Header {
@@ -248,7 +248,7 @@ func (hs *headers) RemoveHeader(name string) {
 
 }
 
-// RemoveHeader removes header by name
+// RemoveHeaderOn before removes header with name, yields (calls func) once it gets found
 func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) (removed bool) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
@@ -275,22 +275,6 @@ func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) (removed b
 	}
 	return
 }
-
-// func (hs *headers) RemoveViaByHost(host string) {
-// 	via := hs.via
-// 	if via.Next != nil {
-// 		prevvia := via
-// 		for via != nil {
-// 			if via.Host == host {
-// 				prevvia.Next = via.Next
-// 				via.Next = nil
-// 				return
-// 			}
-// 			prevvia = via
-// 			via = via.Next
-// 		}
-// 	}
-// }
 
 // CloneHeaders returns all cloned headers in slice.
 func (hs *headers) CloneHeaders() []Header {
@@ -345,41 +329,50 @@ func (hs *headers) MaxForwards() (*MaxForwardsHeader, bool) {
 	return hs.maxForwards, hs.maxForwards != nil
 }
 
-// GenericHeader is generic struct for unknown headers
-type GenericHeader struct {
+// NewHeader creates generic type of header.
+// Use it for unknown type of header
+func NewHeader(name, value string) Header {
+	return &genericHeader{
+		HeaderName: name,
+		Contents:   value,
+	}
+}
+
+// genericHeader is generic struct for unknown headers
+type genericHeader struct {
 	// The name of the header.
 	HeaderName string
 	// The contents of the header, including any parameters.
 	Contents string
 }
 
-func (h *GenericHeader) String() string {
+func (h *genericHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *GenericHeader) StringWrite(buffer io.StringWriter) {
+func (h *genericHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
-func (h *GenericHeader) Name() string {
+func (h *genericHeader) Name() string {
 	return h.HeaderName
 }
 
-func (h *GenericHeader) Value() string {
+func (h *genericHeader) Value() string {
 	return h.Contents
 }
 
-func (h *GenericHeader) headerClone() Header {
+func (h *genericHeader) headerClone() Header {
 	if h == nil {
-		var newHeader *GenericHeader
+		var newHeader *genericHeader
 		return newHeader
 	}
 
-	return &GenericHeader{
+	return &genericHeader{
 		HeaderName: h.HeaderName,
 		Contents:   h.Contents,
 	}

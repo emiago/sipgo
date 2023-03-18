@@ -101,6 +101,7 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 	return
 }
 
+// parseToAddressHeader generates sip.ToHeader
 func parseToAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
 
 	h := &sip.ToHeader{
@@ -121,6 +122,7 @@ func parseToAddressHeader(headerName string, headerText string) (header sip.Head
 	return h, err
 }
 
+// parseFromAddressHeader generates sip.FromHeader
 func parseFromAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
 
 	h := sip.FromHeader{
@@ -148,6 +150,7 @@ func parseFromAddressHeader(headerName string, headerText string) (header sip.He
 	return &h, nil
 }
 
+// parseContactAddressHeader generates sip.ContactHeader
 func parseContactAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
 	prevIdx := 0
 	inBrackets := false
@@ -187,6 +190,7 @@ func parseContactAddressHeader(headerName string, headerText string) (header sip
 	return &head, nil
 }
 
+// parseRouteHeader generates sip.RouteHeader
 func parseRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
 	prevIdx := 0
 	inBrackets := false
@@ -222,6 +226,7 @@ func parseRouteHeader(headerName string, headerText string) (header sip.Header, 
 	return &head, nil
 }
 
+// parseRouteHeader generates sip.RecordRouteHeader
 func parseRecordRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
 	prevIdx := 0
 	inBrackets := false

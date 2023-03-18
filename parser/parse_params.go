@@ -12,13 +12,6 @@ const (
 	paramsStateQuote
 )
 
-// ParseKeyValParams method for parsing 'key=value' parameters.
-func ParseParams(s string, seperator rune, ending rune) (p sip.HeaderParams, n int, err error) {
-	p = sip.NewParams()
-	n, err = UnmarshalParams(s, seperator, ending, p)
-	return
-}
-
 func UnmarshalParams(s string, seperator rune, ending rune, p sip.HeaderParams) (n int, err error) {
 	var start, sep, quote int = 0, 0, -1
 	state := paramsStateKey

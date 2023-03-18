@@ -28,31 +28,6 @@ var (
 	ErrLineNoCRLF = errors.New("line has no CRLF")
 )
 
-// A HeaderParser is any function that turns raw header data into one or more Header objects.
-type HeaderParser func(headerName string, headerData string) (sip.Header, error)
-
-// This needs to kept minimalistic in order to avoid overhead of parsing
-var headersParsers = map[string]HeaderParser{
-	"to":             parseToAddressHeader,
-	"t":              parseToAddressHeader,
-	"from":           parseFromAddressHeader,
-	"f":              parseFromAddressHeader,
-	"contact":        parseContactAddressHeader,
-	"m":              parseContactAddressHeader,
-	"call-id":        parseCallId,
-	"i":              parseCallId,
-	"cseq":           parseCSeq,
-	"via":            parseViaHeader,
-	"v":              parseViaHeader,
-	"max-forwards":   parseMaxForwards,
-	"content-length": parseContentLength,
-	"l":              parseContentLength,
-	"content-type":   parseContentType,
-	"c":              parseContentType,
-	"route":          parseRouteHeader,
-	"record-route":   parseRecordRouteHeader,
-}
-
 var bufReader = sync.Pool{
 	New: func() interface{} {
 		// The Pool's New function should generally only return pointer
@@ -82,18 +57,32 @@ func ParseMessage(msgData []byte) (sip.Message, error) {
 
 type Parser struct {
 	log zerolog.Logger
+	// headersParsers uses default list of headers to be parsed. Smaller list parser will be faster
+	headersParsers map[string]HeaderParser
 }
 
+// ParserOption are addition option for NewParser. Check WithParser...
+type ParserOption func(p *Parser)
+
 // Create a new Parser.
-func NewParser() *Parser {
+func NewParser(options ...ParserOption) *Parser {
 	p := &Parser{
-		log: log.Logger,
+		log:            log.Logger,
+		headersParsers: headersParsers,
 	}
+
+	for _, o := range options {
+		o(p)
+	}
+
 	return p
 }
 
-func (p *Parser) SetLogger(l zerolog.Logger) {
-	p.log = l
+// WithServerLogger allows customizing server logger
+func WithParserLogger(logger zerolog.Logger) ParserOption {
+	return func(p *Parser) {
+		p.log = logger
+	}
 }
 
 // Parse converts data to sip message. Buffer must contain full sip message
@@ -343,7 +332,7 @@ func (p *Parser) ParseHeader(headerText string) (header sip.Header, err error) {
 	fieldName := strings.TrimSpace(headerText[:colonIdx])
 	lowerFieldName := sip.HeaderToLower(fieldName)
 	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
-	if headerParser, ok := headersParsers[lowerFieldName]; ok {
+	if headerParser, ok := p.headersParsers[lowerFieldName]; ok {
 		// We have a registered parser for this header type - use it.
 		// header, err = headerParser(lowerFieldName, fieldText)
 		header, err = headerParser(lowerFieldName, fieldText)
@@ -351,45 +340,8 @@ func (p *Parser) ParseHeader(headerText string) (header sip.Header, err error) {
 		// We have no registered parser for this header type,
 		// so we encapsulate the header data in a GenericHeader struct.
 		// p.log.Tracef("no parser for header type %s", fieldName)
-
-		header = &sip.GenericHeader{
-			HeaderName: fieldName,
-			Contents:   fieldText,
-		}
+		header = sip.NewHeader(fieldName, fieldText)
 	}
 
 	return
-}
-
-// Parse a string representation of a Call-ID header, returning a slice of at most one CallID.
-func parseCallId(headerName string, headerText string) (
-	header sip.Header, err error) {
-	headerText = strings.TrimSpace(headerText)
-
-	// if strings.ContainsAny(string(callId), abnfWs) {
-	// 	err = fmt.Errorf("unexpected whitespace in CallID header body '%s'", headerText)
-	// 	return
-	// }
-	// if strings.Contains(string(callId), ";") {
-	// 	err = fmt.Errorf("unexpected semicolon in CallID header body '%s'", headerText)
-	// 	return
-	// }
-	if len(headerText) == 0 {
-		err = fmt.Errorf("empty Call-ID body")
-		return
-	}
-
-	var callId = sip.CallIDHeader(headerText)
-
-	return &callId, nil
-}
-
-func parseMaxForwards(headerName string, headerText string) (header sip.Header, err error) {
-	val, err := strconv.ParseUint(headerText, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	maxfwd := sip.MaxForwardsHeader(val)
-	return &maxfwd, nil
 }

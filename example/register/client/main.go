@@ -63,7 +63,9 @@ func main() {
 	recipient := &sip.Uri{}
 	parser.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient, "SIP/2.0")
-	req.AppendHeader(&sip.GenericHeader{HeaderName: "Contact", Contents: fmt.Sprintf("<sip:%s@%s>", *username, *extIP)})
+	req.AppendHeader(
+		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *extIP)),
+	)
 
 	// Send request and parse response
 	// req.SetDestination(*dst)
@@ -96,10 +98,7 @@ func main() {
 		})
 
 		newReq := req.Clone()
-		newReq.AppendHeader(&sip.GenericHeader{
-			HeaderName: "Authorization",
-			Contents:   cred.String(),
-		})
+		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 		tx, err = client.TransactionRequest(newReq)
 		if err != nil {

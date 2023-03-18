@@ -68,10 +68,7 @@ func main() {
 			}
 
 			res := sip.NewResponseFromRequest(req, 401, "Unathorized", nil)
-			res.AppendHeader(&sip.GenericHeader{
-				HeaderName: "WWW-Authenticate",
-				Contents:   chal.String(),
-			})
+			res.AppendHeader(sip.NewHeader("WWW-Authenticate", chal.String()))
 
 			tx.Respond(res)
 			return
