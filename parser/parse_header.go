@@ -36,6 +36,14 @@ var headersParsers = map[string]HeaderParser{
 	"record-route":   parseRecordRouteHeader,
 }
 
+// DefaultHeadersParser returns minimal version header parser.
+// It can be extended or overwritten. Removing some defaults can break SIP functionality
+//
+// NOTE this API call may change
+func DefaultHeadersParser() map[string]HeaderParser {
+	return headersParsers
+}
+
 // parseCallId generates sip.CallIDHeader
 func parseCallId(headerName string, headerText string) (
 	header sip.Header, err error) {

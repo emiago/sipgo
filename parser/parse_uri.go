@@ -35,8 +35,6 @@ func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
 	default:
 		return uriStateHost, s, nil
 	}
-
-	return nil, "", fmt.Errorf("uri is not sip")
 }
 
 func uriStateUser(uri *sip.Uri, s string) (uriFSM, string, error) {

@@ -231,7 +231,7 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	} else {
 		hdrs := inviteResponse.GetHeaders("Record-Route")
 		for i := len(hdrs) - 1; i >= 0; i-- {
-			h := hdrs[i].(*RecordRouteHeader).Clone()
+			h := hdrs[i].headerClone()
 			ackRequest.AppendHeader(h)
 		}
 	}

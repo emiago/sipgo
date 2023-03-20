@@ -57,7 +57,7 @@ func ParseMessage(msgData []byte) (sip.Message, error) {
 
 type Parser struct {
 	log zerolog.Logger
-	// headersParsers uses default list of headers to be parsed. Smaller list parser will be faster
+	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
 	headersParsers map[string]HeaderParser
 }
 
@@ -78,10 +78,21 @@ func NewParser(options ...ParserOption) *Parser {
 	return p
 }
 
-// WithServerLogger allows customizing server logger
+// WithServerLogger allows customizing parser logger
 func WithParserLogger(logger zerolog.Logger) ParserOption {
 	return func(p *Parser) {
 		p.log = logger
+	}
+}
+
+// WithHeadersParsers allows customizing parser headers parsers
+// Consider performance when adding custom parser.
+// Add only if it will appear in almost every message
+//
+// Check DefaultHeadersParser as starting point
+func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
+	return func(p *Parser) {
+		p.headersParsers = m
 	}
 }
 

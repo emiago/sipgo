@@ -9,7 +9,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/emiago/sipgo/parser"
@@ -35,9 +34,9 @@ type Layer struct {
 
 	handlers []sip.MessageHandler
 
-	cancelOnce sync.Once
-	log        zerolog.Logger
+	log zerolog.Logger
 
+	parser          *parser.Parser
 	ConnectionReuse bool
 }
 
@@ -51,6 +50,7 @@ func NewLayer(
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
+		parser:          parser.NewParser(),
 		ConnectionReuse: true,
 	}
 
@@ -97,7 +97,7 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 		return err
 	}
 
-	transport := NewUDPTransport(c.LocalAddr().String(), parser.NewParser())
+	transport := NewUDPTransport(c.LocalAddr().String(), l.parser)
 	l.addTransport(transport, "udp", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -110,7 +110,7 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 		return err
 	}
 
-	transport := NewTCPTransport(c.Addr().String(), parser.NewParser())
+	transport := NewTCPTransport(c.Addr().String(), l.parser)
 	l.addTransport(transport, "tcp", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -123,7 +123,7 @@ func (l *Layer) ServeWS(c net.Listener) error {
 		return err
 	}
 
-	transport := NewWSTransport(c.Addr().String(), parser.NewParser())
+	transport := NewWSTransport(c.Addr().String(), l.parser)
 	l.addTransport(transport, "ws", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -136,7 +136,7 @@ func (l *Layer) ServeTLS(c net.Listener, conf *tls.Config) error {
 		return err
 	}
 
-	transport := NewTLSTransport(c.Addr().String(), parser.NewParser(), conf)
+	transport := NewTLSTransport(c.Addr().String(), l.parser, conf)
 	l.addTransport(transport, "tls", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -156,8 +156,7 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 		return ErrNetworkExists
 	}
 
-	p := parser.NewParser()
-
+	p := l.parser
 	var t Transport
 	switch network {
 	case "udp":
@@ -193,8 +192,7 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 		return ErrNetworkExists
 	}
 
-	p := parser.NewParser()
-
+	p := l.parser
 	var t Transport
 	switch network {
 	case "tcp", "tls":
