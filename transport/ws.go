@@ -9,7 +9,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/gobwas/ws"
 
@@ -23,14 +22,14 @@ var ()
 type WSTransport struct {
 	addr     string
 	listener net.Listener
-	parser   parser.SIPParser
+	parser   sip.Parser
 	handler  sip.MessageHandler
 	log      zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewWSTransport(addr string, par parser.SIPParser) *WSTransport {
+func NewWSTransport(addr string, par sip.Parser) *WSTransport {
 	p := &WSTransport{
 		addr:   addr,
 		parser: par,
@@ -165,7 +164,7 @@ func (t *WSTransport) parse(data []byte, src string) {
 		}
 	}
 
-	msg, err := t.parser.Parse(data) //Very expensive operation
+	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
 		return

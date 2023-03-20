@@ -36,7 +36,9 @@ type Layer struct {
 
 	log zerolog.Logger
 
-	parser          *parser.Parser
+	// Parser used by transport layer. It can be overrided before setuping network transports
+	Parser sip.Parser
+	// ConnectionReuse will force connection reuse when passing request
 	ConnectionReuse bool
 }
 
@@ -50,7 +52,7 @@ func NewLayer(
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
-		parser:          parser.NewParser(),
+		Parser:          parser.NewParser(),
 		ConnectionReuse: true,
 	}
 
@@ -97,7 +99,7 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 		return err
 	}
 
-	transport := NewUDPTransport(c.LocalAddr().String(), l.parser)
+	transport := NewUDPTransport(c.LocalAddr().String(), l.Parser)
 	l.addTransport(transport, "udp", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -110,7 +112,7 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 		return err
 	}
 
-	transport := NewTCPTransport(c.Addr().String(), l.parser)
+	transport := NewTCPTransport(c.Addr().String(), l.Parser)
 	l.addTransport(transport, "tcp", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -123,7 +125,7 @@ func (l *Layer) ServeWS(c net.Listener) error {
 		return err
 	}
 
-	transport := NewWSTransport(c.Addr().String(), l.parser)
+	transport := NewWSTransport(c.Addr().String(), l.Parser)
 	l.addTransport(transport, "ws", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -136,7 +138,7 @@ func (l *Layer) ServeTLS(c net.Listener, conf *tls.Config) error {
 		return err
 	}
 
-	transport := NewTLSTransport(c.Addr().String(), l.parser, conf)
+	transport := NewTLSTransport(c.Addr().String(), l.Parser, conf)
 	l.addTransport(transport, "tls", port)
 
 	return transport.Serve(c, l.handleMessage)
@@ -156,7 +158,7 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 		return ErrNetworkExists
 	}
 
-	p := l.parser
+	p := l.Parser
 	var t Transport
 	switch network {
 	case "udp":
@@ -192,7 +194,7 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 		return ErrNetworkExists
 	}
 
-	p := l.parser
+	p := l.Parser
 	var t Transport
 	switch network {
 	case "tcp", "tls":

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -30,14 +29,14 @@ type UDPTransport struct {
 	// listener *net.UDPConn
 	addr     string
 	listener net.PacketConn
-	parser   parser.SIPParser
+	parser   sip.Parser
 	handler  sip.MessageHandler
 	conn     *UDPConnection
 
 	log zerolog.Logger
 }
 
-func NewUDPTransport(addr string, par parser.SIPParser) *UDPTransport {
+func NewUDPTransport(addr string, par sip.Parser) *UDPTransport {
 	p := &UDPTransport{
 		addr:   addr,
 		parser: par,
@@ -198,7 +197,7 @@ func (t *UDPTransport) parse(data []byte, src string) {
 		}
 	}
 
-	msg, err := t.parser.Parse(data) //Very expensive operation
+	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
 		return

@@ -87,7 +87,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 		//RECEIVE INVITE
 		{
 			res := client2.TestReadConn(t)
-			inviteReqRec, err := p.Parse(res)
+			inviteReqRec, err := p.ParseSIP(res)
 			require.Nil(t, err)
 			assert.Equal(t, inviteReqRec.(*sip.Request).StartLine(), inviteReq.(*sip.Request).StartLine())
 
@@ -110,7 +110,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 			for {
 				res := client2.TestReadConn(t)
 
-				resReceived, err := p.Parse(res)
+				resReceived, err := p.ParseSIP(res)
 				if req, ok := resReceived.(*sip.Request); ok && req.IsInvite() {
 					continue
 				}
@@ -143,12 +143,12 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 		t.Log("CLIENT1: Send INVITE")
 		res := client1.TestRequest(t, []byte(inviteReq.String()))
 		t.Log("CLIENT1 INVITE: Got response")
-		trying, err := p.Parse(res)
+		trying, err := p.ParseSIP(res)
 		require.Nil(t, err)
 		assert.Equal(t, "SIP/2.0 100 Trying", trying.(*sip.Response).StartLine())
 
 		res = client1.TestReadConn(t)
-		inviteOK, err := p.Parse(res)
+		inviteOK, err := p.ParseSIP(res)
 		require.Nil(t, err)
 		assert.Equal(t, "SIP/2.0 200 OK", inviteOK.(*sip.Response).StartLine())
 	}
@@ -165,7 +165,7 @@ func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *pars
 		t.Log("CLIENT1: Send BYE")
 		res := client1.TestRequest(t, []byte(byeReq.String()))
 		t.Log("CLIENT1 BYE: Got response")
-		byeOK, err := p.Parse(res)
+		byeOK, err := p.ParseSIP(res)
 		require.Nil(t, err)
 		assert.Equal(t, "SIP/2.0 200 OK", byeOK.(*sip.Response).StartLine())
 	}
@@ -362,7 +362,7 @@ func TestRegisterTCP(t *testing.T) {
 	})
 
 	res := client1.TestRequest(t, []byte(reg.String()))
-	res200, err := p.Parse(res)
+	res200, err := p.ParseSIP(res)
 	require.Nil(t, err)
 	t.Log(res200.String())
 	assert.Equal(t, "SIP/2.0 200 OK", res200.(*sip.Response).StartLine())

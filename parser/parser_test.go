@@ -91,7 +91,7 @@ func TestParseHeaders(t *testing.T) {
 	t.Run("ViaHeader", func(t *testing.T) {
 		branch := sip.GenerateBranch()
 		header := "Via: SIP/2.0/UDP 127.0.0.2:5060;rport;branch=" + branch
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err)
 
 		hstr := h.String()
@@ -102,7 +102,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("ToHeader", func(t *testing.T) {
 		header := "To: \"Bob\" <sip:bob@127.0.0.1:5060>;xxx=xxx;yyyy=yyyy"
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err)
 
 		hstr := h.String()
@@ -112,7 +112,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("FromHeader", func(t *testing.T) {
 		header := "From: \"Bob\" <sip:bob@127.0.0.1:5060>"
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err)
 
 		hstr := h.String()
@@ -126,7 +126,7 @@ func TestParseHeaders(t *testing.T) {
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
 			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": "Contact: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"",
 		} {
-			h, err := parser.ParseHeader(header)
+			h, err := parser.parseHeader(header)
 			require.Nil(t, err)
 			assert.IsType(t, &sip.ContactHeader{}, h)
 
@@ -137,7 +137,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("RouteHeader", func(t *testing.T) {
 		header := "Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err, err)
 
 		hstr := h.String()
@@ -147,7 +147,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("RecordRouteHeader", func(t *testing.T) {
 		header := "Record-Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err, err)
 
 		hstr := h.String()
@@ -157,7 +157,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("MaxForwards", func(t *testing.T) {
 		header := "Max-Forwards: 70"
-		h, err := parser.ParseHeader(header)
+		h, err := parser.parseHeader(header)
 		require.Nil(t, err, err)
 
 		exp := sip.MaxForwardsHeader(70)
@@ -256,7 +256,7 @@ func TestParseRequest(t *testing.T) {
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
 		} {
-			_, err := parser.Parse([]byte(msgstr))
+			_, err := parser.ParseSIP([]byte(msgstr))
 			assert.Equal(t, ErrLineNoCRLF, err)
 		}
 	})
@@ -301,7 +301,7 @@ func TestParseRequest(t *testing.T) {
 
 	msgstr := strings.Join(rawMsg, "\r\n")
 
-	msg, err := parser.Parse([]byte(msgstr))
+	msg, err := parser.ParseSIP([]byte(msgstr))
 	require.Nil(t, err)
 
 	from, exists := msg.From()
@@ -343,7 +343,7 @@ func TestRegisterRequestFail(t *testing.T) {
 	data := []byte(strings.Join(rawMsg, "\r\n"))
 
 	parser := NewParser()
-	msg, err := parser.Parse(data)
+	msg, err := parser.ParseSIP(data)
 	require.Nil(t, err, err)
 	req := msg.(*sip.Request)
 
@@ -378,7 +378,7 @@ func BenchmarkParser(b *testing.B) {
 	b.ResetTimer()
 	testcase := func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			msg, err := parser.Parse(data)
+			msg, err := parser.ParseSIP(data)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -393,7 +393,7 @@ func BenchmarkParser(b *testing.B) {
 		b.RunParallel(func(p *testing.PB) {
 			i := 0
 			for p.Next() {
-				msg, err := parser.Parse(data)
+				msg, err := parser.ParseSIP(data)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -466,7 +466,7 @@ func BenchmarkParserNoData(b *testing.B) {
 	b.Run("New", func(b *testing.B) {
 		parser := NewParser()
 		for i := 0; i < b.N; i++ {
-			parser.Parse(data)
+			parser.ParseSIP(data)
 		}
 	})
 }

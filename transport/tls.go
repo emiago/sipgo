@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog/log"
@@ -21,7 +20,7 @@ type TLSTransport struct {
 	tlsConf *tls.Config
 }
 
-func NewTLSTransport(addr string, par parser.SIPParser, tlsConf *tls.Config) *TLSTransport {
+func NewTLSTransport(addr string, par sip.Parser, tlsConf *tls.Config) *TLSTransport {
 	tcptrans := NewTCPTransport(addr, par)
 	tcptrans.transport = TransportTLS //Override transport
 	p := &TLSTransport{

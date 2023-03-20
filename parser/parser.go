@@ -1,4 +1,3 @@
-// Originaly forked from github.com/StefanKopieczek/gossip by @StefanKopieczek
 package parser
 
 import (
@@ -37,24 +36,13 @@ var bufReader = sync.Pool{
 	},
 }
 
-// The buffer size of the parser input channel.
-// SipParser is interface for decoding full message into sip message
-type SIPParser interface {
-	Parse(data []byte) (sip.Message, error)
-}
-
-// SIPParserStreamed is parser that allows streamed data for parsing
-type SIPParserStreamed interface {
-	Write(data []byte) (int, error)
-	Output() chan sip.Message
-}
-
-// Parse a SIP message by creating a parser on the fly.
 func ParseMessage(msgData []byte) (sip.Message, error) {
 	parser := NewParser()
-	return parser.Parse(msgData)
+	return parser.ParseSIP(msgData)
 }
 
+// Parser is implementation of sip.SIPParser
+// It is optimized with faster header parsing
 type Parser struct {
 	log zerolog.Logger
 	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
@@ -96,8 +84,8 @@ func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
 	}
 }
 
-// Parse converts data to sip message. Buffer must contain full sip message
-func (p *Parser) Parse(data []byte) (msg sip.Message, err error) {
+// ParseSIP converts data to sip message. Buffer must contain full sip message
+func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 	reader := bufReader.Get().(*bytes.Buffer)
 	defer bufReader.Put(reader)
 	reader.Reset()
@@ -125,7 +113,7 @@ func (p *Parser) Parse(data []byte) (msg sip.Message, err error) {
 			break
 		}
 
-		header, err := p.ParseHeader(line)
+		header, err := p.parseHeader(line)
 		if err == nil {
 			msg.AppendHeader(header)
 		} else {
@@ -158,6 +146,32 @@ func (p *Parser) Parse(data []byte) (msg sip.Message, err error) {
 		msg.SetBody(body)
 	}
 	return msg, nil
+}
+
+func (p *Parser) parseHeader(headerText string) (header sip.Header, err error) {
+	// p.log.Tracef("parsing header \"%s\"", headerText)
+
+	colonIdx := strings.Index(headerText, ":")
+	if colonIdx == -1 {
+		err = fmt.Errorf("field name with no value in header: %s", headerText)
+		return
+	}
+
+	fieldName := strings.TrimSpace(headerText[:colonIdx])
+	lowerFieldName := sip.HeaderToLower(fieldName)
+	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
+	if headerParser, ok := p.headersParsers[lowerFieldName]; ok {
+		// We have a registered parser for this header type - use it.
+		// header, err = headerParser(lowerFieldName, fieldText)
+		header, err = headerParser(lowerFieldName, fieldText)
+	} else {
+		// We have no registered parser for this header type,
+		// so we encapsulate the header data in a GenericHeader struct.
+		// p.log.Tracef("no parser for header type %s", fieldName)
+		header = sip.NewHeader(fieldName, fieldText)
+	}
+
+	return
 }
 
 func ParseLine(startLine string) (msg sip.Message, err error) {
@@ -327,32 +341,6 @@ func ParseStatusLine(statusLine string) (
 	statusCodeRaw, err := strconv.ParseUint(parts[1], 10, 16)
 	statusCode = sip.StatusCode(statusCodeRaw)
 	reasonPhrase = strings.Join(parts[2:], " ")
-
-	return
-}
-
-func (p *Parser) ParseHeader(headerText string) (header sip.Header, err error) {
-	// p.log.Tracef("parsing header \"%s\"", headerText)
-
-	colonIdx := strings.Index(headerText, ":")
-	if colonIdx == -1 {
-		err = fmt.Errorf("field name with no value in header: %s", headerText)
-		return
-	}
-
-	fieldName := strings.TrimSpace(headerText[:colonIdx])
-	lowerFieldName := sip.HeaderToLower(fieldName)
-	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
-	if headerParser, ok := p.headersParsers[lowerFieldName]; ok {
-		// We have a registered parser for this header type - use it.
-		// header, err = headerParser(lowerFieldName, fieldText)
-		header, err = headerParser(lowerFieldName, fieldText)
-	} else {
-		// We have no registered parser for this header type,
-		// so we encapsulate the header data in a GenericHeader struct.
-		// p.log.Tracef("no parser for header type %s", fieldName)
-		header = sip.NewHeader(fieldName, fieldText)
-	}
 
 	return
 }
