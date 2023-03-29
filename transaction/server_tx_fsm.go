@@ -269,14 +269,13 @@ func (tx *ServerTx) actDelete() FsmInput {
 func (tx *ServerTx) actRespondDelete() FsmInput {
 	// tx.Log().Debug("actRespondDelete")
 	tx.delete()
-	lastErr := tx.conn.WriteMsg(tx.lastResp)
+	err := tx.conn.WriteMsg(tx.lastResp)
 
-	tx.mu.Lock()
-	tx.lastErr = lastErr
-	tx.mu.Unlock()
-
-	if lastErr != nil {
-		tx.log.Debug().Err(lastErr).Msg("fail to actRespondDelete")
+	if err != nil {
+		tx.mu.Lock()
+		tx.lastErr = wrapTransportError(err)
+		tx.mu.Unlock()
+		tx.log.Debug().Err(err).Msg("fail to actRespondDelete")
 		return server_input_transport_err
 	}
 

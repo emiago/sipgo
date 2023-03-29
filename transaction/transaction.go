@@ -2,6 +2,7 @@
 package transaction
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,15 +33,22 @@ const (
 	TxSeperator = "__"
 )
 
-type FnTxTerminate func(key string)
+var (
+	// Transaction Layer Errors can be detected and handled with different response on caller side
+	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.3.1
+	ErrTimeout   = errors.New("transaction timeout")
+	ErrTransport = errors.New("transaction transport error")
+)
 
-type TxError interface {
-	error
-	Key() string
-	Terminated() bool
-	Timeout() bool
-	Transport() bool
+func wrapTransportError(err error) error {
+	return fmt.Errorf("%s. %w", err.Error(), ErrTransport)
 }
+
+func wrapTimeoutError(err error) error {
+	return fmt.Errorf("%s. %w", err.Error(), ErrTimeout)
+}
+
+type FnTxTerminate func(key string)
 
 // MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
 func MakeServerTxKey(msg sip.Message) (string, error) {

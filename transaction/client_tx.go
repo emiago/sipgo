@@ -44,11 +44,7 @@ func (tx *ClientTx) Init() error {
 
 	if err := tx.conn.WriteMsg(tx.origin); err != nil {
 		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to write request on init")
-		// tx.mu.Lock()
-		// tx.lastErr = err
-		// tx.mu.Unlock()
-		// tx.spinFsm(client_input_transport_err)
-		return err
+		return wrapTransportError(err)
 	}
 
 	reliable := transport.IsReliable(tx.origin.Transport())
@@ -79,7 +75,7 @@ func (tx *ClientTx) Init() error {
 	tx.mu.Lock()
 	tx.timer_b = time.AfterFunc(Timer_B, func() {
 		tx.mu.Lock()
-		tx.lastErr = fmt.Errorf("transaction timed out by Timer_B")
+		tx.lastErr = fmt.Errorf("Timer_B timed out. %w", ErrTimeout)
 		tx.mu.Unlock()
 		tx.spinFsm(client_input_timer_b)
 	})
@@ -159,7 +155,7 @@ func (tx *ClientTx) cancel() {
 			Msgf("send CANCEL request failed: %s", err)
 
 		tx.mu.Lock()
-		tx.lastErr = err
+		tx.lastErr = wrapTransportError(err)
 		tx.mu.Unlock()
 
 		go tx.spinFsm(client_input_transport_err)
@@ -181,7 +177,7 @@ func (tx *ClientTx) ack() {
 			Msgf("send ACK request failed: %s", err)
 
 		tx.mu.Lock()
-		tx.lastErr = err
+		tx.lastErr = wrapTransportError(err)
 		tx.mu.Unlock()
 
 		go tx.spinFsm(client_input_transport_err)
@@ -209,12 +205,11 @@ func (tx *ClientTx) resend() {
 	// tx.log.Debug("resend origin request")
 
 	err := tx.conn.WriteMsg(tx.origin)
-
-	tx.mu.Lock()
-	tx.lastErr = err
-	tx.mu.Unlock()
-
 	if err != nil {
+		tx.mu.Lock()
+		tx.lastErr = wrapTransportError(err)
+		tx.mu.Unlock()
+
 		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to resend request")
 		go tx.spinFsm(client_input_transport_err)
 	}

@@ -214,7 +214,7 @@ func (tx *ServerTx) passResp() error {
 	if err != nil {
 		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
 		tx.mu.Lock()
-		tx.lastErr = err
+		tx.lastErr = wrapTransportError(err)
 		tx.mu.Unlock()
 		return err
 	}
