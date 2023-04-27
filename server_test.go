@@ -192,7 +192,7 @@ func TestUDPUAS(t *testing.T) {
 	}
 
 	// Test SIP NON allowed
-	srv.unhandledHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+	srv.noRouteHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		serverTxs = append(serverTxs, tx)
 		srv.defaultUnhandledHandler(req, tx)
 	}
@@ -290,7 +290,7 @@ func TestTCPUAS(t *testing.T) {
 	}
 
 	// Test SIP NON allowed
-	srv.unhandledHandler = func(req *sip.Request, tx sip.ServerTransaction) {
+	srv.noRouteHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		serverTxs = append(serverTxs, tx)
 		srv.defaultUnhandledHandler(req, tx)
 	}
@@ -385,6 +385,20 @@ func BenchmarkSwitchVsMap(b *testing.B) {
 			if _, ok := m("NOTIFY"); !ok {
 				b.FailNow()
 			}
+		}
+	})
+}
+
+func ExampleServer_OnNoRoute() {
+	// Creating no route handler allows you to respond for non handled (non routed) requests
+	ua, _ := NewUA()
+	srv, _ := NewServer(ua)
+
+	srv.OnNoRoute(func(req *sip.Request, tx sip.ServerTransaction) {
+		res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
+		// Send response directly and let transaction terminate
+		if err := srv.WriteResponse(res); err != nil {
+			srv.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
 		}
 	})
 }

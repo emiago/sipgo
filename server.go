@@ -21,8 +21,8 @@ type Server struct {
 	*UserAgent
 
 	// requestHandlers map of all registered request handlers
-	requestHandlers  map[sip.RequestMethod]RequestHandler
-	unhandledHandler RequestHandler
+	requestHandlers map[sip.RequestMethod]RequestHandler
+	noRouteHandler  RequestHandler
 
 	log zerolog.Logger
 
@@ -71,7 +71,7 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	}
 
 	// TODO have this exported as option
-	s.unhandledHandler = s.defaultUnhandledHandler
+	s.noRouteHandler = s.defaultUnhandledHandler
 
 	return s, nil
 }
@@ -193,10 +193,17 @@ func (srv *Server) OnPublish(handler RequestHandler) {
 	srv.requestHandlers[sip.PUBLISH] = handler
 }
 
+// OnNoRoute registers no route handler
+// default is handling is responding 405 Method Not allowed
+// This allows customizing your response for any non handled message
+func (srv *Server) OnNoRoute(handler RequestHandler) {
+	srv.noRouteHandler = handler
+}
+
 func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler) {
 	handler, ok := srv.requestHandlers[method]
 	if !ok {
-		return srv.unhandledHandler
+		return srv.noRouteHandler
 	}
 	return handler
 }
