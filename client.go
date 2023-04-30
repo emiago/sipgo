@@ -162,7 +162,6 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 		Host:            c.host,
 		Port:            c.port,
 		Params:          sip.NewParams(),
-		Next:            nil,
 	}
 	// NOTE: Consider lenght of branch configurable
 	newvia.Params.Add("branch", sip.GenerateBranchN(16))
@@ -209,45 +208,19 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 // ClientResponseRemoveVia is needed when handling client transaction response, where previously used in
 // TransactionRequest with ClientRequestAddVia
 func ClientResponseRemoveVia(c *Client, r *sip.Response) {
-	// var removedFromMulti bool
-	// Faster access TODO
-	// if via, exists := r.Via(); exists {
-	// 	prevvia := via
-	// 	for via != nil {
-	// 		if via.Host == c.host {
-
-	// 			removedFromMulti = true
-	// 			break
-	// 		}
-	// 		via = via.Next
-	// 		prevvia = via
-	// 	}
+	// via, exists := r.Via()
+	// if !exists {
+	// 	return
 	// }
-	// if !removedFromMulti {
-	// 	r.RemoveHeaderOn("Via", c.removeViaCallback)
+	// if via.Host == c.host {
+	// 	r.RemoveHeader("Via")
 	// }
 
 	r.RemoveHeaderOn("Via", c.removeViaCallback)
 }
 
 func (c *Client) removeViaCallback(h sip.Header) bool {
+	// This is slow
 	via := h.(*sip.ViaHeader)
-
-	// Check is this multivalue
-	// If yes then just remove that value
-	// TODO can this be done better
-	if via.Next != nil {
-		prevvia := via
-		for via != nil {
-			if via.Host == c.host {
-				prevvia.Next = via.Next
-				via.Next = nil
-				return false
-			}
-			prevvia = via
-			via = via.Next
-		}
-	}
-
 	return via.Host == c.host
 }
