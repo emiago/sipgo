@@ -113,10 +113,8 @@ func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 			break
 		}
 
-		header, err := p.parseHeader(line)
-		if err == nil {
-			msg.AppendHeader(header)
-		} else {
+		err = p.parseMsgHeader(msg, line)
+		if err != nil {
 			p.log.Info().Err(err).Str("line", line).Msg("skip header due to error")
 		}
 	}
@@ -172,6 +170,56 @@ func (p *Parser) parseHeader(headerText string) (header sip.Header, err error) {
 	}
 
 	return
+}
+
+// parseMsgHeader will append any parsed header
+// in case comma seperated values it will add them as new in case comma is detected
+func (p *Parser) parseMsgHeader(msg sip.Message, headerText string) (err error) {
+	// p.log.Tracef("parsing header \"%s\"", headerText)
+
+	colonIdx := strings.Index(headerText, ":")
+	if colonIdx == -1 {
+		err = fmt.Errorf("field name with no value in header: %s", headerText)
+		return
+	}
+
+	fieldName := strings.TrimSpace(headerText[:colonIdx])
+	lowerFieldName := sip.HeaderToLower(fieldName)
+	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
+
+	headerParser, ok := p.headersParsers[lowerFieldName]
+	if !ok {
+		// We have no registered parser for this header type,
+		// so we encapsulate the header data in a GenericHeader struct.
+		// p.log.Tracef("no parser for header type %s", fieldName)
+
+		// TODO Should we check for comma here as well ??
+		header := sip.NewHeader(fieldName, fieldText)
+		msg.AppendHeader(header)
+		return nil
+	}
+
+	// Support comma seperated value
+	for {
+		// We have a registered parser for this header type - use it.
+		// headerParser should detect comma (,) and return as error
+		header, err := headerParser(lowerFieldName, fieldText)
+
+		// Mostly we will run with no error
+		if err == nil {
+			msg.AppendHeader(header)
+			return nil
+		}
+
+		commaErr, ok := err.(errComaDetected)
+		if !ok {
+			return err
+		}
+
+		// Ok we detected we have comma in header value
+		msg.AppendHeader(header)
+		fieldText = fieldText[commaErr:]
+	}
 }
 
 func ParseLine(startLine string) (msg sip.Message, err error) {

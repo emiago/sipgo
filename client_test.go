@@ -102,11 +102,11 @@ func TestClientRequestOptions(t *testing.T) {
 	// Lets make via multivalue
 	req = createSimpleRequest(sip.INVITE, sender, recipment, "UDP")
 	via, _ = req.Via()
-	via.Next = &tmpvia
+	req.AppendHeader(&tmpvia)
 	res = sip.NewResponseFromRequest(req, 400, "", nil)
 	ClientResponseRemoveVia(c, res)
 	viaprev, _ = res.Via()
 	assert.Equal(t, via.Host, viaprev.Host)
-	assert.Nil(t, viaprev.Next)
-	// assert.Equal(t, oldvia.Next, nil)
+
+	assert.Len(t, res.GetHeaders("Via"), 1)
 }

@@ -14,6 +14,12 @@ import (
 // A HeaderParser is any function that turns raw header data into one or more Header objects.
 type HeaderParser func(headerName string, headerData string) (sip.Header, error)
 
+type errComaDetected int
+
+func (e errComaDetected) Error() string {
+	return "comma detected"
+}
+
 // This needs to kept minimalistic in order to avoid overhead of parsing
 var headersParsers = map[string]HeaderParser{
 	"to":             parseToAddressHeader,

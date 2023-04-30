@@ -765,7 +765,6 @@ type ViaHeader struct {
 	Host            string
 	Port            int // This is optional
 	Params          HeaderParams
-	Next            *ViaHeader
 }
 
 func (hop *ViaHeader) SentBy() string {
@@ -799,30 +798,22 @@ func (h *ViaHeader) Value() string {
 }
 
 func (h *ViaHeader) ValueStringWrite(buffer io.StringWriter) {
-	hop := h
-	for hop != nil {
-		buffer.WriteString(hop.ProtocolName)
-		buffer.WriteString("/")
-		buffer.WriteString(hop.ProtocolVersion)
-		buffer.WriteString("/")
-		buffer.WriteString(hop.Transport)
-		buffer.WriteString(" ")
-		buffer.WriteString(hop.Host)
+	buffer.WriteString(h.ProtocolName)
+	buffer.WriteString("/")
+	buffer.WriteString(h.ProtocolVersion)
+	buffer.WriteString("/")
+	buffer.WriteString(h.Transport)
+	buffer.WriteString(" ")
+	buffer.WriteString(h.Host)
 
-		if hop.Port > 0 {
-			buffer.WriteString(":")
-			buffer.WriteString(strconv.Itoa(hop.Port))
-		}
+	if h.Port > 0 {
+		buffer.WriteString(":")
+		buffer.WriteString(strconv.Itoa(h.Port))
+	}
 
-		if hop.Params != nil && hop.Params.Length() > 0 {
-			buffer.WriteString(";")
-			hop.Params.ToStringWrite(';', buffer)
-		}
-
-		if hop.Next != nil {
-			buffer.WriteString(", ")
-		}
-		hop = hop.Next
+	if h.Params != nil && h.Params.Length() > 0 {
+		buffer.WriteString(";")
+		h.Params.ToStringWrite(';', buffer)
 	}
 }
 
@@ -832,27 +823,7 @@ func (h *ViaHeader) headerClone() Header {
 }
 
 func (h *ViaHeader) Clone() *ViaHeader {
-	newHop := h.cloneMe()
-
-	newNext := newHop
-	tmp := h.Next
-	for tmp != nil {
-		clone := tmp.cloneMe()
-		newNext.Next = clone
-
-		newNext = clone
-		tmp = tmp.Next
-	}
-	return newHop
-}
-
-func (h *ViaHeader) cloneMe() *ViaHeader {
-	var newHop *ViaHeader
-	if h == nil {
-		return newHop
-	}
-
-	newHop = &ViaHeader{
+	newHop := &ViaHeader{
 		ProtocolName:    h.ProtocolName,
 		ProtocolVersion: h.ProtocolVersion,
 		Transport:       h.Transport,
