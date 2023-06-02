@@ -33,6 +33,7 @@ func main() {
 	transportType := flag.String("t", "udp", "Transport, default will be determined by request")
 	flag.Parse()
 
+	transport.UDPMTUSize = 10000
 	if *pprof {
 		runtime.SetBlockProfileRate(1)
 		runtime.SetMutexProfileFraction(1)
@@ -226,6 +227,9 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 	var ackHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		dst := getDestination(req)
+		if dst == "" {
+			return
+		}
 		req.SetDestination(dst)
 		if err := client.WriteRequest(req, sipgo.ClientRequestAddVia); err != nil {
 			log.Error().Err(err).Msg("Send failed")

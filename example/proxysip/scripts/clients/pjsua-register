@@ -7,7 +7,7 @@ if [ "${SIP_USERNAME}" == "" ]; then
   exit 1
 fi
 
-SIP_SERVER_HOST=${SIP_SERVER_HOST:-localhost}
+SIP_SERVER_HOST=${SIP_SERVER_HOST:-127.0.0.1}
 SIP_SERVER_PORT=5060
 SIP_PASSWORD=${SIP_PASSWORD:-asterisk}
 # udp, tcp
@@ -20,11 +20,9 @@ RTP_PORT=$(shuf -i 56001-59999 -n 1)
 
 pjsua \
   --log-level=0 \
-  --app-log-level=0 \
   --no-stderr \
   --null-audio \
   --snd-auto-close=0 \
-  --max-calls=15 \
   --no-vad \
   --use-compact-form \
   --reg-timeout=$SIP_REGISTER_TIMEOUT \

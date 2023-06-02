@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/emiago/sipgo/sip"
@@ -198,29 +199,32 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 	return nil
 }
 
-// TODO
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
+// ClientRequestDecreaseMaxForward should be used when forwarding request. It decreases max forward
+// in case of 0 it returnes error
 func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
-	// TODO
+	maxfwd, exists := r.MaxForwards()
+	if !exists {
+		// TODO, should we return error here
+		return nil
+	}
+
+	maxfwd.Dec()
+
+	if maxfwd.Val() <= 0 {
+		return fmt.Errorf("Max forwards reached")
+	}
 	return nil
 }
 
 // ClientResponseRemoveVia is needed when handling client transaction response, where previously used in
 // TransactionRequest with ClientRequestAddVia
 func ClientResponseRemoveVia(c *Client, r *sip.Response) {
-	// via, exists := r.Via()
-	// if !exists {
-	// 	return
-	// }
-	// if via.Host == c.host {
-	// 	r.RemoveHeader("Via")
-	// }
-
-	r.RemoveHeaderOn("Via", c.removeViaCallback)
-}
-
-func (c *Client) removeViaCallback(h sip.Header) bool {
-	// This is slow
-	via := h.(*sip.ViaHeader)
-	return via.Host == c.host
+	via, exists := r.Via()
+	if !exists {
+		return
+	}
+	if via.Host == c.host {
+		r.RemoveHeader("Via")
+	}
 }

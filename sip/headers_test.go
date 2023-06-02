@@ -49,3 +49,9 @@ func BenchmarkHeadersPrepend(b *testing.B) {
 		hs.headerOrder = newOrder
 	})
 }
+
+func TestMaxForwardIncDec(t *testing.T) {
+	maxfwd := MaxForwardsHeader(70)
+	maxfwd.Dec()
+	assert.Equal(t, uint32(69), maxfwd.Val(), "Value returned %d", maxfwd.Val())
+}
