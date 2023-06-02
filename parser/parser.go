@@ -191,7 +191,6 @@ func (p *Parser) parseMsgHeader(msg sip.Message, headerText string) (err error) 
 	if !ok {
 		// We have no registered parser for this header type,
 		// so we encapsulate the header data in a GenericHeader struct.
-		// p.log.Tracef("no parser for header type %s", fieldName)
 
 		// TODO Should we check for comma here as well ??
 		header := sip.NewHeader(fieldName, fieldText)
