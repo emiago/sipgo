@@ -90,3 +90,7 @@ func (ua *UserAgent) setIP(ip net.IP) (err error) {
 	ua.host = strings.Split(ip.String(), ":")[0]
 	return err
 }
+
+func (ua *UserAgent) GetIP() net.IP {
+	return ua.ip
+}
