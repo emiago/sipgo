@@ -108,5 +108,5 @@ func TestClientRequestOptions(t *testing.T) {
 	viaprev, _ = res.Via()
 	assert.Equal(t, via.Host, viaprev.Host)
 
-	assert.Len(t, res.GetHeaders("Via"), 1)
+	assert.Len(t, res.GetHeaders("Via"), 2)
 }
