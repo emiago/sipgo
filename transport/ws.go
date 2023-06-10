@@ -20,18 +20,14 @@ var ()
 
 // WS transport implementation
 type WSTransport struct {
-	addr     string
-	listener net.Listener
-	parser   sip.Parser
-	handler  sip.MessageHandler
-	log      zerolog.Logger
+	parser sip.Parser
+	log    zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewWSTransport(addr string, par sip.Parser) *WSTransport {
+func NewWSTransport(par sip.Parser) *WSTransport {
 	p := &WSTransport{
-		addr:   addr,
 		parser: par,
 		pool:   NewConnectionPool(),
 	}
@@ -43,59 +39,18 @@ func (t *WSTransport) String() string {
 	return "transport<WS>"
 }
 
-func (t *WSTransport) Addr() string {
-	return t.addr
-}
-
 func (t *WSTransport) Network() string {
 	return TransportWS
 }
 
 func (t *WSTransport) Close() error {
 	// return t.connections.Done()
-	var err error
-	if t.listener == nil {
-		return nil
-	}
-
-	if err := t.listener.Close(); err != nil {
-		err = fmt.Errorf("err=%w", err)
-	}
-
-	t.listener = nil
-	return err
-}
-
-// This is more generic way to provide listener and it is blocking
-func (t *WSTransport) ListenAndServe(handler sip.MessageHandler) error {
-	addr := t.addr
-	laddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("fail to resolve address. err=%w", err)
-	}
-
-	conn, err := net.ListenTCP("tcp", laddr)
-	if err != nil {
-		return fmt.Errorf("listen tcp error. err=%w", err)
-	}
-
-	return t.Serve(conn, handler)
+	return nil
 }
 
 // Serve is direct way to provide conn on which this worker will listen
 func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
-	if t.listener != nil {
-		return fmt.Errorf("TCP transport instance can only listen on one lection")
-	}
-
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
-	t.listener = l
-	t.handler = handler
-	return t.Accept()
-}
-
-func (t *WSTransport) Accept() error {
-	l := t.listener
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -108,11 +63,11 @@ func (t *WSTransport) Accept() error {
 			return err
 		}
 
-		t.initConnection(conn, conn.RemoteAddr().String())
+		t.initConnection(conn, conn.RemoteAddr().String(), handler)
 	}
 }
 
-func (t *WSTransport) initConnection(conn net.Conn, addr string) Connection {
+func (t *WSTransport) initConnection(conn net.Conn, addr string, handler sip.MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
@@ -121,13 +76,13 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string) Connection {
 		refcount: 3,
 	}
 	t.pool.Add(addr, c)
-	go t.readConnection(c, addr)
+	go t.readConnection(c, addr, handler)
 	return c
 }
 
 // This should performe better to avoid any interface allocation
-func (t *WSTransport) readConnection(conn *WSConnection, raddr string) {
-	buf := make([]byte, UDPbufferSize)
+func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler sip.MessageHandler) {
+	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
 	defer t.pool.Del(raddr)
 	defer t.log.Debug().Str("raddr", raddr).Msg("WS connection read stopped")
@@ -149,12 +104,12 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string) {
 			continue
 		}
 
-		t.parse(data, raddr)
+		t.parse(data, raddr, handler)
 	}
 
 }
 
-func (t *WSTransport) parse(data []byte, src string) {
+func (t *WSTransport) parse(data []byte, src string, handler sip.MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -172,7 +127,7 @@ func (t *WSTransport) parse(data []byte, src string) {
 
 	msg.SetTransport(TransportWS)
 	msg.SetSource(src)
-	t.handler(msg)
+	handler(msg)
 }
 
 func (t *WSTransport) ResolveAddr(addr string) (net.Addr, error) {
@@ -190,15 +145,15 @@ func (t *WSTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *WSTransport) CreateConnection(addr string) (Connection, error) {
+func (t *WSTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	raddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return t.createConnection(raddr.String())
+	return t.createConnection(raddr.String(), handler)
 }
 
-func (t *WSTransport) createConnection(addr string) (Connection, error) {
+func (t *WSTransport) createConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
 	conn, _, _, err := ws.Dial(context.TODO(), "ws://"+addr)
@@ -206,7 +161,7 @@ func (t *WSTransport) createConnection(addr string) (Connection, error) {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr)
+	c := t.initConnection(conn, addr, handler)
 	return c, nil
 }
 

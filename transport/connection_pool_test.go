@@ -7,7 +7,7 @@ import (
 
 func TestConnectionPool(t *testing.T) {
 	pool := NewConnectionPool()
-	conn := &conn{&net.TCPConn{}}
+	conn := &conn{Conn: &net.TCPConn{}}
 
 	a := &net.TCPAddr{
 		IP:   net.IPv4('1', '2', '3', '4'),
@@ -28,7 +28,7 @@ func TestConnectionPool(t *testing.T) {
 func BenchmarkConnectionPool(b *testing.B) {
 	pool := NewConnectionPool()
 	for i := 0; i < b.N; i++ {
-		conn := &conn{&net.TCPConn{}}
+		conn := &conn{Conn: &net.TCPConn{}}
 		a := &net.TCPAddr{
 			IP:   net.IPv4('1', '2', '3', byte(i)),
 			Port: 1000,

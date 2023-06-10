@@ -17,8 +17,6 @@ var (
 	// Best performance is achieved with low value, to remove high concurency
 	UDPReadWorkers int = 1
 
-	UDPbufferSize uint16 = 65535
-
 	UDPMTUSize = 1500
 
 	ErrUDPMTUCongestion = errors.New("size of packet larger than MTU")
@@ -27,19 +25,20 @@ var (
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
-	addr     string
 	listener net.PacketConn
 	parser   sip.Parser
-	handler  sip.MessageHandler
 	conn     *UDPConnection
+
+	pool ConnectionPool
 
 	log zerolog.Logger
 }
 
-func NewUDPTransport(addr string, par sip.Parser) *UDPTransport {
+func NewUDPTransport(par sip.Parser) *UDPTransport {
 	p := &UDPTransport{
-		addr:   addr,
 		parser: par,
+		conn:   nil, // Making sure interface is nil in returns
+		pool:   NewConnectionPool(),
 	}
 	p.log = log.Logger.With().Str("caller", "transport<UDP>").Logger()
 	return p
@@ -49,36 +48,28 @@ func (t *UDPTransport) String() string {
 	return "transport<UDP>"
 }
 
-func (t *UDPTransport) Addr() string {
-	return t.addr
-}
-
 func (t *UDPTransport) Network() string {
 	return TransportUDP
 }
 
 func (t *UDPTransport) Close() error {
 	// return t.connections.Done()
-	if t.listener == nil {
-		return nil
-	}
-
+	t.pool.RLock()
+	defer t.pool.RUnlock()
 	var rerr error
-	if err := t.listener.Close(); err != nil {
-		rerr = err
+	for _, c := range t.pool.m {
+		if _, err := c.TryClose(); err != nil {
+			t.log.Err(err).Msg("Fail to close conn")
+			rerr = fmt.Errorf("Open connections left")
+		}
 	}
-
-	t.listener = nil
-	t.conn = nil
-
 	return rerr
 }
 
 // TODO
 // This is more generic way to provide listener and it is blocking
-func (t *UDPTransport) ListenAndServe(handler sip.MessageHandler) error {
+func (t *UDPTransport) ListenAndServe(addr string, handler sip.MessageHandler) error {
 	// resolve local UDP endpoint
-	addr := t.addr
 	laddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -94,24 +85,27 @@ func (t *UDPTransport) ListenAndServe(handler sip.MessageHandler) error {
 // ServeConn is direct way to provide conn on which this worker will listen
 // UDPReadWorkers are used to create more workers
 func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) error {
-	if t.listener != nil {
-		return fmt.Errorf("UDP transport instance can only listen on one connection")
-	}
 
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), conn.LocalAddr().String())
-	t.listener = conn
-
-	t.handler = handler
-
 	/*
 		Multiple readers makes problem, which can delay writing response
 	*/
 
-	t.conn = &UDPConnection{conn}
-	for i := 0; i < UDPReadWorkers-1; i++ {
-		go t.readConnection(t.conn)
+	c := &UDPConnection{PacketConn: conn}
+
+	// In case single connection avoid pool
+	if t.pool.Size() == 0 {
+		t.conn = c
+	} else {
+		t.conn = nil
 	}
-	t.readConnection(t.conn)
+
+	t.pool.Add(conn.LocalAddr().String(), c)
+
+	for i := 0; i < UDPReadWorkers-1; i++ {
+		go t.readConnection(c, handler)
+	}
+	t.readConnection(c, handler)
 
 	return nil
 }
@@ -122,31 +116,38 @@ func (t *UDPTransport) ResolveAddr(addr string) (net.Addr, error) {
 
 // GetConnection will return same listener connection
 func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
-
-	return t.conn, nil
-}
-
-// CreateConnection will return same listener connection
-func (t *UDPTransport) CreateConnection(addr string) (Connection, error) {
-	// TODO. Handle connected vs nonconnected udp
-	// Normal client can not reuse this connection
+	// Single udp connection as listener can only be used as long IP of a packet in same network
+	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
-	// raddr, err := net.ResolveUDPAddr("udp", addr)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// conn, err := net.DialUDP("udp", nil, raddr)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// return &UDPConnection{conn}, err
+	if t.conn == nil {
+		// Use pool only in multi connection
+		return t.pool.Get(addr), nil
+	}
 
 	return t.conn, nil
 }
 
-func (t *UDPTransport) readConnection(conn *UDPConnection) {
-	buf := make([]byte, UDPbufferSize)
+// CreateConnection will create new connection. Generally we only
+func (t *UDPTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
+	raddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	udpconn, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		return nil, err
+	}
+	c := &UDPConnection{Conn: udpconn}
+
+	// Wrap it in reference
+	t.pool.Add(addr, c)
+	go t.readConnection(c, handler)
+	return c, err
+}
+
+func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHandler) {
+	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
 	for {
 		num, raddr, err := conn.ReadFrom(buf)
@@ -161,14 +162,38 @@ func (t *UDPTransport) readConnection(conn *UDPConnection) {
 			continue
 		}
 
-		t.parse(data, raddr.String())
+		t.parseAndHandle(data, raddr.String(), handler)
+	}
+}
+
+func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.MessageHandler) {
+	buf := make([]byte, transportBufferSize)
+	defer conn.Close()
+
+	raddr := conn.Conn.RemoteAddr().String()
+	for {
+		num, err := conn.Read(buf)
+
+		if err != nil {
+			t.log.Error().Err(err)
+			return
+		}
+
+		data := buf[:num]
+		if len(bytes.Trim(data, "\x00")) == 0 {
+			continue
+		}
+
+		t.parseAndHandle(data, raddr, handler)
 	}
 }
 
 // This should performe better to avoid any interface allocation
-func (t *UDPTransport) readUDPConn(conn *net.UDPConn) {
-	buf := make([]byte, UDPbufferSize)
+// For now no usage, but leaving here
+func (t *UDPTransport) readUDPConn(conn *net.UDPConn, handler sip.MessageHandler) {
+	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
+
 	for {
 		//ReadFromUDP should make one less allocation
 		num, raddr, err := conn.ReadFromUDP(buf)
@@ -183,11 +208,11 @@ func (t *UDPTransport) readUDPConn(conn *net.UDPConn) {
 			continue
 		}
 
-		t.parse(data, raddr.String())
+		t.parseAndHandle(data, raddr.String(), handler)
 	}
 }
 
-func (t *UDPTransport) parse(data []byte, src string) {
+func (t *UDPTransport) parseAndHandle(data []byte, src string, handler sip.MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -205,11 +230,14 @@ func (t *UDPTransport) parse(data []byte, src string) {
 
 	msg.SetTransport(TransportUDP)
 	msg.SetSource(src)
-	t.handler(msg)
+	handler(msg)
 }
 
 type UDPConnection struct {
-	net.PacketConn
+	// mutual exclusive for now
+	// TODO Refactor
+	PacketConn net.PacketConn
+	Conn       net.Conn
 }
 
 func (c *UDPConnection) Ref(i int) {
@@ -218,11 +246,28 @@ func (c *UDPConnection) Ref(i int) {
 
 func (c *UDPConnection) Close() error {
 	//Do not allow closing UDP
+	if c.Conn != nil {
+		return c.Conn.Close()
+	}
 	return nil
 }
 
 func (c *UDPConnection) TryClose() (int, error) {
 	return 0, c.Close()
+}
+
+func (c *UDPConnection) Read(b []byte) (n int, err error) {
+	if SIPDebug {
+		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b))
+	}
+	return c.Conn.Read(b)
+}
+
+func (c *UDPConnection) Write(b []byte) (n int, err error) {
+	if SIPDebug {
+		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b))
+	}
+	return c.Conn.Write(b)
 }
 
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
@@ -244,12 +289,6 @@ func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 }
 
 func (c *UDPConnection) WriteMsg(msg sip.Message) error {
-	dst := msg.Destination()
-	raddr, err := net.ResolveUDPAddr("udp", dst)
-	if err != nil {
-		return err
-	}
-
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -260,9 +299,27 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 		return ErrUDPMTUCongestion
 	}
 
-	n, err := c.WriteTo(data, raddr)
-	if err != nil {
-		return fmt.Errorf("udp conn %s err. %w", c.LocalAddr().String(), err)
+	var n int
+	// TODO doing without if
+	if c.Conn != nil {
+		var err error
+		n, err = c.Write(data)
+		if err != nil {
+			return fmt.Errorf("conn %s write err=%w", c, err)
+		}
+	} else {
+		var err error
+
+		dst := msg.Destination()
+		raddr, err := net.ResolveUDPAddr("udp", dst)
+		if err != nil {
+			return err
+		}
+
+		n, err = c.WriteTo(data, raddr)
+		if err != nil {
+			return fmt.Errorf("udp conn %s err. %w", c.PacketConn.LocalAddr().String(), err)
+		}
 	}
 
 	if n == 0 {

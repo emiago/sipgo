@@ -4,6 +4,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
 	"github.com/emiago/sipgo/transport"
@@ -79,7 +80,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 		}
 	}
 
-	ua.tp = transport.NewLayer(ua.dnsResolver)
+	ua.tp = transport.NewLayer(ua.dnsResolver, parser.NewParser())
 	ua.tx = transaction.NewLayer(ua.tp)
 	return ua, nil
 }

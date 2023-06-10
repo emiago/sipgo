@@ -1,6 +1,8 @@
 package transport
 
-import "github.com/emiago/sipgo/sip"
+import (
+	"github.com/emiago/sipgo/sip"
+)
 
 var (
 	SIPDebug bool
@@ -13,15 +15,15 @@ const (
 	TransportTCP = "TCP"
 	TransportTLS = "TLS"
 	TransportWS  = "WS"
+
+	transportBufferSize uint16 = 65535
 )
 
 // Protocol implements network specific features.
 type Transport interface {
-	Addr() string
 	Network() string
-	ListenAndServe(handler sip.MessageHandler) error
 	GetConnection(addr string) (Connection, error)
-	CreateConnection(addr string) (Connection, error)
+	CreateConnection(addr string, handler sip.MessageHandler) (Connection, error)
 	String() string
 	Close() error
 }

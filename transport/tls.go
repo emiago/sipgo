@@ -20,15 +20,16 @@ type TLSTransport struct {
 	tlsConf *tls.Config
 }
 
-func NewTLSTransport(addr string, par sip.Parser, tlsConf *tls.Config) *TLSTransport {
-	tcptrans := NewTCPTransport(addr, par)
+// NewTLSTransport needs dialTLSConf for creating connections when dialing
+func NewTLSTransport(par sip.Parser, dialTLSConf *tls.Config) *TLSTransport {
+	tcptrans := NewTCPTransport(par)
 	tcptrans.transport = TransportTLS //Override transport
 	p := &TLSTransport{
 		TCPTransport: tcptrans,
 	}
 
 	// p.rootPool = roots
-	p.tlsConf = tlsConf
+	p.tlsConf = dialTLSConf
 	p.log = log.Logger.With().Str("caller", "transport<TLS>").Logger()
 	return p
 }
@@ -37,32 +38,16 @@ func (t *TLSTransport) String() string {
 	return "transport<TLS>"
 }
 
-// This is more generic way to provide listener and it is blocking
-func (t *TLSTransport) ListenAndServe(handler sip.MessageHandler) error {
-	addr := t.addr
-	laddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("fail to resolve address. err=%w", err)
-	}
-
-	listener, err := tls.Listen("tcp", laddr.String(), t.tlsConf.Clone())
-	if err != nil {
-		return fmt.Errorf("listen tls error. err=%w", err)
-	}
-
-	return t.Serve(listener, handler)
-}
-
 // CreateConnection creates TLS connection for TCP transport
-func (t *TLSTransport) CreateConnection(addr string) (Connection, error) {
+func (t *TLSTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	raddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return t.createConnection(raddr)
+	return t.createConnection(raddr, handler)
 }
 
-func (t *TLSTransport) createConnection(raddr *net.TCPAddr) (Connection, error) {
+func (t *TLSTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -75,6 +60,6 @@ func (t *TLSTransport) createConnection(raddr *net.TCPAddr) (Connection, error) 
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr)
+	c := t.initConnection(conn, addr, handler)
 	return c, nil
 }

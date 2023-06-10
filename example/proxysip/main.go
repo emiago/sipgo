@@ -41,7 +41,8 @@ func main() {
 	}
 
 	lev := zerolog.InfoLevel
-	if *debflag {
+	debuglev := os.Getenv("LOGDEBUG")
+	if *debflag || debuglev != "" {
 		lev = zerolog.DebugLevel
 		transport.SIPDebug = true
 	}

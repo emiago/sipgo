@@ -20,17 +20,14 @@ var ()
 type TCPTransport struct {
 	addr      string
 	transport string
-	listener  net.Listener
 	parser    sip.Parser
-	handler   sip.MessageHandler
 	log       zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewTCPTransport(addr string, par sip.Parser) *TCPTransport {
+func NewTCPTransport(par sip.Parser) *TCPTransport {
 	p := &TCPTransport{
-		addr:      addr,
 		parser:    par,
 		pool:      NewConnectionPool(),
 		transport: TransportTCP,
@@ -43,10 +40,6 @@ func (t *TCPTransport) String() string {
 	return "transport<TCP>"
 }
 
-func (t *TCPTransport) Addr() string {
-	return t.addr
-}
-
 func (t *TCPTransport) Network() string {
 	// return "tcp"
 	return t.transport
@@ -54,51 +47,14 @@ func (t *TCPTransport) Network() string {
 
 func (t *TCPTransport) Close() error {
 	// return t.connections.Done()
-	var rerr error
-	if t.listener == nil {
-		return nil
-	}
+	// TODO should we empty connection pool
 
-	if err := t.listener.Close(); err != nil {
-		rerr = fmt.Errorf("err=%w", err)
-	}
-
-	t.listener = nil
-	// t.listenerTCP = nil
-	return rerr
-}
-
-// TODO
-// This is more generic way to provide listener and it is blocking
-func (t *TCPTransport) ListenAndServe(handler sip.MessageHandler) error {
-	addr := t.addr
-	laddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("fail to resolve address. err=%w", err)
-	}
-
-	conn, err := net.ListenTCP("tcp", laddr)
-	if err != nil {
-		return fmt.Errorf("listen tcp error. err=%w", err)
-	}
-
-	return t.Serve(conn, handler)
+	return nil
 }
 
 // Serve is direct way to provide conn on which this worker will listen
 func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
-	if t.listener != nil {
-		return fmt.Errorf("TCP transport instance can only listen on one lection")
-	}
-
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
-	t.listener = l
-	t.handler = handler
-	return t.Accept()
-}
-
-func (t *TCPTransport) Accept() error {
-	l := t.listener
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -106,7 +62,7 @@ func (t *TCPTransport) Accept() error {
 			return err
 		}
 
-		t.initConnection(conn, conn.RemoteAddr().String())
+		t.initConnection(conn, conn.RemoteAddr().String(), handler)
 	}
 }
 
@@ -125,15 +81,15 @@ func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *TCPTransport) CreateConnection(addr string) (Connection, error) {
+func (t *TCPTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	raddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return t.createConnection(raddr)
+	return t.createConnection(raddr, handler)
 }
 
-func (t *TCPTransport) createConnection(raddr *net.TCPAddr) (Connection, error) {
+func (t *TCPTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -150,11 +106,11 @@ func (t *TCPTransport) createConnection(raddr *net.TCPAddr) (Connection, error) 
 	// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
 	// }
 
-	c := t.initConnection(conn, addr)
+	c := t.initConnection(conn, addr, handler)
 	return c, nil
 }
 
-func (t *TCPTransport) initConnection(conn net.Conn, addr string) Connection {
+func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
@@ -164,13 +120,13 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string) Connection {
 		refcount: 1,
 	}
 	t.pool.Add(addr, c)
-	go t.readConnection(c, addr)
+	go t.readConnection(c, addr, handler)
 	return c
 }
 
 // This should performe better to avoid any interface allocation
-func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
-	buf := make([]byte, UDPbufferSize)
+func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler sip.MessageHandler) {
+	buf := make([]byte, transportBufferSize)
 
 	defer func() {
 		// Delete connection from pool only when closed
@@ -200,11 +156,11 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string) {
 		}
 
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		t.parse(data, raddr)
+		t.parse(data, raddr, handler)
 	}
 }
 
-func (t *TCPTransport) parse(data []byte, src string) {
+func (t *TCPTransport) parse(data []byte, src string, handler sip.MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -222,7 +178,7 @@ func (t *TCPTransport) parse(data []byte, src string) {
 
 	msg.SetTransport(t.Network())
 	msg.SetSource(src)
-	t.handler(msg)
+	handler(msg)
 }
 
 type TCPConnection struct {

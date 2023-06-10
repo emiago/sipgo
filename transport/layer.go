@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -19,7 +18,7 @@ import (
 )
 
 var (
-	ErrNetworkExists = errors.New("network is already served")
+	ErrNetworkNotSuported = errors.New("protocol not supported")
 )
 
 func init() {
@@ -28,6 +27,11 @@ func init() {
 
 // Layer implementation.
 type Layer struct {
+	udp *UDPTransport
+	tcp *TCPTransport
+	tls *TLSTransport
+	ws  *WSTransport
+
 	transports  map[string]Transport
 	listenPorts map[string][]int
 	dnsResolver *net.Resolver
@@ -43,21 +47,36 @@ type Layer struct {
 }
 
 // NewLayer creates transport layer.
-// hostAddr - address of host
 // dns Resolver
+// sip parser
+// tls config - can be nil to use default tls
 func NewLayer(
 	dnsResolver *net.Resolver,
+	sipparser sip.Parser,
 ) *Layer {
 	l := &Layer{
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
-		Parser:          parser.NewParser(),
+		Parser:          sipparser,
 		ConnectionReuse: true,
 	}
 
 	l.log = log.Logger.With().Str("caller", "transportlayer").Logger()
-	// l.OnMessage(func(msg sip.Message) { l.log.Info().Msg("no handler for message") })
+
+	// Make some default transports available.
+	l.udp = NewUDPTransport(sipparser)
+	l.tcp = NewTCPTransport(sipparser)
+	// TODO. Using default dial tls, but it needs to configurable via client
+	l.tls = NewTLSTransport(sipparser, nil)
+	l.ws = NewWSTransport(sipparser)
+
+	// Fill map for fast access
+	l.transports["udp"] = l.udp
+	l.transports["tcp"] = l.tcp
+	l.transports["tls"] = l.tls
+	l.transports["ws"] = l.ws
+
 	return l
 }
 
@@ -99,10 +118,9 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 		return err
 	}
 
-	transport := NewUDPTransport(c.LocalAddr().String(), l.Parser)
-	l.addTransport(transport, "udp", port)
+	l.addListenPort("udp", port)
 
-	return transport.Serve(c, l.handleMessage)
+	return l.udp.Serve(c, l.handleMessage)
 }
 
 // ServeTCP will listen on tcp connection
@@ -112,10 +130,9 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 		return err
 	}
 
-	transport := NewTCPTransport(c.Addr().String(), l.Parser)
-	l.addTransport(transport, "tcp", port)
+	l.addListenPort("tcp", port)
 
-	return transport.Serve(c, l.handleMessage)
+	return l.tcp.Serve(c, l.handleMessage)
 }
 
 // ServeWS will listen on ws connection
@@ -125,103 +142,91 @@ func (l *Layer) ServeWS(c net.Listener) error {
 		return err
 	}
 
-	transport := NewWSTransport(c.Addr().String(), l.Parser)
-	l.addTransport(transport, "ws", port)
+	l.addListenPort("ws", port)
 
-	return transport.Serve(c, l.handleMessage)
+	return l.ws.Serve(c, l.handleMessage)
 }
 
-// ServeTLS will listen on tcp connection. rootPems can be nil if there is no need for client use
-func (l *Layer) ServeTLS(c net.Listener, conf *tls.Config) error {
+// ServeTLS will listen on tcp connection
+func (l *Layer) ServeTLS(c net.Listener) error {
 	_, port, err := sip.ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
 	}
 
-	transport := NewTLSTransport(c.Addr().String(), l.Parser, conf)
-	l.addTransport(transport, "tls", port)
-
-	return transport.Serve(c, l.handleMessage)
+	l.addListenPort("tls", port)
+	return l.tls.Serve(c, l.handleMessage)
 }
 
 // Serve on any network. This function will block
 // Network supported: udp, tcp, ws
 func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string) error {
 	network = strings.ToLower(network)
-	_, port, err := sip.ParseAddr(addr)
-	if err != nil {
-		return err
-	}
-
-	_, exists := l.transports[network]
-	if exists {
-		return ErrNetworkExists
-	}
-
-	p := l.Parser
-	var t Transport
+	// Do some filtering
 	switch network {
 	case "udp":
-		t = NewUDPTransport(addr, p)
-	case "tcp":
-		t = NewTCPTransport(addr, p)
-	case "ws":
-		t = NewWSTransport(addr, p)
-	// case "tls":
-	// t = NewTLSTransport(addr, p)
-	default:
-		return fmt.Errorf("protocol not supported yet")
+		// resolve local UDP endpoint
+		laddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+		udpConn, err := net.ListenUDP("udp", laddr)
+		if err != nil {
+			return fmt.Errorf("listen udp error. err=%w", err)
+		}
+
+		return l.ServeUDP(udpConn)
+
+	case "ws", "tcp":
+		laddr, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		conn, err := net.ListenTCP("tcp", laddr)
+		if err != nil {
+			return fmt.Errorf("listen tcp error. err=%w", err)
+		}
+
+		// and uses listener to buffer
+		if network == "ws" {
+			return l.ServeWS(conn)
+		}
+		return l.ServeTCP(conn)
 	}
-
-	// Add transport to list
-	l.addTransport(t, network, port)
-
-	err = t.ListenAndServe(l.handleMessage)
-	return err
+	return ErrNetworkNotSuported
 }
 
 // Serve on any tls network. This function will block
 // Network supported: tcp
 func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	network = strings.ToLower(network)
-	_, port, err := sip.ParseAddr(addr)
-	if err != nil {
-		return err
-	}
-
-	_, exists := l.transports[network]
-	if exists {
-		return ErrNetworkExists
-	}
-
-	p := l.Parser
-	var t Transport
+	// Do some filtering
 	switch network {
-	case "tcp", "tls":
-		t = NewTLSTransport(addr, p, conf)
-	// case "ws":
-	// 	t = NewWSTransport(addr, p)
-	default:
-		return fmt.Errorf("protocol not supported yet")
+	case "tls", "tcp":
+		laddr, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		listener, err := tls.Listen("tcp", laddr.String(), conf)
+		if err != nil {
+			return fmt.Errorf("listen tls error. err=%w", err)
+		}
+
+		return l.ServeTLS(listener)
 	}
 
-	// Add transport to list
-	l.addTransport(t, t.Network(), port)
-
-	err = t.ListenAndServe(l.handleMessage)
-	return err
+	return ErrNetworkNotSuported
 }
 
-func (l *Layer) addTransport(t Transport, network string, port int) {
-	network = NetworkToLower(network)
+func (l *Layer) addListenPort(network string, port int) {
 	if _, ok := l.listenPorts[network]; !ok {
 		if l.listenPorts[network] == nil {
 			l.listenPorts[network] = make([]int, 0)
 		}
 		l.listenPorts[network] = append(l.listenPorts[network], port)
 	}
-
-	l.transports[network] = t
 }
 
 func (l *Layer) WriteMsg(msg sip.Message) error {
@@ -378,7 +383,9 @@ func (l *Layer) createConnection(network, addr string) (Connection, error) {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
-	c, err := transport.CreateConnection(addr)
+	// If there are no transport handlers registered for handling connection message
+	// this message will be dropped
+	c, err := transport.CreateConnection(addr, l.handleMessage)
 	return c, err
 }
 

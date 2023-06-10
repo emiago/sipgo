@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -84,6 +85,21 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 // Serve will fire all listeners that are secured. Ctx allows canceling
 func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	return srv.tp.ListenAndServeTLS(ctx, network, addr, conf)
+}
+
+// ServeUDP starts serving request on UDP type listener.
+func (srv *Server) ServeUDP(l net.PacketConn) error {
+	return srv.tp.ServeUDP(l)
+}
+
+// ServeTCP starts serving request on TCP type listener.
+func (srv *Server) ServeTCP(l net.Listener) error {
+	return srv.tp.ServeTCP(l)
+}
+
+// ServeTLS starts serving request on TLS type listener.
+func (srv *Server) ServeTLS(l net.Listener, conf *tls.Config) error {
+	return srv.tp.ServeTLS(l)
 }
 
 // onRequest gets request from Transaction layer

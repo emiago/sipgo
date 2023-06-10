@@ -5,6 +5,11 @@ import (
 	"strconv"
 )
 
+type IPAddr struct {
+	IP   net.IP
+	Port int
+}
+
 type Transport interface {
 	WriteMsg(msg Message) error
 }

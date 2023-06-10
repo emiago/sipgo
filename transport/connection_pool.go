@@ -35,6 +35,13 @@ func (p *ConnectionPool) Del(a string) {
 	p.Unlock()
 }
 
+func (p *ConnectionPool) Size() int {
+	p.RLock()
+	l := len(p.m)
+	p.RUnlock()
+	return l
+}
+
 type TCPPool struct {
 	sync.RWMutex
 	m map[string]*net.TCPConn

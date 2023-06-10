@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/rs/zerolog/log"
 )
 
 type Connection interface {
@@ -16,6 +17,8 @@ type Connection interface {
 	Ref(i int)
 	// Close decreases reference and if ref = 0 closes connection. Returns last ref. If 0 then it is closed
 	TryClose() (int, error)
+
+	Close() error
 }
 
 var bufPool = sync.Pool{
@@ -31,15 +34,73 @@ var bufPool = sync.Pool{
 
 type conn struct {
 	net.Conn
+
+	transport string
+
+	mu       sync.RWMutex
+	refcount int
 }
 
 func (c *conn) Ref(i int) {
 	// Not used so far
+	c.mu.Lock()
+	c.refcount += i
+	ref := c.refcount
+	c.mu.Unlock()
+	log.Debug().
+		Str("transport", c.transport).
+		Str("src", c.LocalAddr().String()).
+		Str("dst", c.RemoteAddr().String()).
+		Int("ref", ref).
+		Msg("reference increment")
+}
+
+func (c *conn) Close() error {
+	c.mu.Lock()
+	c.refcount = 0
+	c.mu.Unlock()
+	log.Debug().
+		Str("transport", c.transport).
+		Str("src", c.LocalAddr().String()).
+		Str("dst", c.RemoteAddr().String()).
+		Int("ref", 0).
+		Msg("doing hard close")
+	return c.Conn.Close()
 }
 
 func (c *conn) TryClose() (int, error) {
-	// Not used so far
-	return 0, c.Conn.Close()
+	c.mu.Lock()
+	c.refcount--
+	ref := c.refcount
+	c.mu.Unlock()
+	log.Debug().
+		Str("transport", c.transport).
+		Str("src", c.LocalAddr().String()).
+		Str("dst", c.RemoteAddr().String()).
+		Int("ref", ref).
+		Msg("TCP reference decrement")
+	if ref > 0 {
+		return ref, nil
+	}
+
+	if ref < 0 {
+		log.Warn().
+			Str("transport", c.transport).
+			Str("src", c.LocalAddr().String()).
+			Str("dst", c.RemoteAddr().String()).
+			Int("ref", ref).
+			Msg("ref went negative")
+		return 0, nil
+	}
+
+	log.Debug().
+		Str("transport", c.transport).
+		Str("src", c.LocalAddr().String()).
+		Str("dst", c.RemoteAddr().String()).
+		Int("ref", ref).
+		Msg("TCP closing")
+
+	return ref, c.Conn.Close()
 }
 
 func (c *conn) String() string {
