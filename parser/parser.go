@@ -217,7 +217,7 @@ func (p *Parser) parseMsgHeader(msg sip.Message, headerText string) (err error) 
 
 		// Ok we detected we have comma in header value
 		msg.AppendHeader(header)
-		fieldText = fieldText[commaErr:]
+		fieldText = fieldText[commaErr+1:]
 	}
 }
 

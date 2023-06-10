@@ -86,13 +86,21 @@ func TestUnmarshalParams(t *testing.T) {
 	assert.Equal(t, "", params["lr"])
 }
 
+func testParseHeader(t *testing.T, parser *Parser, header string) sip.Header {
+	// This is fake way to get parsing done. We use fake message and read first header
+	msg := sip.NewRequest(sip.INVITE, nil, "SIP 2.0")
+	name := strings.Split(header, ":")[0]
+	err := parser.parseMsgHeader(msg, header)
+	require.Nil(t, err)
+	return msg.GetHeader(name)
+}
+
 func TestParseHeaders(t *testing.T) {
 	parser := NewParser()
 	t.Run("ViaHeader", func(t *testing.T) {
 		branch := sip.GenerateBranch()
 		header := "Via: SIP/2.0/UDP 127.0.0.2:5060;rport;branch=" + branch
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err)
+		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
 		// TODO find better way to compare
@@ -102,8 +110,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("ToHeader", func(t *testing.T) {
 		header := "To: \"Bob\" <sip:bob@127.0.0.1:5060>;xxx=xxx;yyyy=yyyy"
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err)
+		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
 		unordered := header[:strings.Index(header, ";")] + ";yyyy=yyyy;xxx=xxx"
@@ -112,8 +119,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("FromHeader", func(t *testing.T) {
 		header := "From: \"Bob\" <sip:bob@127.0.0.1:5060>"
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err)
+		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
 		assert.True(t, hstr == header, hstr)
@@ -126,8 +132,7 @@ func TestParseHeaders(t *testing.T) {
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
 			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": "Contact: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"",
 		} {
-			h, err := parser.parseHeader(header)
-			require.Nil(t, err)
+			h := testParseHeader(t, parser, header)
 			assert.IsType(t, &sip.ContactHeader{}, h)
 
 			hstr := h.String()
@@ -137,8 +142,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("RouteHeader", func(t *testing.T) {
 		header := "Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err, err)
+		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
 		unordered := header[:strings.Index(header, ";")] + ";lr;transport=tls>"
@@ -147,8 +151,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("RecordRouteHeader", func(t *testing.T) {
 		header := "Record-Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err, err)
+		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
 		unordered := header[:strings.Index(header, ";")] + ";lr;transport=tls>"
@@ -157,8 +160,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("MaxForwards", func(t *testing.T) {
 		header := "Max-Forwards: 70"
-		h, err := parser.parseHeader(header)
-		require.Nil(t, err, err)
+		h := testParseHeader(t, parser, header)
 
 		exp := sip.MaxForwardsHeader(70)
 		assert.IsType(t, &exp, h)
@@ -318,6 +320,49 @@ func TestParseRequest(t *testing.T) {
 	assert.Equal(t, to.Address.Host+":"+strconv.Itoa(to.Address.Port), "127.0.0.1:5060")
 
 	assert.Equal(t, msg.String(), msgstr)
+}
+
+func TestParseResponse(t *testing.T) {
+	rawMsg := []string{
+		"SIP/2.0 180 Ringing",
+		"Via: SIP/2.0/UDP 127.0.0.20:5060;branch=z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22;alias, SIP/2.0/UDP 127.0.0.10:5060;branch=z9hG4bK-543537-1-0",
+		"From: \"sipp\" <sip:sipp@127.0.0.10:5060>;tag=543537SIPpTag001",
+		"To: \"service\" <sip:service@127.0.0.20:5060>;tag=543447SIPpTag011",
+		"Call-ID: 1-543537@127.0.0.10",
+		"CSeq: 1 INVITE",
+		"Contact: <sip:127.0.0.30:5060;transport=UDP>",
+		"Content-Length: 0",
+	}
+
+	data := []byte(strings.Join(rawMsg, "\r\n"))
+
+	parser := NewParser()
+	msg, err := parser.ParseSIP(data)
+	require.Nil(t, err, err)
+	r := msg.(*sip.Response)
+
+	// Check all headers exists, but do not check is parsing ok. We do this in different tests
+	// Use some value to make sure header is there
+
+	// Make sure via ref is correct set
+	via, _ := r.Via()
+	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", via.Params["branch"])
+
+	// Check all vias branch
+	vias := r.GetHeaders("via")
+	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", vias[0].(*sip.ViaHeader).Params["branch"])
+	assert.Equal(t, "z9hG4bK-543537-1-0", vias[1].(*sip.ViaHeader).Params["branch"])
+	// Check no comma present
+	assert.False(t, strings.Contains(vias[1].String(), ","))
+
+	from, _ := r.From()
+	assert.Equal(t, "sipp", from.Address.User)
+
+	to, _ := r.To()
+	assert.Equal(t, "service", to.Address.User)
+
+	c, _ := r.Contact()
+	assert.Equal(t, "", c.Address.User)
 }
 
 func TestRegisterRequestFail(t *testing.T) {

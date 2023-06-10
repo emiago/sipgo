@@ -192,72 +192,54 @@ func parseContactAddressHeader(headerName string, headerText string) (header sip
 
 // parseRouteHeader generates sip.RouteHeader
 func parseRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
-	prevIdx := 0
-	inBrackets := false
-	inQuotes := false
-
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
-	addresses := headerText + ","
+	h := sip.RouteHeader{}
+	parseRouteAddress(headerText, &h.Address)
 
-	head := sip.RouteHeader{}
-	h := &head
-	for idx, char := range addresses {
-		if char == '<' && !inQuotes {
-			inBrackets = true
-		} else if char == '>' && !inQuotes {
-			inBrackets = false
-		} else if char == '"' {
-			inQuotes = !inQuotes
-		} else if !inQuotes && !inBrackets && char == ',' {
-			// if char == ',' {
-			if h == nil {
-				h = &sip.RouteHeader{}
-			}
-			_, err = ParseAddressValue(addresses[prevIdx:idx], &h.Address, nil)
-			if err != nil {
-				return
-			}
-			prevIdx = idx + 1
-			h = h.Next
-		}
-	}
-
-	return &head, nil
+	return &h, nil
 }
 
 // parseRouteHeader generates sip.RecordRouteHeader
 func parseRecordRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
-	prevIdx := 0
-	inBrackets := false
-	inQuotes := false
-
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
-	addresses := headerText + ","
+	h := sip.RecordRouteHeader{}
+	parseRouteAddress(headerText, &h.Address)
+	return &h, nil
+}
 
-	head := sip.RecordRouteHeader{}
-	h := &head
-	for idx, char := range addresses {
+func parseRouteAddress(headerText string, address *sip.Uri) (err error) {
+	inBrackets := false
+	inQuotes := false
+	end := len(headerText) - 1
+	for idx, char := range headerText {
 		if char == '<' && !inQuotes {
 			inBrackets = true
-		} else if char == '>' && !inQuotes {
+			continue
+		}
+		if char == '>' && !inQuotes {
 			inBrackets = false
 		} else if char == '"' {
 			inQuotes = !inQuotes
-		} else if !inQuotes && !inBrackets && char == ',' {
-			// if char == ',' {
-			if h == nil {
-				h = &sip.RecordRouteHeader{}
+		}
+
+		if !inQuotes && !inBrackets {
+			switch {
+			case char == ',':
+				err = errComaDetected(idx)
+			case idx == end:
+				idx = idx + 1
+			default:
+				continue
 			}
-			_, err = ParseAddressValue(addresses[prevIdx:idx], &h.Address, nil)
-			if err != nil {
-				return
+
+			_, e := ParseAddressValue(headerText[:idx], address, nil)
+			if e != nil {
+				return e
 			}
-			prevIdx = idx + 1
-			h = h.Next
+			return err
 		}
 	}
-
-	return &head, nil
+	return nil
 }

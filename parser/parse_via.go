@@ -20,18 +20,17 @@ func parseViaHeader(headerName string, headerText string) (
 	}
 	state := viaStateProtocol
 	str := headerText
-	hop := &h
 	var ind, nextInd int
 
 	for state != nil {
-		state, nextInd, err = state(hop, str[ind:])
+		state, nextInd, err = state(&h, str[ind:])
 		if err != nil {
 
 			// Fix the offset
 			if _, ok := err.(errComaDetected); ok {
 				err = errComaDetected(ind + nextInd)
 			}
-			return
+			return &h, err
 		}
 		// If we alocated next hop this means we hit coma
 		// if hop.Next != nil {

@@ -870,7 +870,6 @@ func (h *ContentTypeHeader) headerClone() Header { return h }
 // RouteHeader  is Route header representation.
 type RouteHeader struct {
 	Address Uri
-	Next    *RouteHeader
 }
 
 func (h *RouteHeader) Name() string { return "Route" }
@@ -882,14 +881,9 @@ func (h *RouteHeader) Value() string {
 }
 
 func (h *RouteHeader) ValueStringWrite(buffer io.StringWriter) {
-	for hop := h; hop != nil; hop = hop.Next {
-		buffer.WriteString("<")
-		hop.Address.StringWrite(buffer)
-		buffer.WriteString(">")
-		if hop.Next != nil {
-			buffer.WriteString(", ")
-		}
-	}
+	buffer.WriteString("<")
+	h.Address.StringWrite(buffer)
+	buffer.WriteString(">")
 }
 
 func (h *RouteHeader) String() string {
@@ -910,11 +904,6 @@ func (h *RouteHeader) headerClone() Header {
 
 func (h *RouteHeader) Clone() *RouteHeader {
 	newRoute := h.cloneFirst()
-	newNext := newRoute
-	for hop := h.Next; hop != nil; hop = hop.Next {
-		newNext.Next = hop.Next.cloneFirst()
-		newNext = newNext.Next
-	}
 	return newRoute
 }
 
