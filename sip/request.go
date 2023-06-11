@@ -18,10 +18,9 @@ type Request struct {
 // sipVersion must be SIP/2.0
 // No headers are added. AppendHeader should be called to add Headers.
 // r.SetBody can be called to set proper ContentLength header
-func NewRequest(method RequestMethod, recipient *Uri, sipVersion string) *Request {
+func NewRequest(method RequestMethod, recipient *Uri) *Request {
 	req := &Request{}
-	// req.startLineWrite = req.StartLineWrite
-	req.SipVersion = sipVersion
+	req.SipVersion = "SIP/2.0"
 	// req.headers = newHeaders()
 	req.headers = headers{
 		// headers:     make(map[string]Header),
@@ -218,8 +217,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	ackRequest := NewRequest(
 		ACK,
 		Recipient,
-		inviteRequest.SipVersion,
 	)
+	ackRequest.SipVersion = inviteRequest.SipVersion
 	CopyHeaders("Via", inviteRequest, ackRequest)
 	if inviteResponse.IsSuccess() {
 		// update branch, 2xx ACK is separate Tx
@@ -270,8 +269,8 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	cancelReq := NewRequest(
 		CANCEL,
 		requestForCancel.Recipient,
-		requestForCancel.SipVersion,
 	)
+	cancelReq.SipVersion = requestForCancel.SipVersion
 
 	viaHop, _ := requestForCancel.Via()
 	cancelReq.AppendHeader(viaHop.Clone())
@@ -306,8 +305,8 @@ func cloneRequest(req *Request) *Request {
 	newReq := NewRequest(
 		req.Method,
 		req.Recipient.Clone(),
-		req.SipVersion,
 	)
+	newReq.SipVersion = req.SipVersion
 
 	for _, h := range req.CloneHeaders() {
 		newReq.AppendHeader(h)

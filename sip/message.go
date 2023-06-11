@@ -68,6 +68,7 @@ type Message interface {
 type MessageData struct {
 	// message headers
 	headers
+	// Set to 2.0 version by defaul
 	SipVersion string
 	body       []byte
 	tp         string

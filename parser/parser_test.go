@@ -88,7 +88,7 @@ func TestUnmarshalParams(t *testing.T) {
 
 func testParseHeader(t *testing.T, parser *Parser, header string) sip.Header {
 	// This is fake way to get parsing done. We use fake message and read first header
-	msg := sip.NewRequest(sip.INVITE, nil, "SIP 2.0")
+	msg := sip.NewRequest(sip.INVITE, nil)
 	name := strings.Split(header, ":")[0]
 	err := parser.parseMsgHeader(msg, header)
 	require.Nil(t, err)

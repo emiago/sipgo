@@ -229,8 +229,9 @@ func ParseLine(startLine string) (msg sip.Message, err error) {
 			return nil, err
 		}
 
-		msg = sip.NewRequest(method, &recipient, sipVersion)
-		return msg, nil
+		m := sip.NewRequest(method, &recipient)
+		m.SipVersion = sipVersion
+		return m, nil
 	}
 
 	if isResponse(startLine) {
@@ -239,8 +240,9 @@ func ParseLine(startLine string) (msg sip.Message, err error) {
 			return nil, err
 		}
 
-		msg = sip.NewResponse(sipVersion, statusCode, reason)
-		return msg, nil
+		m := sip.NewResponse(statusCode, reason)
+		m.SipVersion = sipVersion
+		return m, nil
 	}
 	return nil, fmt.Errorf("transmission beginning '%s' is not a SIP message", startLine)
 }

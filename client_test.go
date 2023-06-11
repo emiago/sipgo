@@ -21,7 +21,7 @@ func TestClientRequestBuild(t *testing.T) {
 		Host: "10.2.2.2",
 		Port: 5060,
 	}
-	req := sip.NewRequest(sip.OPTIONS, &recipment, "SIP/2.0")
+	req := sip.NewRequest(sip.OPTIONS, &recipment)
 	clientRequestBuildReq(c, req)
 
 	from, exists := req.From()

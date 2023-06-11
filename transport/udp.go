@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/emiago/sipgo/sip"
 
@@ -57,12 +58,12 @@ func (t *UDPTransport) Close() error {
 	t.pool.RLock()
 	defer t.pool.RUnlock()
 	var rerr error
-	for _, c := range t.pool.m {
-		if _, err := c.TryClose(); err != nil {
-			t.log.Err(err).Msg("Fail to close conn")
-			rerr = fmt.Errorf("Open connections left")
-		}
-	}
+	// for _, c := range t.pool.m {
+	// 	if _, err := c.TryClose(); err != nil {
+	// 		t.log.Err(err).Msg("Fail to close conn")
+	// 		rerr = fmt.Errorf("Open connections left")
+	// 	}
+	// }
 	return rerr
 }
 
@@ -138,11 +139,11 @@ func (t *UDPTransport) CreateConnection(addr string, handler sip.MessageHandler)
 	if err != nil {
 		return nil, err
 	}
-	c := &UDPConnection{Conn: udpconn}
+	c := &UDPConnection{Conn: udpconn, refcount: 1}
 
 	// Wrap it in reference
 	t.pool.Add(addr, c)
-	go t.readConnection(c, handler)
+	go t.readConnectedConnection(c, handler)
 	return c, err
 }
 
@@ -168,9 +169,16 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 
 func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.MessageHandler) {
 	buf := make([]byte, transportBufferSize)
-	defer conn.Close()
-
 	raddr := conn.Conn.RemoteAddr().String()
+	defer func() {
+		// Delete connection from pool only when closed
+		// TODO does this makes sense closing if reading fails
+		ref, _ := conn.TryClose()
+		if ref > 0 {
+			return
+		}
+		t.pool.Del(raddr)
+	}()
 	for {
 		num, err := conn.Read(buf)
 
@@ -238,22 +246,55 @@ type UDPConnection struct {
 	// TODO Refactor
 	PacketConn net.PacketConn
 	Conn       net.Conn
+
+	mu       sync.RWMutex
+	refcount int
 }
 
 func (c *UDPConnection) Ref(i int) {
 	// For now all udp connections must be reused
+	if c.Conn == nil {
+		return
+	}
+
+	c.mu.Lock()
+	c.refcount += i
+	c.mu.Unlock()
 }
 
 func (c *UDPConnection) Close() error {
-	//Do not allow closing UDP
-	if c.Conn != nil {
-		return c.Conn.Close()
+	// TODO closing packet connection is problem
+	// but maybe referece could help?
+	if c.Conn == nil {
+		return nil
 	}
-	return nil
+	c.mu.Lock()
+	c.refcount = 0
+	c.mu.Unlock()
+	return c.Conn.Close()
 }
 
 func (c *UDPConnection) TryClose() (int, error) {
-	return 0, c.Close()
+	if c.Conn == nil {
+		return 0, nil
+	}
+
+	c.mu.Lock()
+	c.refcount--
+	ref := c.refcount
+	c.mu.Unlock()
+	log.Debug().Str("src", c.Conn.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP reference decrement")
+	if ref > 0 {
+		return ref, nil
+	}
+
+	if ref < 0 {
+		log.Warn().Str("src", c.Conn.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP ref went negative")
+		return 0, nil
+	}
+
+	// log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP closing")
+	return 0, c.Conn.Close()
 }
 
 func (c *UDPConnection) Read(b []byte) (n int, err error) {
@@ -305,7 +346,7 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 		var err error
 		n, err = c.Write(data)
 		if err != nil {
-			return fmt.Errorf("conn %s write err=%w", c, err)
+			return fmt.Errorf("conn %s write err=%w", c.Conn.LocalAddr().String(), err)
 		}
 	} else {
 		var err error

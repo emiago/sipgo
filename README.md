@@ -151,7 +151,7 @@ select {
 
 ```go
 client, _ := sipgo.NewClient(ua) // Creating client handle
-req := sip.NewRequest(method, &recipment, "SIP/2.0")
+req := sip.NewRequest(method, &recipment)
 // Send request and forget
 client.WriteRequest(req)
 ```

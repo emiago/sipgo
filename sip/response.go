@@ -19,12 +19,11 @@ type Response struct {
 
 // NewResponse creates base structure of response.
 func NewResponse(
-	sipVersion string,
 	statusCode StatusCode,
 	reason string,
 ) *Response {
 	res := &Response{}
-	res.SipVersion = sipVersion
+	res.SipVersion = "SIP/2.0"
 	res.headers = headers{
 		// headers:     make(map[string]Header),
 		headerOrder: make([]Header, 0),
@@ -211,10 +210,10 @@ func NewResponseFromRequest(
 	body []byte,
 ) *Response {
 	res := NewResponse(
-		req.SipVersion,
 		statusCode,
 		reason,
 	)
+	res.SipVersion = req.SipVersion
 	CopyHeaders("Record-Route", req, res)
 	CopyHeaders("Via", req, res)
 	if h, _ := req.From(); h != nil {
@@ -257,10 +256,10 @@ func NewResponseFromRequest(
 
 func cloneResponse(res *Response) *Response {
 	newRes := NewResponse(
-		res.SipVersion,
 		res.StatusCode(),
 		res.Reason(),
 	)
+	newRes.SipVersion = res.SipVersion
 
 	for _, h := range res.CloneHeaders() {
 		newRes.AppendHeader(h)
