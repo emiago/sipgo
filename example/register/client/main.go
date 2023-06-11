@@ -62,7 +62,7 @@ func main() {
 	// Create basic REGISTER request structure
 	recipient := &sip.Uri{}
 	parser.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
-	req := sip.NewRequest(sip.REGISTER, recipient, "SIP/2.0")
+	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
 		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *extIP)),
 	)
