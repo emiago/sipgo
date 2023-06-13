@@ -95,3 +95,7 @@ func (ua *UserAgent) setIP(ip net.IP) (err error) {
 func (ua *UserAgent) GetIP() net.IP {
 	return ua.ip
 }
+
+func (ua *UserAgent) TransportLayer() *transport.Layer {
+	return ua.tp
+}

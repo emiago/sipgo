@@ -12,7 +12,7 @@ Fetch lib with:
 
 `go get github.com/emiago/sipgo`
 
-**NOTE**: LIB IS IN DEV. API CAN CHANGE
+**NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
 ## Performance
 
@@ -28,6 +28,7 @@ To find out more about performance check the latest results:
 - Register with authentication [example/register](example/register)  
 - Dialog [example/dialog](example/dialog)  
 
+***If you use this lib in some way, open issue for more sharing.***
 ## Usage
 
 Lib allows you to write easily sip servers(or clients) or to build up stateful proxies, registrar or any sip routing.
@@ -35,6 +36,8 @@ Writing in GO we are not limited to handle SIP requests/responses in many ways, 
 
 
 ### UAS/UAC build
+
+Using server or client handle for UA you can build incoming or outgoing requests.
 
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
@@ -52,6 +55,7 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 <-ctx.Done()
 ```
+
 - Server handle creates listeners and reacts on incoming requests. [More on server transactions](#server-transaction)
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
@@ -62,7 +66,6 @@ go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 ```
-
 
 ## Stateful Proxy build
 
@@ -124,9 +127,15 @@ srv.OnACK(ackHandler)
 
 ### Client Transaction
 
-**NOTE**: UA needs server handle and listener on same network before sending request
+Using client handle allows easy creating and sending request. All you need is this.
+```go
+req := sip.NewRequest(sip.INVITE, recipient)
+tx, err := client.TransactionRequest(req, opts...) // Send request and get client transaction handle
+```
+Unless you customize transaction request with opts by default `client.TransactionRequest` will build all other
+headers needed to pass correct sip request.
 
-
+Here is full example:
 ```go
 client, _ := sipgo.NewClient(ua) // Creating client handle
 
@@ -146,6 +155,7 @@ select {
 }
 
 ```
+NOTE: If you are building UA that also has server handle on UDP. UDP listener will be reused to also send packets.
 
 ### Client stateless request
 
@@ -157,6 +167,8 @@ client.WriteRequest(req)
 ```
 
 ### Dialogs (experiment)
+
+NOTE: This may be redesigned to have more control
 
 `ServerDialog` is extended type of Server with Dialog support. 
 For now this is in experiment.
@@ -230,7 +242,7 @@ This unfortunately required many design changes, therefore this libraries are no
 
 ## Support
 
-If you find this project interesting for support or contributing, you can contact me on
+If you find this project interesting for bigger support or contributing, you can contact me on
 [mail](emirfreelance91@gmail.com) 
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
