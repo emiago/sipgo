@@ -977,7 +977,6 @@ func (h *RecordRouteHeader) cloneFirst() *RecordRouteHeader {
 // Copy all headers of one type from one message to another.
 // Appending to any headers that were already there.
 func CopyHeaders(name string, from, to Message) {
-	name = HeaderToLower(name)
 	for _, h := range from.GetHeaders(name) {
 		to.AppendHeader(h.headerClone())
 	}

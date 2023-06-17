@@ -26,7 +26,7 @@ func TestClientRequestBuild(t *testing.T) {
 
 	from, exists := req.From()
 	assert.True(t, exists)
-	assert.Equal(t, "\"sipgo\" <sip:sipgo@10.0.0.0>", from.Value())
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@10.0.0.0>;tag="+from.Params["tag"], from.Value())
 
 	to, exists := req.To()
 	assert.True(t, exists)

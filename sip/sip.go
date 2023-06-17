@@ -39,10 +39,16 @@ func GenerateBranchN(n int) string {
 }
 
 func generateBranchStringWrite(sb *strings.Builder, n int) {
-	sb.Grow(len(RFC3261BranchMagicCookie) + 33)
+	sb.Grow(len(RFC3261BranchMagicCookie) + n + 1)
 	sb.WriteString(RFC3261BranchMagicCookie)
 	sb.WriteString(".")
-	RandStringBytesMask(sb, 32)
+	RandStringBytesMask(sb, n)
+}
+
+func GenerateTagN(n int) string {
+	sb := &strings.Builder{}
+	RandStringBytesMask(sb, n)
+	return sb.String()
 }
 
 // DefaultPort returns protocol default port by network.
