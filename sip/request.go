@@ -301,6 +301,63 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	return cancelReq
 }
 
+// NewByeRequest creates bye request from invite
+// TODO do some testing
+func NewByeRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
+	Recipient := inviteRequest.Recipient
+
+	byeRequest := NewRequest(
+		BYE,
+		Recipient,
+	)
+	byeRequest.SipVersion = inviteRequest.SipVersion
+	CopyHeaders("Via", inviteRequest, byeRequest)
+	// if inviteResponse.IsSuccess() {
+	// update branch, 2xx ACK is separate Tx
+	viaHop, _ := byeRequest.Via()
+	viaHop.Params.Add("branch", GenerateBranch())
+	// }
+
+	if len(inviteRequest.GetHeaders("Route")) > 0 {
+		CopyHeaders("Route", inviteRequest, byeRequest)
+	} else {
+		hdrs := inviteResponse.GetHeaders("Record-Route")
+		for i := len(hdrs) - 1; i >= 0; i-- {
+			h := hdrs[i].headerClone()
+			byeRequest.AppendHeader(h)
+		}
+	}
+
+	maxForwardsHeader := MaxForwardsHeader(70)
+	byeRequest.AppendHeader(&maxForwardsHeader)
+	if h, _ := inviteRequest.From(); h != nil {
+		byeRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteResponse.To(); h != nil {
+		byeRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteRequest.CallID(); h != nil {
+		byeRequest.AppendHeader(h.headerClone())
+	}
+
+	if h, _ := inviteRequest.CSeq(); h != nil {
+		byeRequest.AppendHeader(h.headerClone())
+	}
+
+	cseq, _ := byeRequest.CSeq()
+	cseq.SeqNo = cseq.SeqNo + 1
+	cseq.MethodName = BYE
+
+	byeRequest.SetBody(body)
+	byeRequest.SetTransport(inviteRequest.Transport())
+	byeRequest.SetSource(inviteRequest.Source())
+	byeRequest.SetDestination(inviteRequest.Destination())
+
+	return byeRequest
+}
+
 func cloneRequest(req *Request) *Request {
 	newReq := NewRequest(
 		req.Method,

@@ -34,17 +34,17 @@ func WithUserAgent(ua string) UserAgentOption {
 
 // WithUserAgentIP sets local IP that will be used in building request
 // If not used IP will be resolved
-func WithUserAgentIP(ip string) UserAgentOption {
+func WithUserAgentIP(ip net.IP) UserAgentOption {
 	return func(s *UserAgent) error {
-		host, _, err := net.SplitHostPort(ip)
-		if err != nil {
-			return err
-		}
-		addr, err := net.ResolveIPAddr("ip", host)
-		if err != nil {
-			return err
-		}
-		return s.setIP(addr.IP)
+		// host, _, err := net.SplitHostPort(ip)
+		// if err != nil {
+		// 	return err
+		// }
+		// addr, err := net.ResolveIPAddr("ip", host)
+		// if err != nil {
+		// 	return err
+		// }
+		return s.setIP(ip)
 	}
 }
 

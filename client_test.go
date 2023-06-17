@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"net"
 	"strings"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func TestClientRequestBuild(t *testing.T) {
-	ua, err := NewUA(WithUserAgentIP("10.0.0.0:5060"))
+	ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
 	require.Nil(t, err)
 
 	c, err := NewClient(ua)
@@ -50,7 +51,7 @@ func TestClientRequestBuild(t *testing.T) {
 }
 
 func TestClientRequestOptions(t *testing.T) {
-	ua, err := NewUA(WithUserAgentIP("10.0.0.0:5060"))
+	ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
 	require.Nil(t, err)
 
 	c, err := NewClient(ua)

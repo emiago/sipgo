@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -88,7 +89,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	// Prepare all variables we need for our service
 	host, port, _ := sip.ParseAddr(ip)
 	ua, err := sipgo.NewUA(
-		sipgo.WithUserAgentIP(ip),
+		sipgo.WithUserAgentIP(net.ParseIP(host)),
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup user agent")
