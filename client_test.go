@@ -60,7 +60,7 @@ func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 	require.Nil(t, err)
 
 	c, err := NewClient(ua,
-		WithClientHost("sip.myserver.com"),
+		WithClientHostname("sip.myserver.com"),
 		WithClientPort(5066),
 	)
 	require.Nil(t, err)

@@ -34,9 +34,9 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 
 // WithClientHost allows setting default route host
 // default it will be used user agent IP
-func WithClientHost(host string) ClientOption {
+func WithClientHostname(hostname string) ClientOption {
 	return func(s *Client) error {
-		s.host = host
+		s.host = hostname
 		return nil
 	}
 }
@@ -64,6 +64,10 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+func (c *Client) GetHostname() string {
+	return c.host
 }
 
 // TransactionRequest uses transaction layer to send request and returns transaction

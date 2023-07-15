@@ -32,14 +32,6 @@ func WithUserAgent(ua string) UserAgentOption {
 // If not used IP will be resolved
 func WithUserAgentIP(ip net.IP) UserAgentOption {
 	return func(s *UserAgent) error {
-		// host, _, err := net.SplitHostPort(ip)
-		// if err != nil {
-		// 	return err
-		// }
-		// addr, err := net.ResolveIPAddr("ip", host)
-		// if err != nil {
-		// 	return err
-		// }
 		return s.setIP(ip)
 	}
 }
