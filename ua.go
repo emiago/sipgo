@@ -2,7 +2,6 @@ package sipgo
 
 import (
 	"net"
-	"strings"
 
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
@@ -11,11 +10,8 @@ import (
 )
 
 type UserAgent struct {
-	name string
-	ip   net.IP
-	host string
-	port int
-
+	name        string
+	ip          net.IP
 	dnsResolver *net.Resolver
 	tp          *transport.Layer
 	tx          *transaction.Layer
@@ -88,7 +84,6 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 // Listen adds listener for serve
 func (ua *UserAgent) setIP(ip net.IP) (err error) {
 	ua.ip = ip
-	ua.host = strings.Split(ip.String(), ":")[0]
 	return err
 }
 

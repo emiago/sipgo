@@ -3,6 +3,7 @@ package sipgo
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -17,15 +18,34 @@ func Init() {
 
 type Client struct {
 	*UserAgent
-	log zerolog.Logger
+	host string
+	port int
+	log  zerolog.Logger
 }
 
 type ClientOption func(c *Client) error
 
-// WithServerLogger allows customizing client logger
+// WithClientLogger allows customizing client logger
 func WithClientLogger(logger zerolog.Logger) ClientOption {
 	return func(s *Client) error {
 		s.log = logger
+		return nil
+	}
+}
+
+// WithClientHost allows setting default route host
+// default it will be used user agent IP
+func WithClientHost(host string) ClientOption {
+	return func(s *Client) error {
+		s.host = host
+		return nil
+	}
+}
+
+// WithClientPort allows setting default route port
+func WithClientPort(port int) ClientOption {
+	return func(s *Client) error {
+		s.port = port
 		return nil
 	}
 }
@@ -34,6 +54,7 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
+		host:      strings.Split(ua.GetIP().String(), ":")[0],
 		log:       log.Logger.With().Str("caller", "Client").Logger(),
 	}
 
@@ -193,7 +214,7 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 			Host: c.host,
 			Port: c.port,
 			UriParams: sip.HeaderParams{
-				// Transport must be provided as well
+				// Transport must be provided as wesll
 				// https://datatracker.ietf.org/doc/html/rfc5658
 				"transport": transport.NetworkToLower(r.Transport()),
 				"lr":        "",

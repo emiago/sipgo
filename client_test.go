@@ -22,8 +22,13 @@ func TestClientRequestBuild(t *testing.T) {
 		Host: "10.2.2.2",
 		Port: 5060,
 	}
+
 	req := sip.NewRequest(sip.OPTIONS, &recipment)
 	clientRequestBuildReq(c, req)
+
+	via, exists := req.Via()
+	assert.True(t, exists)
+	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"], via.Value())
 
 	from, exists := req.From()
 	assert.True(t, exists)
@@ -48,6 +53,38 @@ func TestClientRequestBuild(t *testing.T) {
 	clen, exists := req.ContentLength()
 	assert.True(t, exists)
 	assert.Equal(t, "0", clen.Value())
+}
+
+func TestClientRequestBuildWithHostAndPort(t *testing.T) {
+	ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
+	require.Nil(t, err)
+
+	c, err := NewClient(ua,
+		WithClientHost("sip.myserver.com"),
+		WithClientPort(5066),
+	)
+	require.Nil(t, err)
+
+	recipment := sip.Uri{
+		User: "bob",
+		Host: "10.2.2.2",
+		Port: 5060,
+	}
+
+	req := sip.NewRequest(sip.OPTIONS, &recipment)
+	clientRequestBuildReq(c, req)
+
+	via, exists := req.Via()
+	assert.True(t, exists)
+	assert.Equal(t, "SIP/2.0/UDP sip.myserver.com:5066;branch="+via.Params["branch"], via.Value())
+
+	from, exists := req.From()
+	assert.True(t, exists)
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com:5066>;tag="+from.Params["tag"], from.Value())
+
+	to, exists := req.To()
+	assert.True(t, exists)
+	assert.Equal(t, "<"+recipment.String()+">", to.Value())
 }
 
 func TestClientRequestOptions(t *testing.T) {

@@ -51,9 +51,9 @@ func GenerateTagN(n int) string {
 	return sb.String()
 }
 
-// DefaultPort returns protocol default port by network.
-func DefaultPort(protocol string) int {
-	switch strings.ToLower(protocol) {
+// DefaultPort returns transport default port by network.
+func DefaultPort(transport string) int {
+	switch ASCIIToLower(transport) {
 	case "tls":
 		return DefaultTlsPort
 	case "tcp":
