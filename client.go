@@ -3,7 +3,6 @@ package sipgo
 import (
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -54,7 +53,7 @@ func WithClientPort(port int) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
-		host:      strings.Split(ua.GetIP().String(), ":")[0],
+		host:      ua.GetIP().String(),
 		log:       log.Logger.With().Str("caller", "Client").Logger(),
 	}
 
