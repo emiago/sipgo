@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emiago/sipgo/sip"
@@ -32,9 +33,11 @@ type Layer struct {
 	tls *TLSTransport
 	ws  *WSTransport
 
-	transports  map[string]Transport
-	listenPorts map[string][]int
-	dnsResolver *net.Resolver
+	transports map[string]Transport
+
+	listenPorts   map[string][]int
+	listenPortsMu sync.Mutex
+	dnsResolver   *net.Resolver
 
 	handlers []sip.MessageHandler
 
@@ -221,6 +224,9 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 }
 
 func (l *Layer) addListenPort(network string, port int) {
+	l.listenPortsMu.Lock()
+	defer l.listenPortsMu.Unlock()
+
 	if _, ok := l.listenPorts[network]; !ok {
 		if l.listenPorts[network] == nil {
 			l.listenPorts[network] = make([]int, 0)
