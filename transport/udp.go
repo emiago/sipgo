@@ -26,11 +26,11 @@ var (
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
-	listener net.PacketConn
-	parser   sip.Parser
-	conn     *UDPConnection
+	parser sip.Parser
+	conn   *UDPConnection
 
-	pool ConnectionPool
+	pool      ConnectionPool
+	listeners []*UDPConnection
 
 	log zerolog.Logger
 }
@@ -95,13 +95,14 @@ func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) er
 	c := &UDPConnection{PacketConn: conn}
 
 	// In case single connection avoid pool
-	if t.pool.Size() == 0 {
+	if len(t.listeners) == 0 {
 		t.conn = c
 	} else {
 		t.conn = nil
 	}
 
-	t.pool.Add(conn.LocalAddr().String(), c)
+	// t.listenersPool.Add(conn.LocalAddr().String(), c)
+	t.listeners = append(t.listeners, c)
 
 	for i := 0; i < UDPReadWorkers-1; i++ {
 		go t.readConnection(c, handler)
@@ -120,12 +121,22 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 	// Single udp connection as listener can only be used as long IP of a packet in same network
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
-	if t.conn == nil {
-		// Use pool only in multi connection
-		return t.pool.Get(addr), nil
+
+	// Pool must be checked as it can be Client mode only and connection is created
+	if conn := t.pool.Get(addr); conn != nil {
+		return conn, nil
 	}
 
-	return t.conn, nil
+	if t.conn != nil {
+		return t.conn, nil
+	}
+
+	// TODO: How to pick listener. Some address range mapping
+	if len(t.listeners) > 0 {
+		return t.listeners[0], nil
+	}
+
+	return nil, nil
 }
 
 // CreateConnection will create new connection. Generally we only
@@ -154,7 +165,11 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 		num, raddr, err := conn.ReadFrom(buf)
 
 		if err != nil {
-			t.log.Error().Err(err)
+			if errors.Is(err, net.ErrClosed) {
+				t.log.Debug().Err(err).Msg("Read connection closed")
+				return
+			}
+			t.log.Error().Err(err).Msg("Read connection error")
 			return
 		}
 
@@ -183,7 +198,11 @@ func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.
 		num, err := conn.Read(buf)
 
 		if err != nil {
-			t.log.Error().Err(err)
+			if errors.Is(err, net.ErrClosed) {
+				t.log.Debug().Err(err).Msg("Read connection closed")
+				return
+			}
+			t.log.Error().Err(err).Msg("Read connection error")
 			return
 		}
 
@@ -207,7 +226,11 @@ func (t *UDPTransport) readUDPConn(conn *net.UDPConn, handler sip.MessageHandler
 		num, raddr, err := conn.ReadFromUDP(buf)
 
 		if err != nil {
-			t.log.Error().Err(err)
+			if errors.Is(err, net.ErrClosed) {
+				t.log.Debug().Err(err).Msg("Read connection closed")
+				return
+			}
+			t.log.Error().Err(err).Msg("Read UDP connection error")
 			return
 		}
 
