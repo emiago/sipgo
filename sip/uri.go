@@ -101,3 +101,8 @@ func (uri *Uri) Clone() *Uri {
 func (uri *Uri) IsEncrypted() bool {
 	return uri.Encrypted
 }
+
+func (uri *Uri) Addr() string {
+	p := strconv.Itoa(uri.Port)
+	return uri.Host + ":" + p
+}
