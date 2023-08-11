@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"strconv"
@@ -32,6 +33,7 @@ type Layer struct {
 	tcp *TCPTransport
 	tls *TLSTransport
 	ws  *WSTransport
+	wss *WSSTransport
 
 	transports map[string]Transport
 
@@ -56,6 +58,7 @@ type Layer struct {
 func NewLayer(
 	dnsResolver *net.Resolver,
 	sipparser sip.Parser,
+	tlsConfig *tls.Config,
 ) *Layer {
 	l := &Layer{
 		transports:      make(map[string]Transport),
@@ -71,14 +74,17 @@ func NewLayer(
 	l.udp = NewUDPTransport(sipparser)
 	l.tcp = NewTCPTransport(sipparser)
 	// TODO. Using default dial tls, but it needs to configurable via client
-	l.tls = NewTLSTransport(sipparser, nil)
+	l.tls = NewTLSTransport(sipparser, tlsConfig)
 	l.ws = NewWSTransport(sipparser)
+	// TODO. Using default dial tls, but it needs to configurable via client
+	l.wss = NewWSSTransport(sipparser, tlsConfig)
 
 	// Fill map for fast access
 	l.transports["udp"] = l.udp
 	l.transports["tcp"] = l.tcp
 	l.transports["tls"] = l.tls
 	l.transports["ws"] = l.ws
+	l.transports["wss"] = l.wss
 
 	return l
 }
@@ -161,11 +167,41 @@ func (l *Layer) ServeTLS(c net.Listener) error {
 	return l.tls.Serve(c, l.handleMessage)
 }
 
+// ServeWSS will listen on wss connection
+func (l *Layer) ServeWSS(c net.Listener) error {
+	_, port, err := sip.ParseAddr(c.Addr().String())
+	if err != nil {
+		return err
+	}
+
+	l.addListenPort("wss", port)
+
+	return l.wss.Serve(c, l.handleMessage)
+}
+
 // Serve on any network. This function will block
 // Network supported: udp, tcp, ws
 func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string) error {
 	network = strings.ToLower(network)
 	// Do some filtering
+	var connCloser io.Closer
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// TODO consider different design to avoid this additional go routines
+	go func() {
+		select {
+		case <-ctx.Done():
+			if connCloser == nil {
+				return
+			}
+			if err := connCloser.Close(); err != nil {
+				l.log.Error().Err(err).Msg("Failed to close listener")
+			}
+
+		}
+	}()
+
 	switch network {
 	case "udp":
 		// resolve local UDP endpoint
@@ -178,6 +214,7 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 			return fmt.Errorf("listen udp error. err=%w", err)
 		}
 
+		connCloser = udpConn
 		return l.ServeUDP(udpConn)
 
 	case "ws", "tcp":
@@ -191,10 +228,12 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 			return fmt.Errorf("listen tcp error. err=%w", err)
 		}
 
+		connCloser = conn
 		// and uses listener to buffer
 		if network == "ws" {
 			return l.ServeWS(conn)
 		}
+
 		return l.ServeTCP(conn)
 	}
 	return ErrNetworkNotSuported
@@ -204,9 +243,27 @@ func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string)
 // Network supported: tcp
 func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	network = strings.ToLower(network)
+
+	var connCloser io.Closer
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// TODO consider different design to avoid this additional go routines
+	go func() {
+		select {
+		case <-ctx.Done():
+			if connCloser == nil {
+				return
+			}
+			if err := connCloser.Close(); err != nil {
+				l.log.Error().Err(err).Msg("Failed to close listener")
+			}
+
+		}
+	}()
 	// Do some filtering
 	switch network {
-	case "tls", "tcp":
+	case "tls", "tcp", "wss":
 		laddr, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -215,6 +272,11 @@ func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr stri
 		listener, err := tls.Listen("tcp", laddr.String(), conf)
 		if err != nil {
 			return fmt.Errorf("listen tls error. err=%w", err)
+		}
+
+		connCloser = listener
+		if network == "wss" {
+			return l.ServeWSS(listener)
 		}
 
 		return l.ServeTLS(listener)
@@ -377,7 +439,7 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 
 	c, err := transport.GetConnection(addr)
 	if err == nil && c == nil {
-		return nil, fmt.Errorf("connection does not exist")
+		return nil, fmt.Errorf("connection %q does not exist", addr)
 	}
 
 	return c, err

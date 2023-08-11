@@ -15,6 +15,7 @@ const (
 	TransportTCP = "TCP"
 	TransportTLS = "TLS"
 	TransportWS  = "WS"
+	TransportWSS = "WSS"
 
 	transportBufferSize uint16 = 65535
 )

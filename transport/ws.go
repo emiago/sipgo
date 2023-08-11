@@ -20,16 +20,18 @@ var ()
 
 // WS transport implementation
 type WSTransport struct {
-	parser sip.Parser
-	log    zerolog.Logger
+	parser    sip.Parser
+	log       zerolog.Logger
+	transport string
 
 	pool ConnectionPool
 }
 
 func NewWSTransport(par sip.Parser) *WSTransport {
 	p := &WSTransport{
-		parser: par,
-		pool:   NewConnectionPool(),
+		parser:    par,
+		pool:      NewConnectionPool(),
+		transport: TransportWS,
 	}
 	p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
@@ -40,7 +42,7 @@ func (t *WSTransport) String() string {
 }
 
 func (t *WSTransport) Network() string {
-	return TransportWS
+	return t.transport
 }
 
 func (t *WSTransport) Close() error {
@@ -57,6 +59,8 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 			t.log.Error().Err(err).Msg("Fail to accept conenction")
 			return err
 		}
+
+		t.log.Debug().Str("addr", conn.RemoteAddr().String()).Msg("New connection")
 
 		_, err = ws.Upgrade(conn)
 		if err != nil {

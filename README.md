@@ -50,6 +50,7 @@ srv.OnBye(byeHandler)
 
 // For registrars
 // srv.OnRegister(registerHandler)
+ctx, _ := signal.NotifyContext(ctx, os.Interrupt)
 go srv.ListenAndServe(ctx, "tcp", "127.0.0.1:5061")
 go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
