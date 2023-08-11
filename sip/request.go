@@ -257,6 +257,21 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	cseq, _ := ackRequest.CSeq()
 	cseq.MethodName = ACK
 
+	/*
+	   	A UAC SHOULD include a Contact header field in any target refresh
+	    requests within a dialog, and unless there is a need to change it,
+	    the URI SHOULD be the same as used in previous requests within the
+	    dialog.  If the "secure" flag is true, that URI MUST be a SIPS URI.
+	    As discussed in Section 12.2.2, a Contact header field in a target
+	    refresh request updates the remote target URI.  This allows a UA to
+	    provide a new contact address, should its address change during the
+	    duration of the dialog.
+	*/
+
+	if h, _ := inviteRequest.Contact(); h != nil {
+		ackRequest.AppendHeader(h.headerClone())
+	}
+
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
