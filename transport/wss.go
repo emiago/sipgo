@@ -57,6 +57,6 @@ func (t *WSSTransport) createConnection(addr string, handler sip.MessageHandler)
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr, handler)
+	c := t.initConnection(conn, addr, true, handler)
 	return c, nil
 }

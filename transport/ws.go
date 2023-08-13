@@ -8,15 +8,15 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
-
-var ()
 
 // WS transport implementation
 type WSTransport struct {
@@ -69,17 +69,18 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 			return err
 		}
 
-		t.initConnection(conn, raddr, handler)
+		t.initConnection(conn, raddr, false, handler)
 	}
 }
 
-func (t *WSTransport) initConnection(conn net.Conn, addr string, handler sip.MessageHandler) Connection {
+func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, handler sip.MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
 	c := &WSConnection{
-		Conn:     conn,
-		refcount: 1,
+		Conn:       conn,
+		refcount:   1,
+		clientSide: clientSide,
 	}
 	t.pool.Add(addr, c)
 	go t.readConnection(c, addr, handler)
@@ -104,16 +105,25 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler s
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				t.log.Debug().Err(err).Msg("Got EOF")
+				return
+			}
+
 			if errors.Is(err, net.ErrClosed) {
 				t.log.Debug().Err(err).Msg("Read connection closed")
 				return
 			}
-			if errors.Is(err, io.EOF) {
-				t.log.Debug().Msg("Got EOF")
-				return
-			}
+
 			t.log.Error().Err(err).Msg("Got TCP error")
 			return
+		}
+
+		if num == 0 {
+			// // What todo
+			log.Debug().Msg("Got no bytes, sleeping")
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
 
 		data := buf[:num]
@@ -179,15 +189,16 @@ func (t *WSTransport) createConnection(addr string, handler sip.MessageHandler) 
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr, handler)
+	c := t.initConnection(conn, addr, true, handler)
 	return c, nil
 }
 
 type WSConnection struct {
 	net.Conn
 
-	mu       sync.RWMutex
-	refcount int
+	clientSide bool
+	mu         sync.RWMutex
+	refcount   int
 }
 
 func (c *WSConnection) Ref(i int) {
@@ -226,21 +237,26 @@ func (c *WSConnection) TryClose() (int, error) {
 }
 
 func (c *WSConnection) Read(b []byte) (n int, err error) {
+	state := ws.StateServerSide
+	if c.clientSide {
+		state = ws.StateClientSide
+	}
+	reader := wsutil.NewReader(c.Conn, state)
 	for {
-		header, err := ws.ReadHeader(c.Conn)
+		header, err := reader.NextFrame()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+			if errors.Is(err, io.EOF) && n > 0 {
+				return n, nil
 			}
-			return 0, err
-		}
-
-		if header.OpCode == ws.OpClose {
-			return 0, io.EOF
+			return n, err
 		}
 
 		if SIPDebug {
-			log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS read connection header <- %s len=%d", c.Conn.RemoteAddr(), header.Length)
+			log.Debug().Str("caller", c.RemoteAddr().String()).Msgf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
+		}
+
+		if header.OpCode == ws.OpClose {
+			return n, net.ErrClosed
 		}
 
 		data := make([]byte, header.Length)
@@ -248,11 +264,14 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// Read until
 		_, err = io.ReadFull(c.Conn, data)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return 0, err
+			return n, err
 		}
+
+		// if header.OpCode == ws.OpPing {
+		// 	f := ws.NewPongFrame(data)
+		// 	ws.WriteFrame(c.Conn, f)
+		// 	continue
+		// }
 
 		if header.Masked {
 			ws.Cipher(data, header.Mask, 0)
@@ -266,19 +285,20 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		}
 	}
 
-	if SIPDebug {
-		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS read connection <- %s: len=%d\n%s", c.Conn.RemoteAddr(), n, string(b))
-	}
-
 	return n, nil
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
 	fs := ws.NewFrame(ws.OpText, true, b)
+	if c.clientSide {
+		fs = ws.MaskFrameInPlace(fs)
+	}
+
 	err = ws.WriteFrame(c.Conn, fs)
 	if SIPDebug {
 		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
 	}
+
 	return len(b), err
 }
 
