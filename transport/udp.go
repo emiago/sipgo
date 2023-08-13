@@ -337,7 +337,7 @@ func (c *UDPConnection) Write(b []byte) (n int, err error) {
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
-	if SIPDebug {
+	if err == nil && SIPDebug {
 		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
 	}
 	return n, addr, err

@@ -5,11 +5,9 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -177,112 +175,6 @@ func (l *Layer) ServeWSS(c net.Listener) error {
 	l.addListenPort("wss", port)
 
 	return l.wss.Serve(c, l.handleMessage)
-}
-
-// Serve on any network. This function will block
-// Network supported: udp, tcp, ws
-func (l *Layer) ListenAndServe(ctx context.Context, network string, addr string) error {
-	network = strings.ToLower(network)
-	// Do some filtering
-	var connCloser io.Closer
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// TODO consider different design to avoid this additional go routines
-	go func() {
-		select {
-		case <-ctx.Done():
-			if connCloser == nil {
-				return
-			}
-			if err := connCloser.Close(); err != nil {
-				l.log.Error().Err(err).Msg("Failed to close listener")
-			}
-
-		}
-	}()
-
-	switch network {
-	case "udp":
-		// resolve local UDP endpoint
-		laddr, err := net.ResolveUDPAddr("udp", addr)
-		if err != nil {
-			return fmt.Errorf("fail to resolve address. err=%w", err)
-		}
-		udpConn, err := net.ListenUDP("udp", laddr)
-		if err != nil {
-			return fmt.Errorf("listen udp error. err=%w", err)
-		}
-
-		connCloser = udpConn
-		return l.ServeUDP(udpConn)
-
-	case "ws", "tcp":
-		laddr, err := net.ResolveTCPAddr("tcp", addr)
-		if err != nil {
-			return fmt.Errorf("fail to resolve address. err=%w", err)
-		}
-
-		conn, err := net.ListenTCP("tcp", laddr)
-		if err != nil {
-			return fmt.Errorf("listen tcp error. err=%w", err)
-		}
-
-		connCloser = conn
-		// and uses listener to buffer
-		if network == "ws" {
-			return l.ServeWS(conn)
-		}
-
-		return l.ServeTCP(conn)
-	}
-	return ErrNetworkNotSuported
-}
-
-// Serve on any tls network. This function will block
-// Network supported: tcp
-func (l *Layer) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
-	network = strings.ToLower(network)
-
-	var connCloser io.Closer
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// TODO consider different design to avoid this additional go routines
-	go func() {
-		select {
-		case <-ctx.Done():
-			if connCloser == nil {
-				return
-			}
-			if err := connCloser.Close(); err != nil {
-				l.log.Error().Err(err).Msg("Failed to close listener")
-			}
-
-		}
-	}()
-	// Do some filtering
-	switch network {
-	case "tls", "tcp", "wss":
-		laddr, err := net.ResolveTCPAddr("tcp", addr)
-		if err != nil {
-			return fmt.Errorf("fail to resolve address. err=%w", err)
-		}
-
-		listener, err := tls.Listen("tcp", laddr.String(), conf)
-		if err != nil {
-			return fmt.Errorf("listen tls error. err=%w", err)
-		}
-
-		connCloser = listener
-		if network == "wss" {
-			return l.ServeWSS(listener)
-		}
-
-		return l.ServeTLS(listener)
-	}
-
-	return ErrNetworkNotSuported
 }
 
 func (l *Layer) addListenPort(network string, port int) {
@@ -470,7 +362,7 @@ func (l *Layer) Close() error {
 
 func IsReliable(network string) bool {
 	switch network {
-	case "tcp", "tls", "TCP", "TLS":
+	case "tcp", "tls", "ws", "wss", "TCP", "TLS", "WS", "WSS":
 		return true
 	default:
 		return false
@@ -479,7 +371,7 @@ func IsReliable(network string) bool {
 
 func IsStreamed(network string) bool {
 	switch network {
-	case "tcp", "tls", "TCP", "TLS":
+	case "tcp", "tls", "ws", "wss", "TCP", "TLS", "WS", "WSS":
 		return true
 	default:
 		return false
@@ -498,6 +390,8 @@ func NetworkToLower(network string) string {
 		return "tls"
 	case "WS":
 		return "ws"
+	case "WSS":
+		return "wss"
 	default:
 		return sip.ASCIIToLower(network)
 	}

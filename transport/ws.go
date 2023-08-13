@@ -60,14 +60,16 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 			return err
 		}
 
-		t.log.Debug().Str("addr", conn.RemoteAddr().String()).Msg("New connection")
+		raddr := conn.RemoteAddr().String()
+
+		t.log.Debug().Str("addr", raddr).Msg("New connection accept")
 
 		_, err = ws.Upgrade(conn)
 		if err != nil {
 			return err
 		}
 
-		t.initConnection(conn, conn.RemoteAddr().String(), handler)
+		t.initConnection(conn, raddr, handler)
 	}
 }
 
@@ -77,7 +79,7 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string, handler sip.Mes
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
 	c := &WSConnection{
 		Conn:     conn,
-		refcount: 3,
+		refcount: 1,
 	}
 	t.pool.Add(addr, c)
 	go t.readConnection(c, addr, handler)
@@ -87,13 +89,25 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string, handler sip.Mes
 // This should performe better to avoid any interface allocation
 func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler sip.MessageHandler) {
 	buf := make([]byte, transportBufferSize)
-	defer conn.Close()
-	defer t.pool.Del(raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("WS connection read stopped")
+	// defer conn.Close()
+	// defer t.pool.Del(raddr)
+
+	defer func() {
+		// Delete connection from pool only when closed
+		ref, _ := conn.TryClose()
+		if ref > 0 {
+			return
+		}
+		t.pool.Del(raddr)
+	}()
 
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				t.log.Debug().Err(err).Msg("Read connection closed")
+				return
+			}
 			if errors.Is(err, io.EOF) {
 				t.log.Debug().Msg("Got EOF")
 				return
@@ -129,7 +143,7 @@ func (t *WSTransport) parse(data []byte, src string, handler sip.MessageHandler)
 		return
 	}
 
-	msg.SetTransport(TransportWS)
+	msg.SetTransport(t.transport)
 	msg.SetSource(src)
 	handler(msg)
 }

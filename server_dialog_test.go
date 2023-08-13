@@ -68,13 +68,13 @@ func TestDialog(t *testing.T) {
 	ch := make(chan sip.Dialog)
 	srv.OnDialogChan(ch)
 
-	inviteReq, callid, ftag := createTestInvite(t, "UDP", client1.LocalAddr().String())
+	inviteReq, callid, ftag := createTestInvite(t, "sip:bob@127.0.0.1:5060", "UDP", client1.LocalAddr().String())
 	client1.TestWriteConn(t, []byte(inviteReq.String()))
 
 	d := <-ch
 	assert.Equal(t, sip.DialogStateEstablished, d.State)
 
-	byeReq := createTestBye(t, "UDP", client1.LocalAddr().String(), callid, ftag, ftag)
+	byeReq := createTestBye(t, "sip:bob@127.0.0.1:5060", "UDP", client1.LocalAddr().String(), callid, ftag, ftag)
 	client1.TestWriteConn(t, []byte(byeReq.String()))
 
 	d = <-ch

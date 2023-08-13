@@ -12,14 +12,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var ()
-
 // TLS transport implementation
 type WSSTransport struct {
 	*WSTransport
 
 	// rootPool *x509.CertPool
-	// tlsConf *tls.Config
 }
 
 // NewWSSTransport needs dialTLSConf for creating connections when dialing

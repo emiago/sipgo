@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
+	"strings"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
@@ -77,14 +79,122 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-// Serve will fire all listeners. Ctx allows canceling
+var (
+	// Used only for testing, better way is to pass listener with Serve{Transport}
+	ctxTestListenAndServeReady = "ctxTestListenAndServeReady"
+)
+
+// Serve will fire all listeners
+// Network supported: udp, tcp, ws
 func (srv *Server) ListenAndServe(ctx context.Context, network string, addr string) error {
-	return srv.tp.ListenAndServe(ctx, network, addr)
+	network = strings.ToLower(network)
+	var connCloser io.Closer
+
+	// TODO consider different design to avoid this additional go routines
+	go func() {
+		select {
+		case <-ctx.Done():
+			if connCloser == nil {
+				return
+			}
+			if err := connCloser.Close(); err != nil {
+				srv.log.Error().Err(err).Msg("Failed to close listener")
+			}
+
+		}
+	}()
+
+	switch network {
+	case "udp":
+		// resolve local UDP endpoint
+		laddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+		udpConn, err := net.ListenUDP("udp", laddr)
+		if err != nil {
+			return fmt.Errorf("listen udp error. err=%w", err)
+		}
+
+		connCloser = udpConn
+		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
+			close(v.(chan any))
+		}
+		return srv.tp.ServeUDP(udpConn)
+
+	case "ws", "tcp":
+		laddr, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		conn, err := net.ListenTCP("tcp", laddr)
+		if err != nil {
+			return fmt.Errorf("listen tcp error. err=%w", err)
+		}
+
+		connCloser = conn
+		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
+			close(v.(chan any))
+		}
+		// and uses listener to buffer
+		if network == "ws" {
+			return srv.tp.ServeWS(conn)
+		}
+
+		return srv.tp.ServeTCP(conn)
+	}
+	return transport.ErrNetworkNotSuported
 }
 
-// Serve will fire all listeners that are secured. Ctx allows canceling
+// Serve will fire all listeners that are secured.
+// Network supported: tls, wss
 func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
-	return srv.tp.ListenAndServeTLS(ctx, network, addr, conf)
+	network = strings.ToLower(network)
+
+	var connCloser io.Closer
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// TODO consider different design to avoid this additional go routines
+	go func() {
+		select {
+		case <-ctx.Done():
+			if connCloser == nil {
+				return
+			}
+			if err := connCloser.Close(); err != nil {
+				srv.log.Error().Err(err).Msg("Failed to close listener")
+			}
+
+		}
+	}()
+	// Do some filtering
+	switch network {
+	case "tls", "tcp", "wss":
+		laddr, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		listener, err := tls.Listen("tcp", laddr.String(), conf)
+		if err != nil {
+			return fmt.Errorf("listen tls error. err=%w", err)
+		}
+
+		connCloser = listener
+
+		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
+			close(v.(chan any))
+		}
+		if network == "wss" {
+			return srv.tp.ServeWSS(listener)
+		}
+
+		return srv.tp.ServeTLS(listener)
+	}
+
+	return transport.ErrNetworkNotSuported
 }
 
 // ServeUDP starts serving request on UDP type listener.
@@ -100,6 +210,16 @@ func (srv *Server) ServeTCP(l net.Listener) error {
 // ServeTLS starts serving request on TLS type listener.
 func (srv *Server) ServeTLS(l net.Listener, conf *tls.Config) error {
 	return srv.tp.ServeTLS(l)
+}
+
+// ServeWS starts serving request on WS type listener.
+func (srv *Server) ServeWS(l net.Listener, conf *tls.Config) error {
+	return srv.tp.ServeWS(l)
+}
+
+// ServeWS starts serving request on WS type listener.
+func (srv *Server) ServeWSS(l net.Listener, conf *tls.Config) error {
+	return srv.tp.ServeWSS(l)
 }
 
 // onRequest gets request from Transaction layer

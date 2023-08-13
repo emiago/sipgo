@@ -76,14 +76,14 @@ func (txl *Layer) handleMessage(msg sip.Message) {
 func (txl *Layer) handleRequest(req *sip.Request) {
 	key, err := MakeServerTxKey(req)
 	if err != nil {
-		txl.log.Error().Err(err)
+		txl.log.Error().Err(err).Msg("Server tx make key failed")
 		return
 	}
 
 	tx, exists := txl.getServerTx(key)
 	if exists {
 		if err := tx.Receive(req); err != nil {
-			txl.log.Error().Err(err)
+			txl.log.Error().Err(err).Msg("Server tx failed to receive req")
 		}
 		return
 	}
@@ -94,16 +94,17 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 	}
 
 	// Connection must exist by transport layer.
+	// TODO: What if we are gettinb BYE and client closed connection
 	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
 	if err != nil {
-		txl.log.Error().Err(err)
+		txl.log.Error().Err(err).Msg("Server tx get connection failed")
 		return
 	}
 
 	tx = NewServerTx(key, req, conn, txl.log)
 
 	if err := tx.Init(); err != nil {
-		txl.log.Error().Err(err)
+		txl.log.Error().Err(err).Msg("Server tx init failed")
 		return
 	}
 	// put tx to store, to match retransmitting requests later
@@ -116,7 +117,7 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 func (txl *Layer) handleResponse(res *sip.Response) {
 	key, err := MakeClientTxKey(res)
 	if err != nil {
-		txl.log.Error().Err(err)
+		txl.log.Error().Err(err).Msg("Client tx make key failed")
 		return
 	}
 
@@ -129,7 +130,7 @@ func (txl *Layer) handleResponse(res *sip.Response) {
 	}
 
 	if err := tx.Receive(res); err != nil {
-		txl.log.Error().Err(err)
+		txl.log.Error().Err(err).Msg("Client tx failed to receive response")
 		return
 	}
 }

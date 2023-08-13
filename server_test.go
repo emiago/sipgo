@@ -1,7 +1,6 @@
 package sipgo
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
+	"github.com/emiago/sipgo/transport"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -63,15 +63,15 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 	return req
 }
 
-func createTestInvite(t *testing.T, transport, addr string) (*sip.Request, string, string) {
+func createTestInvite(t *testing.T, targetSipUri string, transport, addr string) (*sip.Request, string, string) {
 	branch := sip.GenerateBranch()
 	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
 	ftag := fmt.Sprintf("%d", time.Now().UnixNano())
 	return testCreateMessage(t, []string{
-		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"INVITE " + targetSipUri + " SIP/2.0",
 		"Via: SIP/2.0/" + transport + " " + addr + ";branch=" + branch,
 		"From: \"Alice\" <sip:alice@" + addr + ">;tag=" + ftag,
-		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"To: \"Bob\" <" + targetSipUri + ">",
 		"Call-ID: " + callid,
 		"CSeq: 1 INVITE",
 		"Content-Length: 0",
@@ -80,13 +80,13 @@ func createTestInvite(t *testing.T, transport, addr string) (*sip.Request, strin
 	}).(*sip.Request), callid, ftag
 }
 
-func createTestBye(t *testing.T, transport, addr string, callid string, ftag string, totag string) *sip.Request {
+func createTestBye(t *testing.T, targetSipUri string, transport, addr string, callid string, ftag string, totag string) *sip.Request {
 	branch := sip.GenerateBranch()
 	return testCreateMessage(t, []string{
-		"BYE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"BYE " + targetSipUri + " SIP/2.0",
 		"Via: SIP/2.0/" + transport + " " + addr + ";branch=" + branch,
 		"From: \"Alice\" <sip:alice@" + addr + ">;tag=" + ftag,
-		"To: \"Bob\" <sip:bob@127.0.0.1:5060>;tag=" + totag,
+		"To: \"Bob\" <" + targetSipUri + ">;tag=" + totag,
 		"Call-ID: " + callid,
 		"CSeq: 1 INVITE",
 		"Content-Length: 0",
@@ -96,17 +96,15 @@ func createTestBye(t *testing.T, transport, addr string, callid string, ftag str
 }
 
 func TestMain(m *testing.M) {
-	debug := flag.Bool("debug", false, "")
-	flag.Parse()
-
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{
 		Out:        os.Stdout,
 		TimeFormat: "2006-01-02 15:04:05.000",
 	}).With().Timestamp().Logger().Level(zerolog.WarnLevel)
 
-	if *debug {
-		log.Logger = log.Logger.With().Logger().Level(zerolog.DebugLevel)
+	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
+		log.Logger = log.Level(lvl)
 	}
+	transport.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
 
 	m.Run()
 }
