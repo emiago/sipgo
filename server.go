@@ -171,7 +171,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 	}()
 	// Do some filtering
 	switch network {
-	case "tls", "tcp", "wss":
+	case "tls", "tcp", "ws", "wss":
 		laddr, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -187,7 +187,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
 			close(v.(chan any))
 		}
-		if network == "wss" {
+		if network == "ws" || network == "wss" {
 			return srv.tp.ServeWSS(listener)
 		}
 

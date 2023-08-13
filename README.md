@@ -51,9 +51,9 @@ srv.OnBye(byeHandler)
 // For registrars
 // srv.OnRegister(registerHandler)
 ctx, _ := signal.NotifyContext(ctx, os.Interrupt)
+go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 go srv.ListenAndServe(ctx, "tcp", "127.0.0.1:5061")
 go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
-go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 <-ctx.Done()
 ```
 
@@ -66,6 +66,7 @@ go srv.ListenAndServe(ctx, "udp", "127.0.0.1:5060")
 // TLS
 conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
+srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
 ```
 
 ## Stateful Proxy build
@@ -226,7 +227,7 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 - [x] TCP
 - [x] TLS
 - [x] WS
-- [ ] WSS
+- [x] WSS
 
 
 ## Tests
