@@ -32,6 +32,7 @@ func WithUserAgent(ua string) UserAgentOption {
 
 // WithUserAgentIP sets local IP that will be used in building request
 // If not used IP will be resolved
+// Deprecated: Use on client WithClientHostname WithClientPort
 func WithUserAgentIP(ip net.IP) UserAgentOption {
 	return func(s *UserAgent) error {
 		return s.setIP(ip)

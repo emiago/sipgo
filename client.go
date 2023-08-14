@@ -49,6 +49,21 @@ func WithClientPort(port int) ClientOption {
 	}
 }
 
+// WithClientAddr is merge of WithClientHostname and WithClientPort
+// addr is format <host>:<port>
+func WithClientAddr(addr string) ClientOption {
+	return func(s *Client) error {
+		host, port, err := sip.SplitHostPort(addr)
+		if err != nil {
+			return err
+		}
+
+		WithClientHostname(host)
+		WithClientPort(port)
+		return nil
+	}
+}
+
 // NewClient creates client handle for user agent
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{

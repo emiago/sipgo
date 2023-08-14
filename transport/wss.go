@@ -5,9 +5,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/gobwas/ws"
 
 	"github.com/rs/zerolog/log"
 )
@@ -23,12 +23,12 @@ type WSSTransport struct {
 func NewWSSTransport(par sip.Parser, dialTLSConf *tls.Config) *WSSTransport {
 	tcptrans := NewWSTransport(par)
 	tcptrans.transport = TransportWSS
+	// Set our TLS config
 	p := &WSSTransport{
 		WSTransport: tcptrans,
 	}
 
-	// TODO should have single or multiple dialers
-	ws.DefaultDialer.TLSConfig = dialTLSConf
+	p.dialer.TLSConfig = dialTLSConf
 
 	// p.tlsConf = dialTLSConf
 	p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
@@ -52,7 +52,10 @@ func (t *WSSTransport) CreateConnection(addr string, handler sip.MessageHandler)
 func (t *WSSTransport) createConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	conn, _, _, err := ws.Dial(context.TODO(), "wss://"+addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, _, err := t.dialer.Dial(ctx, "wss://"+addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

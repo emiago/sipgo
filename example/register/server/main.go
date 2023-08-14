@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
@@ -20,17 +21,23 @@ import (
 func main() {
 	extIP := flag.String("ip", "127.0.0.1:5060", "My exernal ip")
 	creds := flag.String("u", "alice:alice", "Coma seperated username:password list")
-	sipdebug := flag.Bool("sipdebug", false, "Turn on sipdebug")
+	tran := flag.String("t", "udp", "Transport")
+	tlskey := flag.String("tlskey", "", "TLS key path")
+	tlscrt := flag.String("tlscrt", "", "TLS crt path")
 	flag.Parse()
 
 	// Make SIP Debugging available
-	transport.SIPDebug = *sipdebug
+	transport.SIPDebug = os.Getenv("SIP_DEBUG") != ""
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{
 		Out:        os.Stdout,
 		TimeFormat: time.StampMicro,
-	}).With().Timestamp().Logger().Level(zerolog.DebugLevel)
+	}).With().Timestamp().Logger().Level(zerolog.InfoLevel)
+
+	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil && lvl != zerolog.NoLevel {
+		log.Logger = log.Logger.Level(lvl)
+	}
 
 	registry := make(map[string]string)
 	for _, c := range strings.Split(*creds, ",") {
@@ -110,5 +117,20 @@ func main() {
 		tx.Respond(sip.NewResponseFromRequest(req, 200, "OK", nil))
 	})
 
-	srv.ListenAndServe(ctx, "udp", *extIP)
+	log.Info().Str("addr", *extIP).Msg("Listening on")
+
+	switch *tran {
+	case "tls", "wss":
+		cert, err := tls.LoadX509KeyPair(*tlscrt, *tlskey)
+		if err != nil {
+
+			log.Fatal().Err(err).Msg("Fail to load  x509 key and crt")
+		}
+		if err := srv.ListenAndServeTLS(ctx, *tran, *extIP, &tls.Config{Certificates: []tls.Certificate{cert}}); err != nil {
+			log.Info().Err(err).Msg("Listening stop")
+		}
+		return
+	}
+
+	srv.ListenAndServe(ctx, *tran, *extIP)
 }

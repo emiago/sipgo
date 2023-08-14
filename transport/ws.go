@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -18,13 +19,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	// WebSocketProtocols is used in setting websocket header
+	// By default clients must accept protocol sip
+	WebSocketProtocols = []string{"sip"}
+)
+
 // WS transport implementation
 type WSTransport struct {
 	parser    sip.Parser
 	log       zerolog.Logger
 	transport string
 
-	pool ConnectionPool
+	pool   ConnectionPool
+	dialer ws.Dialer
 }
 
 func NewWSTransport(par sip.Parser) *WSTransport {
@@ -32,7 +40,10 @@ func NewWSTransport(par sip.Parser) *WSTransport {
 		parser:    par,
 		pool:      NewConnectionPool(),
 		transport: TransportWS,
+		dialer:    ws.DefaultDialer,
 	}
+
+	p.dialer.Protocols = WebSocketProtocols
 	p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
 }
@@ -53,6 +64,27 @@ func (t *WSTransport) Close() error {
 // Serve is direct way to provide conn on which this worker will listen
 func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
+
+	// Prepare handshake header writer from http.Header mapping.
+	// Some phones want to return this
+	// TODO make this configurable
+	header := ws.HandshakeHeaderHTTP(http.Header{
+		"Sec-WebSocket-Protocol": WebSocketProtocols,
+	})
+
+	u := ws.Upgrader{
+		OnBeforeUpgrade: func() (ws.HandshakeHeader, error) {
+			return header, nil
+		},
+	}
+
+	if SIPDebug {
+		u.OnHeader = func(key, value []byte) error {
+			log.Debug().Str(string(key), string(value)).Msg("non-websocket header:")
+			return nil
+		}
+	}
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -64,9 +96,10 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 
 		t.log.Debug().Str("addr", raddr).Msg("New connection accept")
 
-		_, err = ws.Upgrade(conn)
+		_, err = u.Upgrade(conn)
 		if err != nil {
-			return err
+			t.log.Error().Err(err).Msg("Fail to upgrade")
+			continue
 		}
 
 		t.initConnection(conn, raddr, false, handler)
@@ -184,7 +217,10 @@ func (t *WSTransport) CreateConnection(addr string, handler sip.MessageHandler) 
 func (t *WSTransport) createConnection(addr string, handler sip.MessageHandler) (Connection, error) {
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	conn, _, _, err := ws.Dial(context.TODO(), "ws://"+addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, _, err := t.dialer.Dial(ctx, "ws://"+addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -264,4 +265,15 @@ func MessageShortString(msg Message) string {
 		return m.Short()
 	}
 	return "Unknown message type"
+}
+
+func SplitHostPort(addr string) (host string, port int, err error) {
+	var p string
+	host, p, err = net.SplitHostPort(addr)
+	if err != nil {
+		return
+	}
+
+	port, err = strconv.Atoi(p)
+	return
 }

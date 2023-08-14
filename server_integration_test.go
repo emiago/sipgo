@@ -20,7 +20,7 @@ import (
 
 // This will generate TLS certificates needed for test below
 // openssl is required
-//go:generate bash -c "cd testdata && ./generate_certs.sh"
+//go:generate bash -c "cd testdata && ./generate_certs_rsa.sh"
 
 var (
 	//go:embed testdata/certs/server.crt

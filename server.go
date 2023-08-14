@@ -208,17 +208,17 @@ func (srv *Server) ServeTCP(l net.Listener) error {
 }
 
 // ServeTLS starts serving request on TLS type listener.
-func (srv *Server) ServeTLS(l net.Listener, conf *tls.Config) error {
+func (srv *Server) ServeTLS(l net.Listener) error {
 	return srv.tp.ServeTLS(l)
 }
 
 // ServeWS starts serving request on WS type listener.
-func (srv *Server) ServeWS(l net.Listener, conf *tls.Config) error {
+func (srv *Server) ServeWS(l net.Listener) error {
 	return srv.tp.ServeWS(l)
 }
 
 // ServeWS starts serving request on WS type listener.
-func (srv *Server) ServeWSS(l net.Listener, conf *tls.Config) error {
+func (srv *Server) ServeWSS(l net.Listener) error {
 	return srv.tp.ServeWSS(l)
 }
 

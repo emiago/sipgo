@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/emiago/sipgo"
@@ -20,24 +21,27 @@ import (
 func main() {
 	extIP := flag.String("ip", "127.0.0.50:5060", "My exernal ip")
 	dst := flag.String("srv", "127.0.0.10:5060", "Destination")
+	tran := flag.String("t", "udp", "Transport")
 	username := flag.String("u", "alice", "SIP Username")
 	password := flag.String("p", "alice", "Password")
-	sipdebug := flag.Bool("sipdebug", false, "Turn on sipdebug")
 	flag.Parse()
 
 	// Make SIP Debugging available
-	transport.SIPDebug = *sipdebug
+	transport.SIPDebug = os.Getenv("SIP_DEBUG") != ""
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{
 		Out:        os.Stdout,
 		TimeFormat: time.StampMicro,
-	}).With().Timestamp().Logger().Level(zerolog.DebugLevel)
+	}).With().Timestamp().Logger().Level(zerolog.InfoLevel)
+
+	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil && lvl != zerolog.NoLevel {
+		log.Logger = log.Logger.Level(lvl)
+	}
 
 	// Setup UAC
 	ua, err := sipgo.NewUA(
 		sipgo.WithUserAgent(*username),
-		sipgo.WithUserAgentIP(*extIP),
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup user agent")
@@ -48,16 +52,17 @@ func main() {
 		log.Fatal().Err(err).Msg("Fail to setup server handle")
 	}
 
-	client, err := sipgo.NewClient(ua)
+	client, err := sipgo.NewClient(ua, sipgo.WithClientAddr(*extIP))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup client handle")
 	}
 
 	ctx := context.TODO()
-	go srv.ListenAndServe(ctx, "udp", *extIP)
+	go srv.ListenAndServe(ctx, *tran, *extIP)
 
 	// Wait that ouir server loads
 	time.Sleep(1 * time.Second)
+	log.Info().Str("addr", *extIP).Msg("Server listening on")
 
 	// Create basic REGISTER request structure
 	recipient := &sip.Uri{}
@@ -66,9 +71,11 @@ func main() {
 	req.AppendHeader(
 		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *extIP)),
 	)
+	req.SetTransport(strings.ToUpper(*tran))
 
 	// Send request and parse response
 	// req.SetDestination(*dst)
+	log.Info().Msg(req.StartLine())
 	tx, err := client.TransactionRequest(req.Clone())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to create transaction")
