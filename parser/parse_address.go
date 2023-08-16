@@ -10,8 +10,7 @@ import (
 // ParseAddressValue parses an address - such as from a From, To, or
 // Contact header. It returns:
 // See RFC 3261 section 20.10 for details on parsing an address.
-// Note that this method will not accept a comma-separated list of addresses;
-// addresses in that form should be handled by ParseAddressValues.
+// Note that this method will not accept a comma-separated list of addresses.
 func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.HeaderParams) (displayName string, err error) {
 	// headerParams = sip.NewParams()
 	var semicolon, equal, startQuote, endQuote int = -1, -1, -1, -1
@@ -31,6 +30,7 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 				continue
 			}
 
+			// display-name   =  *(token LWS)/ quoted-string
 			if endQuote > 0 {
 				displayName = addressText[startQuote+1 : endQuote]
 				startQuote, endQuote = -1, -1
@@ -135,10 +135,6 @@ func parseFromAddressHeader(headerName string, headerText string) (header sip.He
 		return
 	}
 
-	if err != nil {
-		return
-	}
-
 	if h.Address.Wildcard {
 		// The Wildcard '*' URI is only permitted in Contact headers.
 		err = fmt.Errorf(
@@ -152,42 +148,44 @@ func parseFromAddressHeader(headerName string, headerText string) (header sip.He
 
 // parseContactAddressHeader generates sip.ContactHeader
 func parseContactAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
-	prevIdx := 0
 	inBrackets := false
 	inQuotes := false
 
-	// Append a comma to simplify the parsing code; we split address sections
-	// on commas, so use a comma to signify the end of the final address section.
-	addresses := headerText + ","
-
-	head := sip.ContactHeader{
+	h := sip.ContactHeader{
 		Params: sip.NewParams(),
 	}
-	h := &head
-	for idx, char := range addresses {
+
+	endInd := len(headerText)
+	end := endInd - 1
+
+	for idx, char := range headerText {
 		if char == '<' && !inQuotes {
 			inBrackets = true
 		} else if char == '>' && !inQuotes {
 			inBrackets = false
 		} else if char == '"' {
 			inQuotes = !inQuotes
-		} else if !inQuotes && !inBrackets && char == ',' {
-			// if char == ',' {
-			if h == nil {
-				h = &sip.ContactHeader{
-					Params: sip.NewParams(),
-				}
+		} else if !inQuotes && !inBrackets {
+			switch {
+			case char == ',':
+				err = errComaDetected(idx)
+			case idx == end:
+				endInd = idx + 1
+			default:
+				continue
 			}
-			h.DisplayName, err = ParseAddressValue(addresses[prevIdx:idx], &h.Address, h.Params)
-			if err != nil {
-				return
-			}
-			prevIdx = idx + 1
-			h = h.Next
+
+			break
 		}
 	}
 
-	return &head, nil
+	var e error
+	h.DisplayName, e = ParseAddressValue(headerText[:endInd], &h.Address, h.Params)
+	if e != nil {
+		return nil, e
+	}
+
+	return &h, err
 }
 
 // parseRouteHeader generates sip.RouteHeader
@@ -238,8 +236,8 @@ func parseRouteAddress(headerText string, address *sip.Uri) (err error) {
 			if e != nil {
 				return e
 			}
-			return err
+			break
 		}
 	}
-	return nil
+	return
 }

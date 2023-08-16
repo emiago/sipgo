@@ -530,8 +530,6 @@ type ContactHeader struct {
 	Address     Uri
 	// Any parameters present in the header.
 	Params HeaderParams
-	// Next goes to next header if header has multi value
-	Next *ContactHeader
 }
 
 func (h *ContactHeader) String() string {
@@ -543,26 +541,15 @@ func (h *ContactHeader) String() string {
 func (h *ContactHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueWrite(buffer)
 }
 
 func (h *ContactHeader) Name() string { return "Contact" }
 
 func (h *ContactHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueWrite(&buffer)
 	return buffer.String()
-}
-
-func (h *ContactHeader) ValueStringWrite(buffer io.StringWriter) {
-	hop := h
-	for hop != nil {
-		hop.valueWrite(buffer)
-		if hop.Next != nil {
-			buffer.WriteString(", ")
-		}
-		hop = hop.Next
-	}
 }
 
 func (h *ContactHeader) valueWrite(buffer io.StringWriter) {
@@ -599,18 +586,6 @@ func (h *ContactHeader) headerClone() Header {
 }
 
 func (h *ContactHeader) Clone() *ContactHeader {
-	newCnt := h.cloneFirst()
-
-	newNext := newCnt
-	for hop := h.Next; hop != nil; hop = hop.Next {
-		newNext.Next = hop.Clone()
-		newNext = newNext.Next
-	}
-
-	return newCnt
-}
-
-func (h *ContactHeader) cloneFirst() *ContactHeader {
 	var newCnt *ContactHeader
 	if h == nil {
 		return newCnt
