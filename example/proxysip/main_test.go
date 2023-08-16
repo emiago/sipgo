@@ -245,7 +245,7 @@ func TestInviteCallUDP(t *testing.T) {
 
 	t.Log("Running proxy", serverAddr, client1Addr, client2Addr)
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
-	go srv.TransportLayer().ServeUDP(serverC)
+	go srv.ServeUDP(serverC)
 	inviteScenario(t, client1, client2, p)
 
 }
@@ -303,7 +303,7 @@ func TestInviteCallTCP(t *testing.T) {
 
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
 
-	go srv.TransportLayer().ServeTCP(listener)
+	go srv.ServeTCP(listener)
 	inviteScenario(t, client1, client2, p)
 }
 
@@ -341,7 +341,7 @@ func TestRegisterTCP(t *testing.T) {
 	listener.Conns <- serverC1
 
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
-	go srv.TransportLayer().ServeTCP(listener)
+	go srv.ServeTCP(listener)
 
 	reg := testCreateMessage(t, []string{
 		"REGISTER sip:10.5.0.10:5060;transport=tcp SIP/2.0",
@@ -408,7 +408,7 @@ func BenchmarkInviteCall(t *testing.B) {
 	}
 
 	srv := setupSipProxy(client2Addr.String(), serverAddr.String())
-	go srv.TransportLayer().ServeUDP(serverC)
+	go srv.ServeUDP(serverC)
 	// defer srv.Shutdown()
 
 	// client2 := testCreateUDPListener(t, "udp", client2Addr)
