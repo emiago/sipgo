@@ -223,7 +223,7 @@ func (hs *headers) getHeader(nameLower string) Header {
 }
 
 // RemoveHeader removes header by name
-func (hs *headers) RemoveHeader(name string) {
+func (hs *headers) RemoveHeader(name string) (removed bool) {
 	// name = HeaderToLower(name)
 	// delete(hs.headers, name)
 	// update order slice
@@ -236,8 +236,9 @@ func (hs *headers) RemoveHeader(name string) {
 		}
 	}
 
+	removed = foundIdx > 0
 	// Update refs
-	if foundIdx > 0 {
+	if removed {
 		for _, entry := range hs.headerOrder[foundIdx:] {
 			if entry.Name() == name {
 				hs.setHeaderRef(entry)
@@ -246,6 +247,7 @@ func (hs *headers) RemoveHeader(name string) {
 		}
 	}
 
+	return removed
 }
 
 // RemoveHeaderOn before removes header with name, yields (calls func) once it gets found

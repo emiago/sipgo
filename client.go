@@ -53,7 +53,7 @@ func WithClientPort(port int) ClientOption {
 // addr is format <host>:<port>
 func WithClientAddr(addr string) ClientOption {
 	return func(s *Client) error {
-		host, port, err := sip.SplitHostPort(addr)
+		host, port, err := sip.ParseAddr(addr)
 		if err != nil {
 			return err
 		}
