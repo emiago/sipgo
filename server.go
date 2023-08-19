@@ -343,6 +343,7 @@ func (srv *Server) RegisteredMethods() []string {
 	for k, _ := range srv.requestHandlers {
 		r = append(r, k.String())
 	}
+	return r
 }
 
 func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler) {
