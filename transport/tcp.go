@@ -8,13 +8,12 @@ import (
 	"net"
 	"sync"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
-
-var ()
 
 // TCP transport implementation
 type TCPTransport struct {
@@ -25,6 +24,10 @@ type TCPTransport struct {
 
 	pool ConnectionPool
 }
+
+var (
+	HandlePartialMessages bool = true
+)
 
 func NewTCPTransport(par sip.Parser) *TCPTransport {
 	p := &TCPTransport{
@@ -155,27 +158,36 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 			continue
 		}
 
+		if len(data) <= 4 {
+			//One or 2 CRLF
+			if len(bytes.Trim(data, "\r\n")) == 0 {
+				t.log.Debug().Msg("Keep alive CRLF received")
+				continue
+			}
+		}
+
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		t.parse(data, raddr, handler)
+		if HandlePartialMessages {
+			messages, err := conn.partialMessageParser.Process(data)
+			if err != nil {
+				t.log.Error().Err(err).Str("data", string(data)).Msg("failed to extract single message from stream")
+			}
+
+			for _, message := range messages {
+				t.parseFullMessage(message, raddr, handler)
+			}
+		} else {
+			t.parseFullMessage(data, raddr, handler)
+		}
 	}
 }
 
-func (t *TCPTransport) parse(data []byte, src string, handler sip.MessageHandler) {
-	// Check is keep alive
-	if len(data) <= 4 {
-		//One or 2 CRLF
-		if len(bytes.Trim(data, "\r\n")) == 0 {
-			t.log.Debug().Msg("Keep alive CRLF received")
-			return
-		}
-	}
-
+func (t *TCPTransport) parseFullMessage(data []byte, src string, handler sip.MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
 		return
 	}
-
 	msg.SetTransport(t.Network())
 	msg.SetSource(src)
 	handler(msg)
@@ -183,6 +195,7 @@ func (t *TCPTransport) parse(data []byte, src string, handler sip.MessageHandler
 
 type TCPConnection struct {
 	net.Conn
+	partialMessageParser parser.PartialMessageParser
 
 	mu       sync.RWMutex
 	refcount int

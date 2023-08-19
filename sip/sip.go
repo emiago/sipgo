@@ -26,6 +26,12 @@ type Parser interface {
 	ParseSIP(data []byte) (Message, error)
 }
 
+// PartialParser extracts full SIP messages from a stream
+type PartialParser interface {
+	Process(data []byte) error
+	OnMessage(func(msg []byte))
+}
+
 // GenerateBranch returns random unique branch ID.
 func GenerateBranch() string {
 	return GenerateBranchN(16)
