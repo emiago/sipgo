@@ -20,7 +20,7 @@ import (
 
 func main() {
 	extIP := flag.String("ip", "127.0.0.50:5060", "My exernal ip")
-	dst := flag.String("srv", "127.0.0.10:5060", "Destination")
+	dst := flag.String("srv", "127.0.0.1:5060", "Destination")
 	tran := flag.String("t", "udp", "Transport")
 	username := flag.String("u", "alice", "SIP Username")
 	password := flag.String("p", "alice", "Password")
