@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	extIP := flag.String("ip", "127.0.0.50:5060", "My exernal ip")
+	listenIP := flag.String("l", "127.0.0.50:5060", "My listen ip")
 	dst := flag.String("srv", "127.0.0.1:5060", "Destination")
 	tran := flag.String("t", "udp", "Transport")
 	username := flag.String("u", "alice", "SIP Username")
@@ -52,24 +52,24 @@ func main() {
 		log.Fatal().Err(err).Msg("Fail to setup server handle")
 	}
 
-	client, err := sipgo.NewClient(ua, sipgo.WithClientAddr(*extIP))
+	client, err := sipgo.NewClient(ua, sipgo.WithClientHostname("localhost"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup client handle")
 	}
 
 	ctx := context.TODO()
-	go srv.ListenAndServe(ctx, *tran, *extIP)
+	go srv.ListenAndServe(ctx, *tran, *listenIP)
 
 	// Wait that ouir server loads
 	time.Sleep(1 * time.Second)
-	log.Info().Str("addr", *extIP).Msg("Server listening on")
+	log.Info().Str("addr", *listenIP).Msg("Server listening on")
 
 	// Create basic REGISTER request structure
 	recipient := &sip.Uri{}
 	parser.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
-		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *extIP)),
+		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *listenIP)),
 	)
 	req.SetTransport(strings.ToUpper(*tran))
 
