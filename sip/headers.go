@@ -747,9 +747,10 @@ type ViaHeader struct {
 	// E.g. '2.0'.
 	ProtocolVersion string
 	Transport       string
-	Host            string
-	Port            int // This is optional
-	Params          HeaderParams
+	// TODO consider changing Host Port as struct Addr from transport
+	Host   string
+	Port   int // This is optional
+	Params HeaderParams
 }
 
 func (hop *ViaHeader) SentBy() string {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -232,13 +231,14 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		// Reference counting should prevent us closing connection too early
 		defer conn.TryClose()
 
-		// RFC 3261 - 18.2.2.
 	case *sip.Response:
 
 		conn, err = l.GetConnection(network, addr)
 		if err != nil {
 			return err
 		}
+
+		defer conn.TryClose()
 	}
 
 	if err := conn.WriteMsg(msg); err != nil {
@@ -267,60 +267,135 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 // It is wrapper for getting and creating connection
 func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
+	transport, ok := l.transports[network]
+	if !ok {
+		return nil, fmt.Errorf("transport %s is not supported", network)
+	}
+
 	addr := req.Destination()
 
-	host, _, err := net.SplitHostPort(addr)
+	// Resolve our remote address
+	host, port, err := sip.ParseAddr(addr)
 	if err != nil {
 		return nil, fmt.Errorf("build address target for %s: %w", addr, err)
 	}
+
 	// dns srv lookup
-	if net.ParseIP(host) == nil {
+
+	raddr := Addr{
+		IP:   net.ParseIP(host),
+		Port: port,
+	}
+	if raddr.IP == nil {
 		ctx := context.Background()
-		if _, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", network, host); err == nil && len(addrs) > 0 {
-			a := addrs[0]
-			addr = a.Target[:len(a.Target)-1] + ":" + strconv.Itoa(int(a.Port))
+		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
+			return nil, err
 		}
 	}
 
+	// Now use Via header to determine our local address
+	// Here is from RFC statement:
+	//   Before a request is sent, the client transport MUST insert a value of
+	//   the "sent-by" field into the Via header field.  This field contains
+	//   an IP address or host name, and port.
 	viaHop, exists := req.Via()
 	if !exists {
+		// NOTE: We are enforcing that client creates this header
 		return nil, fmt.Errorf("missing Via Header")
-	}
-	// rewrite sent-by port
-	if viaHop.Port <= 0 {
-		if ports, ok := l.listenPorts[network]; ok {
-			port := ports[rand.Intn(len(ports))]
-			viaHop.Port = port
-		} else {
-			defPort := sip.DefaultPort(network)
-			viaHop.Port = int(defPort)
-		}
 	}
 
 	if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
-		c, _ = l.getConnection(network, addr)
+		c, _ := transport.GetConnection(addr)
 		if c != nil {
-			//Increase reference. This should prevent client connection early drop
-			l.log.Debug().Str("req", req.Method.String()).Msg("Connection ref increment")
-			c.Ref(1)
+			// Update Via sent by
+			// TODO avoid this parsing
+			laddr := c.LocalAddr().String()
+			host, port, err := sip.ParseAddr(laddr)
+			if err != nil {
+				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddr, err)
+			}
+
+			viaHop.Host = host
+			viaHop.Port = port
 			return c, nil
 		}
 	}
 
-	c, err = l.createConnection(network, addr)
-	return c, err
+	// In case host is domain, IP will be nil and connection IP will be determine automatically
+	// We will still need to keep Host part as it is in Via for tracking
+
+	// rewrite our sent-by port
+	// if viaHop.Port <= 0 {
+	// 	// TODO should we here use connection port?
+	// 	// This makes no sense
+	// 	if ports, ok := l.listenPorts[network]; ok {
+	// 		port := ports[rand.Intn(len(ports))]
+	// 		viaHop.Port = port
+	// 	} else {
+	// 		defPort := sip.DefaultPort(network)
+	// 		viaHop.Port = int(defPort)
+	// 	}
+	// }
+
+	laddr := Addr{
+		IP: net.ParseIP(viaHop.Host),
+		// IP:   lIP,
+		Port: viaHop.Port,
+	}
+
+	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Msg("Via header used for creating connection")
+
+	c, err = transport.CreateConnection(laddr, raddr, l.handleMessage)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case viaHop.Host == "" || laddr.IP == nil:
+		laddrStr := c.LocalAddr().String()
+		host, port, err = sip.ParseAddr(laddrStr)
+		if err != nil {
+			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
+		}
+
+		viaHop.Host = host
+		viaHop.Port = port
+	}
+	return c, nil
+}
+
+func (l *Layer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
+	// We need to try local resolving.
+	ip, err := net.ResolveIPAddr("ip", host)
+	if err == nil {
+		addr.IP = ip.IP
+		return nil
+	}
+	log.Debug().Err(err).Msg("IP addr resolving failed, doing via dns resolver")
+
+	var lookupnet string
+	switch network {
+	case "udp":
+		lookupnet = "udp"
+	default:
+		lookupnet = "tcp"
+	}
+
+	_, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", lookupnet, host)
+	if err != nil {
+		return fmt.Errorf("fail to resolve target for %q: %w", host, err)
+	}
+	a := addrs[0]
+	addr.IP = net.ParseIP(a.Target[:len(a.Target)-1])
+	addr.Port = int(a.Port)
+	return nil
 }
 
 // GetConnection gets existing or creates new connection based on addr
 func (l *Layer) GetConnection(network, addr string) (Connection, error) {
 	network = NetworkToLower(network)
 	return l.getConnection(network, addr)
-}
-
-func (l *Layer) CreateConnection(network, addr string) (Connection, error) {
-	network = NetworkToLower(network)
-	return l.createConnection(network, addr)
 }
 
 func (l *Layer) getConnection(network, addr string) (Connection, error) {
@@ -334,18 +409,6 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 		return nil, fmt.Errorf("connection %q does not exist", addr)
 	}
 
-	return c, err
-}
-
-func (l *Layer) createConnection(network, addr string) (Connection, error) {
-	transport, ok := l.transports[network]
-	if !ok {
-		return nil, fmt.Errorf("transport %s is not supported", network)
-	}
-
-	// If there are no transport handlers registered for handling connection message
-	// this message will be dropped
-	c, err := transport.CreateConnection(addr, l.handleMessage)
 	return c, err
 }
 

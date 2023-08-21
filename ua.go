@@ -60,7 +60,8 @@ func WithUserAgenTLSConfig(c *tls.Config) UserAgentOption {
 // Check options for customizing user agent
 func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	ua := &UserAgent{
-		name: "sipgo",
+		name:        "sipgo",
+		dnsResolver: net.DefaultResolver,
 	}
 
 	for _, o := range options {

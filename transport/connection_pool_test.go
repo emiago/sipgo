@@ -3,48 +3,42 @@ package transport
 import (
 	"net"
 	"testing"
+
+	"github.com/emiago/sipgo/fakes"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestConnectionPool(t *testing.T) {
 	pool := NewConnectionPool()
-	conn := &conn{Conn: &net.TCPConn{}}
 
-	a := &net.TCPAddr{
-		IP:   net.IPv4('1', '2', '3', '4'),
-		Port: 1000,
+	fakeConn := &fakes.TCPConn{
+		LAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060},
+		RAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
+		Reader: nil,
+		Writer: nil,
 	}
-	pool.Add(a.String(), conn)
+	conn := &TCPConnection{Conn: fakeConn}
 
-	a2 := &net.TCPAddr{
-		IP:   net.IPv4('1', '2', '3', '4'),
-		Port: 1000,
-	}
-	c := pool.Get(a2.String())
+	pool.Add(fakeConn.RAddr.String(), conn)
+
+	c := pool.Get(fakeConn.RAddr.String())
 	if c != conn {
 		t.Fatal("Not found connection")
 	}
 }
 
 func BenchmarkConnectionPool(b *testing.B) {
+	log.Logger = log.Logger.Level(zerolog.WarnLevel)
 	pool := NewConnectionPool()
-	for i := 0; i < b.N; i++ {
-		conn := &conn{Conn: &net.TCPConn{}}
-		a := &net.TCPAddr{
-			IP:   net.IPv4('1', '2', '3', byte(i)),
-			Port: 1000,
-		}
-		pool.Add(a.String(), conn)
-		c := pool.Get(a.String())
-		if c != conn {
-			b.Fatal("mismatched function")
-		}
-	}
-}
 
-func BenchmarkTCPPool(b *testing.B) {
-	pool := NewTCPPool()
 	for i := 0; i < b.N; i++ {
-		conn := &net.TCPConn{}
+		conn := &TCPConnection{Conn: &fakes.TCPConn{
+			LAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060},
+			RAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
+			Reader: nil,
+			Writer: nil,
+		}}
 		a := &net.TCPAddr{
 			IP:   net.IPv4('1', '2', '3', byte(i)),
 			Port: 1000,

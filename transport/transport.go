@@ -1,6 +1,9 @@
 package transport
 
 import (
+	"net"
+	"strconv"
+
 	"github.com/emiago/sipgo/sip"
 )
 
@@ -24,7 +27,16 @@ const (
 type Transport interface {
 	Network() string
 	GetConnection(addr string) (Connection, error)
-	CreateConnection(addr string, handler sip.MessageHandler) (Connection, error)
+	CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error)
 	String() string
 	Close() error
+}
+
+type Addr struct {
+	IP   net.IP // Must be in IP format
+	Port int
+}
+
+func (a *Addr) String() string {
+	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
 }

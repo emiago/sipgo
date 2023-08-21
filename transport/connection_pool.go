@@ -1,10 +1,10 @@
 package transport
 
 import (
-	"net"
 	"sync"
 )
 
+// TODO Connection pool with keeping active connections longer
 type ConnectionPool struct {
 	sync.RWMutex
 	m map[string]Connection
@@ -17,21 +17,41 @@ func NewConnectionPool() ConnectionPool {
 }
 
 func (p *ConnectionPool) Add(a string, c Connection) {
+	if c.Ref(0) < 1 {
+		c.Ref(1) // Make 1 reference count by default
+	}
 	p.Lock()
 	p.m[a] = c
 	p.Unlock()
 }
 
+// Getting connection pool increases reference
+// Make sure you TryClose after finish
 func (p *ConnectionPool) Get(a string) (c Connection) {
 	p.RLock()
-	c = p.m[a]
+	c, exists := p.m[a]
 	p.RUnlock()
+	if !exists {
+		return nil
+	}
+	// Reference could drop with TryClose before it get deleted
+	// NOTE: DEADLOCK! if used inside pool lock
+	if c.Ref(1) <= 1 {
+		return nil
+	}
+
 	return c
 }
 
-func (p *ConnectionPool) Del(a string) {
+// CloseAndDelete closes connection and deletes from pool
+func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
+	ref, _ := c.TryClose() // Be nice. Saves from double closing
+	if ref > 0 {
+		c.Close()
+		return
+	}
 	p.Lock()
-	delete(p.m, a)
+	delete(p.m, addr)
 	p.Unlock()
 }
 
@@ -40,34 +60,4 @@ func (p *ConnectionPool) Size() int {
 	l := len(p.m)
 	p.RUnlock()
 	return l
-}
-
-type TCPPool struct {
-	sync.RWMutex
-	m map[string]*net.TCPConn
-}
-
-func NewTCPPool() TCPPool {
-	return TCPPool{
-		m: make(map[string]*net.TCPConn),
-	}
-}
-
-func (p *TCPPool) Add(a string, c *net.TCPConn) {
-	p.Lock()
-	p.m[a] = c
-	p.Unlock()
-}
-
-func (p *TCPPool) Get(a string) (c *net.TCPConn) {
-	p.RLock()
-	c = p.m[a]
-	p.RUnlock()
-	return c
-}
-
-func (p *TCPPool) Del(a string) {
-	p.Lock()
-	delete(p.m, a)
-	p.Unlock()
 }

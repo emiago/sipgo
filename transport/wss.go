@@ -41,19 +41,36 @@ func (t *WSSTransport) String() string {
 
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
-func (t *WSSTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
+func (t *WSSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	// raddr, err := net.ResolveTCPAddr("tcp", addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	var tladdr *net.TCPAddr = nil
+	if laddr.IP != nil {
+		tladdr = &net.TCPAddr{
+			IP:   laddr.IP,
+			Port: laddr.Port,
+		}
 	}
-	return t.createConnection(raddr.String(), handler)
+
+	traddr := &net.TCPAddr{
+		IP:   raddr.IP,
+		Port: raddr.Port,
+	}
+
+	return t.createConnection(tladdr, traddr, handler)
 }
 
-func (t *WSSTransport) createConnection(addr string, handler sip.MessageHandler) (Connection, error) {
+func (t *WSSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// How to pass local interface
 
 	conn, _, _, err := t.dialer.Dial(ctx, "wss://"+addr)
 	if err != nil {

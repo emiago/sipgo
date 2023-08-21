@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -39,15 +40,29 @@ func (t *TLSTransport) String() string {
 }
 
 // CreateConnection creates TLS connection for TCP transport
-func (t *TLSTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
+func (t *TLSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	// raddr, err := net.ResolveTCPAddr("tcp", addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	var tladdr *net.TCPAddr = nil
+	if laddr.IP != nil {
+		tladdr = &net.TCPAddr{
+			IP:   laddr.IP,
+			Port: laddr.Port,
+		}
 	}
-	return t.createConnection(raddr, handler)
+
+	traddr := &net.TCPAddr{
+		IP:   raddr.IP,
+		Port: raddr.Port,
+	}
+
+	return t.createConnection(tladdr, traddr, handler)
 }
 
-func (t *TLSTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TLSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -55,7 +70,14 @@ func (t *TLSTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageH
 	// SHould we make copy of rootPool?
 	// There is Clone of config
 
-	conn, err := tls.Dial("tcp", raddr.String(), t.tlsConf)
+	dialer := tls.Dialer{
+		NetDialer: &net.Dialer{
+			LocalAddr: laddr,
+		},
+		Config: t.tlsConf,
+	}
+
+	conn, err := dialer.DialContext(context.TODO(), "tcp", raddr.String())
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

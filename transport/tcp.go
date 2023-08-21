@@ -77,23 +77,42 @@ func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
 	}
 	addr = raddr.String()
 
+	t.log.Debug().Str("addr", addr).Msg("Getting connection")
+
 	c := t.pool.Get(addr)
 	return c, nil
 }
 
-func (t *TCPTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
+func (t *TCPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	// We are letting transport layer to resolve our address
+	// raddr, err := net.ResolveTCPAddr("tcp", addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	var tladdr *net.TCPAddr = nil
+	if laddr.IP != nil {
+		tladdr = &net.TCPAddr{
+			IP:   laddr.IP,
+			Port: laddr.Port,
+		}
+
+		if tladdr.Port == 0 {
+			tladdr.Port = sip.DefaultTcpPort
+		}
 	}
-	return t.createConnection(raddr, handler)
+
+	traddr := &net.TCPAddr{
+		IP:   raddr.IP,
+		Port: raddr.Port,
+	}
+	return t.createConnection(tladdr, traddr, handler)
 }
 
-func (t *TCPTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TCPTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	conn, err := net.DialTCP("tcp", nil, raddr)
+	conn, err := net.DialTCP("tcp", laddr, raddr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
@@ -128,25 +147,17 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.Me
 func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler sip.MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 
-	defer func() {
-		// Delete connection from pool only when closed
-		ref, _ := conn.TryClose()
-		if ref > 0 {
-			return
-		}
-		t.pool.Del(raddr)
-	}()
-	// defer conn.Close()
-	// defer t.pool.Del(raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("Connection read stopped")
+	defer t.pool.CloseAndDelete(conn, raddr)
 
 	for {
 		num, err := conn.Read(buf)
-
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				t.log.Error().Err(err).Msg("Read error")
+			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
+				t.log.Debug().Err(err).Msg("connection was closed")
+				return
 			}
+
+			t.log.Error().Err(err).Msg("Read error")
 			return
 		}
 
@@ -188,12 +199,13 @@ type TCPConnection struct {
 	refcount int
 }
 
-func (c *TCPConnection) Ref(i int) {
+func (c *TCPConnection) Ref(i int) int {
 	c.mu.Lock()
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
 	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP reference increment")
+	return ref
 }
 
 func (c *TCPConnection) Close() error {

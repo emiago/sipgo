@@ -125,25 +125,12 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler s
 	buf := make([]byte, transportBufferSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
-
-	defer func() {
-		// Delete connection from pool only when closed
-		ref, _ := conn.TryClose()
-		if ref > 0 {
-			return
-		}
-		t.pool.Del(raddr)
-	}()
+	defer t.pool.CloseAndDelete(conn, raddr)
 
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				t.log.Debug().Err(err).Msg("Got EOF")
-				return
-			}
-
-			if errors.Is(err, net.ErrClosed) {
+			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug().Err(err).Msg("Read connection closed")
 				return
 			}
@@ -206,19 +193,42 @@ func (t *WSTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *WSTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
+func (t *WSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	// raddr, err := net.ResolveTCPAddr("tcp", addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	var tladdr *net.TCPAddr = nil
+	if laddr.IP != nil {
+		tladdr = &net.TCPAddr{
+			IP:   laddr.IP,
+			Port: laddr.Port,
+		}
+
+		if tladdr.Port == 0 {
+			tladdr.Port = sip.DefaultTcpPort
+		}
 	}
-	return t.createConnection(raddr.String(), handler)
+
+	traddr := &net.TCPAddr{
+		IP:   raddr.IP,
+		Port: raddr.Port,
+	}
+	return t.createConnection(tladdr, traddr, handler)
 }
 
-func (t *WSTransport) createConnection(addr string, handler sip.MessageHandler) (Connection, error) {
+func (t *WSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// How to define local interface
+	if laddr != nil {
+		log.Error().Str("laddr", laddr.String()).Msg("Dialing with local IP is not supported on ws")
+	}
 
 	conn, _, _, err := t.dialer.Dial(ctx, "ws://"+addr)
 	if err != nil {
@@ -237,12 +247,13 @@ type WSConnection struct {
 	refcount   int
 }
 
-func (c *WSConnection) Ref(i int) {
+func (c *WSConnection) Ref(i int) int {
 	c.mu.Lock()
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
 	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS reference increment")
+	return ref
 
 }
 
@@ -309,6 +320,10 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// 	continue
 		// }
 
+		if SIPDebug {
+			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
+		}
+
 		if header.Masked {
 			ws.Cipher(data, header.Mask, 0)
 		}
@@ -325,15 +340,15 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
+	if SIPDebug {
+		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
+	}
+
 	fs := ws.NewFrame(ws.OpText, true, b)
 	if c.clientSide {
 		fs = ws.MaskFrameInPlace(fs)
 	}
-
 	err = ws.WriteFrame(c.Conn, fs)
-	if SIPDebug {
-		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
-	}
 
 	return len(b), err
 }

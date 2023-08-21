@@ -58,8 +58,8 @@ func WithClientAddr(addr string) ClientOption {
 			return err
 		}
 
-		WithClientHostname(host)
-		WithClientPort(port)
+		WithClientHostname(host)(s)
+		WithClientPort(port)(s)
 		return nil
 	}
 }
@@ -205,8 +205,8 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       r.Transport(),
-		Host:            c.host,
-		Port:            c.port,
+		Host:            c.host, // This can be rewritten by transport layer
+		Port:            c.port, // This can be rewritten by transport layer
 		Params:          sip.NewParams(),
 	}
 	// NOTE: Consider lenght of branch configurable

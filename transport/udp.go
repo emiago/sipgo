@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 
@@ -139,21 +140,41 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 	return nil, nil
 }
 
-// CreateConnection will create new connection. Generally we only
-func (t *UDPTransport) CreateConnection(addr string, handler sip.MessageHandler) (Connection, error) {
-	raddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return nil, err
+// CreateConnection will create new connection
+func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	// raddr, err := net.ResolveUDPAddr("udp", addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	var uladdr *net.UDPAddr = nil
+	if laddr.IP != nil {
+		uladdr = &net.UDPAddr{
+			IP:   laddr.IP,
+			Port: laddr.Port,
+		}
+
+		if uladdr.Port == 0 {
+			uladdr.Port = sip.DefaultUdpPort
+		}
 	}
 
-	udpconn, err := net.DialUDP("udp", nil, raddr)
+	uraddr := &net.UDPAddr{
+		IP:   raddr.IP,
+		Port: raddr.Port,
+	}
+
+	udpconn, err := net.DialUDP("udp", uladdr, uraddr)
 	if err != nil {
 		return nil, err
 	}
-	c := &UDPConnection{Conn: udpconn, refcount: 1}
+	c := &UDPConnection{
+		Conn:     udpconn,
+		refcount: 1,
+	}
 
 	// Wrap it in reference
-	t.pool.Add(addr, c)
+	t.pool.Add(uraddr.String(), c)
 	go t.readConnectedConnection(c, handler)
 	return c, err
 }
@@ -185,20 +206,13 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	raddr := conn.Conn.RemoteAddr().String()
-	defer func() {
-		// Delete connection from pool only when closed
-		// TODO does this makes sense closing if reading fails
-		ref, _ := conn.TryClose()
-		if ref > 0 {
-			return
-		}
-		t.pool.Del(raddr)
-	}()
+	defer t.pool.CloseAndDelete(conn, raddr)
+
 	for {
 		num, err := conn.Read(buf)
 
 		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
+			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug().Err(err).Msg("Read connection closed")
 				return
 			}
@@ -274,15 +288,24 @@ type UDPConnection struct {
 	refcount int
 }
 
-func (c *UDPConnection) Ref(i int) {
+func (c *UDPConnection) LocalAddr() net.Addr {
+	if c.Conn != nil {
+		return c.Conn.LocalAddr()
+	}
+	return c.PacketConn.LocalAddr()
+}
+
+func (c *UDPConnection) Ref(i int) int {
 	// For now all udp connections must be reused
 	if c.Conn == nil {
-		return
+		return 0
 	}
 
 	c.mu.Lock()
 	c.refcount += i
+	ref := c.refcount
 	c.mu.Unlock()
+	return ref
 }
 
 func (c *UDPConnection) Close() error {
