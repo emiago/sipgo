@@ -156,7 +156,12 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				}
 
 				res.SetDestination(req.Source())
-				sipgo.ClientResponseRemoveVia(client, res) // For now this needs to be called manually
+
+				// https://datatracker.ietf.org/doc/html/rfc3261#section-16.7
+				// Based on section removing via. Topmost via should be removed and check that exist
+
+				// Removes top most header
+				res.RemoveHeader("Via")
 				if err := tx.Respond(res); err != nil {
 					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 				}

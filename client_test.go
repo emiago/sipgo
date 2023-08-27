@@ -133,7 +133,7 @@ func TestClientRequestOptions(t *testing.T) {
 
 	// When proxy gets response, he will remove via
 	res := sip.NewResponseFromRequest(req, 400, "", nil)
-	ClientResponseRemoveVia(c, res)
+	res.RemoveHeader("Via")
 	viaprev, _ := res.Via()
 	assert.Equal(t, oldvia, viaprev)
 
@@ -142,9 +142,9 @@ func TestClientRequestOptions(t *testing.T) {
 	via, _ = req.Via()
 	req.AppendHeader(&tmpvia)
 	res = sip.NewResponseFromRequest(req, 400, "", nil)
-	ClientResponseRemoveVia(c, res)
+	res.RemoveHeader("Via")
 	viaprev, _ = res.Via()
 	assert.Equal(t, via.Host, viaprev.Host)
 
-	assert.Len(t, res.GetHeaders("Via"), 2)
+	assert.Len(t, res.GetHeaders("Via"), 1)
 }

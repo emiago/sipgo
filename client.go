@@ -273,15 +273,3 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	}
 	return nil
 }
-
-// ClientResponseRemoveVia is needed when handling client transaction response, where previously used in
-// TransactionRequest with ClientRequestAddVia
-func ClientResponseRemoveVia(c *Client, r *sip.Response) {
-	via, exists := r.Via()
-	if !exists {
-		return
-	}
-	if via.Host == c.host {
-		r.RemoveHeader("Via")
-	}
-}
