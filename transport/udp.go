@@ -55,17 +55,8 @@ func (t *UDPTransport) Network() string {
 }
 
 func (t *UDPTransport) Close() error {
-	// return t.connections.Done()
-	t.pool.RLock()
-	defer t.pool.RUnlock()
-	var rerr error
-	// for _, c := range t.pool.m {
-	// 	if _, err := c.TryClose(); err != nil {
-	// 		t.log.Err(err).Msg("Fail to close conn")
-	// 		rerr = fmt.Errorf("Open connections left")
-	// 	}
-	// }
-	return rerr
+	t.pool.Clear()
+	return nil
 }
 
 // TODO
@@ -168,6 +159,7 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 	if err != nil {
 		return nil, err
 	}
+
 	c := &UDPConnection{
 		Conn:     udpconn,
 		refcount: 1,

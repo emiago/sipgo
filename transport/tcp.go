@@ -47,8 +47,7 @@ func (t *TCPTransport) Network() string {
 
 func (t *TCPTransport) Close() error {
 	// return t.connections.Done()
-	// TODO should we empty connection pool
-
+	t.pool.Clear()
 	return nil
 }
 
@@ -136,7 +135,7 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.Me
 	t.log.Debug().Str("raddr", addr).Msg("New connection")
 	c := &TCPConnection{
 		Conn:     conn,
-		refcount: 1,
+		refcount: 1 + IdleConnection,
 	}
 	t.pool.Add(addr, c)
 	go t.readConnection(c, addr, handler)

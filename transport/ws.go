@@ -57,7 +57,7 @@ func (t *WSTransport) Network() string {
 }
 
 func (t *WSTransport) Close() error {
-	// return t.connections.Done()
+	t.pool.Clear()
 	return nil
 }
 

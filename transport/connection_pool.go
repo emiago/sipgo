@@ -2,9 +2,12 @@ package transport
 
 import (
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // TODO Connection pool with keeping active connections longer
+
 type ConnectionPool struct {
 	sync.RWMutex
 	m map[string]Connection
@@ -17,6 +20,9 @@ func NewConnectionPool() ConnectionPool {
 }
 
 func (p *ConnectionPool) Add(a string, c Connection) {
+	// TODO how about multi connection support for same remote address
+	// We can then check ref count
+
 	if c.Ref(0) < 1 {
 		c.Ref(1) // Make 1 reference count by default
 	}
@@ -34,25 +40,41 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 	if !exists {
 		return nil
 	}
-	// Reference could drop with TryClose before it get deleted
-	// NOTE: DEADLOCK! if used inside pool lock
-	if c.Ref(1) <= 1 {
-		return nil
-	}
+	// TODO handling more references
+	// if c.Ref(1) <= 1 {
+	// 	return nil
+	// }
 
 	return c
 }
 
 // CloseAndDelete closes connection and deletes from pool
 func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
+	p.Lock()
+	defer p.Unlock()
 	ref, _ := c.TryClose() // Be nice. Saves from double closing
 	if ref > 0 {
-		c.Close()
-		return
+		if err := c.Close(); err != nil {
+			log.Warn().Err(err).Msg("Closing conection return error")
+		}
 	}
-	p.Lock()
 	delete(p.m, addr)
-	p.Unlock()
+}
+
+// Clear will clear all connection from pool and close them
+func (p *ConnectionPool) Clear() {
+	p.Lock()
+	defer p.Unlock()
+	for _, c := range p.m {
+		if c.Ref(0) <= 0 {
+			continue
+		}
+		if err := c.Close(); err != nil {
+			log.Warn().Err(err).Msg("Closing conection return error")
+		}
+	}
+	// Remove all
+	p.m = make(map[string]Connection)
 }
 
 func (p *ConnectionPool) Size() int {

@@ -81,17 +81,29 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
+func (c *Client) Close() error {
+	// stop transaction layer
+	c.tx.Close()
+
+	// stop transport layer
+	return c.tp.Close()
+}
+
 func (c *Client) GetHostname() string {
 	return c.host
 }
 
 // TransactionRequest uses transaction layer to send request and returns transaction
-// By default the following header fields will be added if not exist:
-// To, From, CSeq, Call-ID, Max-Forwards, Via
-// Passing custom options will override this behavior.
-// This is useful when using client handle in proxy building
+// NOTE: By default request will not be cloned and it will populate request with missing headers unless options are used
 //
-// NOTE: request will not be cloned and header adding will be present after this action
+//	In most cases you want this as you will retry with additional headers
+//
+// Following header fields will be added if not exist to have correct SIP request:
+// To, From, CSeq, Call-ID, Max-Forwards, Via
+//
+// Passing options will override this behavior, that is it is expected
+// that you have request fully built
+// This is useful when using client handle in proxy building as request are already parsed
 func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)

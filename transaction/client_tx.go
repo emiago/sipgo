@@ -117,11 +117,11 @@ func (tx *ClientTx) Cancel() error {
 }
 
 func (tx *ClientTx) Terminate() {
-	select {
-	case <-tx.done:
-		return
-	default:
-	}
+	// select {
+	// case <-tx.done:
+	// 	return
+	// default:
+	// }
 
 	tx.delete()
 }

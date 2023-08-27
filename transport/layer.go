@@ -413,6 +413,7 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 }
 
 func (l *Layer) Close() error {
+	l.log.Debug().Msg("Layer is closing")
 	var werr error
 	for _, t := range l.transports {
 		if err := t.Close(); err != nil {

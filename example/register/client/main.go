@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -19,7 +18,7 @@ import (
 )
 
 func main() {
-	listenIP := flag.String("l", "127.0.0.50:5060", "My listen ip")
+	inter := flag.String("h", "localhost", "My interface ip or hostname")
 	dst := flag.String("srv", "127.0.0.1:5060", "Destination")
 	tran := flag.String("t", "udp", "Transport")
 	username := flag.String("u", "alice", "SIP Username")
@@ -47,36 +46,25 @@ func main() {
 		log.Fatal().Err(err).Msg("Fail to setup user agent")
 	}
 
-	srv, err := sipgo.NewServer(ua)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup server handle")
-	}
-
-	client, err := sipgo.NewClient(ua, sipgo.WithClientHostname("localhost"))
+	client, err := sipgo.NewClient(ua, sipgo.WithClientHostname(*inter))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup client handle")
 	}
-
-	ctx := context.TODO()
-	go srv.ListenAndServe(ctx, *tran, *listenIP)
-
-	// Wait that ouir server loads
-	time.Sleep(1 * time.Second)
-	log.Info().Str("addr", *listenIP).Msg("Server listening on")
+	defer client.Close()
 
 	// Create basic REGISTER request structure
 	recipient := &sip.Uri{}
 	parser.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
-		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *listenIP)),
+		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *inter)),
 	)
 	req.SetTransport(strings.ToUpper(*tran))
 
 	// Send request and parse response
 	// req.SetDestination(*dst)
 	log.Info().Msg(req.StartLine())
-	tx, err := client.TransactionRequest(req.Clone())
+	tx, err := client.TransactionRequest(req)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to create transaction")
 	}
@@ -107,7 +95,7 @@ func main() {
 		newReq := req.Clone()
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
-		tx, err = client.TransactionRequest(newReq)
+		tx, err := client.TransactionRequest(newReq)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Fail to create transaction")
 		}

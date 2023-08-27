@@ -9,6 +9,12 @@ import (
 
 var (
 	SIPDebug bool
+
+	// IdleConnection will keep connections idle even after transaction terminate
+	// -1 	- single response or request will close
+	// 0 	- close connection immediatelly after transaction terminate
+	// 1 	- keep connection idle after transaction termination
+	IdleConnection int = 1
 )
 
 const (
