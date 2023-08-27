@@ -176,7 +176,7 @@ func TestSimpleCall(t *testing.T) {
 			require.NoError(t, err)
 
 			res := <-tx.Responses()
-			assert.Equal(t, sip.StatusCode(200), res.StatusCode())
+			assert.Equal(t, sip.StatusCode(200), res.StatusCode)
 
 			tx.Terminate()
 		})

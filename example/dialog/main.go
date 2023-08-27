@@ -108,7 +108,7 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 				return
 			}
 			res.SetDestination(req.Source())
-			sipgo.ClientResponseRemoveVia(h.c, res)
+			res.RemoveHeader("Via")
 			if err := tx.Respond(res); err != nil {
 				log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 			}

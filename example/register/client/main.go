@@ -75,8 +75,8 @@ func main() {
 		log.Fatal().Err(err).Msg("Fail to get response")
 	}
 
-	log.Info().Int("status", int(res.StatusCode())).Msg("Received status")
-	if res.StatusCode() == 401 {
+	log.Info().Int("status", int(res.StatusCode)).Msg("Received status")
+	if res.StatusCode == 401 {
 		// Get WwW-Authenticate
 		wwwAuth := res.GetHeader("WWW-Authenticate")
 		chal, err := digest.ParseChallenge(wwwAuth.Value())
@@ -107,7 +107,7 @@ func main() {
 		}
 	}
 
-	if res.StatusCode() != 200 {
+	if res.StatusCode != 200 {
 		log.Fatal().Msg("Fail to register")
 	}
 

@@ -12,9 +12,9 @@ import (
 // Response RFC 3261 - 7.2.
 type Response struct {
 	MessageData
-	status   StatusCode
-	reason   string
-	previous []Response
+
+	Reason     string     // e.g. "200 OK"
+	StatusCode StatusCode // e.g. 200
 }
 
 // NewResponse creates base structure of response.
@@ -28,10 +28,9 @@ func NewResponse(
 		// headers:     make(map[string]Header),
 		headerOrder: make([]Header, 0),
 	}
-	res.status = statusCode
-	res.reason = reason
+	res.StatusCode = statusCode
+	res.Reason = reason
 	res.body = nil
-	res.previous = make([]Response, 0)
 
 	return res
 }
@@ -43,34 +42,11 @@ func (res *Response) Short() string {
 	}
 
 	return fmt.Sprintf("response status=%d reason=%s transport=%s source=%s",
-		res.StatusCode(),
-		res.Reason(),
+		res.StatusCode,
+		res.Reason,
 		res.Transport(),
 		res.Source(),
 	)
-}
-
-func (res *Response) StatusCode() StatusCode {
-	return res.status
-}
-
-func (res *Response) SetStatusCode(code StatusCode) {
-	res.status = code
-}
-
-func (res *Response) Reason() string {
-	return res.reason
-}
-func (res *Response) SetReason(reason string) {
-	res.reason = reason
-}
-
-func (res *Response) Previous() []Response {
-	return res.previous
-}
-
-func (res *Response) SetPrevious(responses []Response) {
-	res.previous = responses
 }
 
 // StartLine returns Response Status Line - RFC 2361 7.2.
@@ -82,12 +58,12 @@ func (res *Response) StartLine() string {
 }
 
 func (res *Response) StartLineWrite(buffer io.StringWriter) {
-	statusCode := strconv.Itoa(int(res.StatusCode()))
+	statusCode := strconv.Itoa(int(res.StatusCode))
 	buffer.WriteString(res.SipVersion)
 	buffer.WriteString(" ")
 	buffer.WriteString(statusCode)
 	buffer.WriteString(" ")
-	buffer.WriteString(res.Reason())
+	buffer.WriteString(res.Reason)
 }
 
 func (res *Response) String() string {
@@ -114,27 +90,27 @@ func (res *Response) Clone() *Response {
 }
 
 func (res *Response) IsProvisional() bool {
-	return res.StatusCode() < 200
+	return res.StatusCode < 200
 }
 
 func (res *Response) IsSuccess() bool {
-	return res.StatusCode() >= 200 && res.StatusCode() < 300
+	return res.StatusCode >= 200 && res.StatusCode < 300
 }
 
 func (res *Response) IsRedirection() bool {
-	return res.StatusCode() >= 300 && res.StatusCode() < 400
+	return res.StatusCode >= 300 && res.StatusCode < 400
 }
 
 func (res *Response) IsClientError() bool {
-	return res.StatusCode() >= 400 && res.StatusCode() < 500
+	return res.StatusCode >= 400 && res.StatusCode < 500
 }
 
 func (res *Response) IsServerError() bool {
-	return res.StatusCode() >= 500 && res.StatusCode() < 600
+	return res.StatusCode >= 500 && res.StatusCode < 600
 }
 
 func (res *Response) IsGlobalError() bool {
-	return res.StatusCode() >= 600
+	return res.StatusCode >= 600
 }
 
 func (res *Response) IsAck() bool {
@@ -256,8 +232,8 @@ func NewResponseFromRequest(
 
 func cloneResponse(res *Response) *Response {
 	newRes := NewResponse(
-		res.StatusCode(),
-		res.Reason(),
+		res.StatusCode,
+		res.Reason,
 	)
 	newRes.SipVersion = res.SipVersion
 
@@ -267,7 +243,7 @@ func cloneResponse(res *Response) *Response {
 
 	newRes.SetBody(res.Body())
 
-	newRes.SetPrevious(res.Previous())
+	// newRes.SetPrevious(res.Previous())
 	newRes.SetTransport(res.Transport())
 	newRes.SetSource(res.Source())
 	newRes.SetDestination(res.Destination())
