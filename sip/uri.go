@@ -102,7 +102,18 @@ func (uri *Uri) IsEncrypted() bool {
 	return uri.Encrypted
 }
 
+// Addr is uri address form. sip:user@host:port
 func (uri *Uri) Addr() string {
+	addr := uri.User + "@" + uri.HostPort()
+
+	if uri.Encrypted {
+		return "sips:" + addr
+	}
+	return "sip:" + addr
+}
+
+// HostPort represents host:port part
+func (uri *Uri) HostPort() string {
 	p := strconv.Itoa(uri.Port)
 	return uri.Host + ":" + p
 }

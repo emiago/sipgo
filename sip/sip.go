@@ -69,35 +69,64 @@ func DefaultPort(transport string) int {
 	}
 }
 
+func MakeDialogIDFromRequest(msg *Request) (string, error) {
+	var callID, innerID, externalID string = "", "", ""
+	if err := getDialogIDFromMessage(msg, &callID, &innerID, &externalID); err != nil {
+		return "", err
+	}
+	return MakeDialogID(callID, innerID, externalID), nil
+}
+
+func MakeDialogIDFromResponse(msg *Response) (string, error) {
+	var callID, innerID, externalID string = "", "", ""
+	if err := getDialogIDFromMessage(msg, &callID, &externalID, &innerID); err != nil {
+		return "", err
+	}
+	return MakeDialogID(callID, innerID, externalID), nil
+}
+
 // MakeDialogIDFromMessage creates dialog ID of message.
 // returns error if callid or to tag or from tag does not exists
+// Deprecated! Will be removed
 func MakeDialogIDFromMessage(msg Message) (string, error) {
+	switch m := msg.(type) {
+	case *Request:
+		return MakeDialogIDFromRequest(m)
+	case *Response:
+		return MakeDialogIDFromResponse(m)
+	}
+	return "", fmt.Errorf("unknown message format")
+}
+
+func getDialogIDFromMessage(msg Message, callId, innerId, externalId *string) error {
 	callID, ok := msg.CallID()
 	if !ok {
-		return "", fmt.Errorf("missing Call-ID header")
+		return fmt.Errorf("missing Call-ID header")
 	}
 
 	to, ok := msg.To()
 	if !ok {
-		return "", fmt.Errorf("missing To header")
+		return fmt.Errorf("missing To header")
 	}
 
 	toTag, ok := to.Params.Get("tag")
 	if !ok {
-		return "", fmt.Errorf("missing tag param in To header")
+		return fmt.Errorf("missing tag param in To header")
 	}
 
 	from, ok := msg.From()
 	if !ok {
-		return "", fmt.Errorf("missing From header")
+		return fmt.Errorf("missing From header")
 	}
 
 	fromTag, ok := from.Params.Get("tag")
 	if !ok {
-		return "", fmt.Errorf("missing tag param in From header")
+		return fmt.Errorf("missing tag param in From header")
 	}
-
-	return MakeDialogID(string(*callID), toTag, fromTag), nil
+	*callId = string(*callID)
+	*innerId = toTag
+	*externalId = fromTag
+	return nil
 }
 
 func MakeDialogID(callID, innerID, externalID string) string {
