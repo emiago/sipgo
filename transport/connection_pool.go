@@ -9,6 +9,7 @@ import (
 // TODO Connection pool with keeping active connections longer
 
 type ConnectionPool struct {
+	// TODO consider sync.Map way with atomic checks to reduce mutex contention
 	sync.RWMutex
 	m map[string]Connection
 }
@@ -40,6 +41,7 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 	if !exists {
 		return nil
 	}
+	c.Ref(1)
 	// TODO handling more references
 	// if c.Ref(1) <= 1 {
 	// 	return nil
