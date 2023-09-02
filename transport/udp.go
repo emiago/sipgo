@@ -59,22 +59,6 @@ func (t *UDPTransport) Close() error {
 	return nil
 }
 
-// TODO
-// This is more generic way to provide listener and it is blocking
-func (t *UDPTransport) ListenAndServe(addr string, handler sip.MessageHandler) error {
-	// resolve local UDP endpoint
-	laddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return fmt.Errorf("fail to resolve address. err=%w", err)
-	}
-	udpConn, err := net.ListenUDP("udp", laddr)
-	if err != nil {
-		return fmt.Errorf("listen udp error. err=%w", err)
-	}
-
-	return t.Serve(udpConn, handler)
-}
-
 // ServeConn is direct way to provide conn on which this worker will listen
 // UDPReadWorkers are used to create more workers
 func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) error {
@@ -165,8 +149,11 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 		refcount: 1,
 	}
 
+	addr := uraddr.String()
+	t.log.Debug().Str("raddr", addr).Msg("New connection")
+
 	// Wrap it in reference
-	t.pool.Add(uraddr.String(), c)
+	t.pool.Add(addr, c)
 	go t.readConnectedConnection(c, handler)
 	return c, err
 }
