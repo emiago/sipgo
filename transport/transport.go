@@ -27,6 +27,9 @@ const (
 	TransportWSS = "WSS"
 
 	transportBufferSize uint16 = 65535
+
+	// TransportFixedLengthMessage sets message size limit for parsing and avoids stream parsing
+	TransportFixedLengthMessage uint16 = 0
 )
 
 // Protocol implements network specific features.

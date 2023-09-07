@@ -80,6 +80,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 		}
 	}
 
+	// TODO export parser to be configurable
 	ua.tp = transport.NewLayer(ua.dnsResolver, parser.NewParser(), ua.tlsConfig)
 	ua.tx = transaction.NewLayer(ua.tp)
 	return ua, nil

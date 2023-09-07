@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -42,8 +43,6 @@ type Layer struct {
 
 	log zerolog.Logger
 
-	// Parser used by transport layer. It can be overrided before setuping network transports
-	Parser sip.Parser
 	// ConnectionReuse will force connection reuse when passing request
 	ConnectionReuse bool
 }
@@ -54,14 +53,13 @@ type Layer struct {
 // tls config - can be nil to use default tls
 func NewLayer(
 	dnsResolver *net.Resolver,
-	sipparser sip.Parser,
+	sipparser *parser.Parser,
 	tlsConfig *tls.Config,
 ) *Layer {
 	l := &Layer{
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
-		Parser:          sipparser,
 		ConnectionReuse: true,
 	}
 

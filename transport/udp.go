@@ -8,6 +8,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -27,7 +28,7 @@ var (
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
-	parser sip.Parser
+	parser *parser.Parser
 	conn   *UDPConnection
 
 	pool      ConnectionPool
@@ -36,7 +37,7 @@ type UDPTransport struct {
 	log zerolog.Logger
 }
 
-func NewUDPTransport(par sip.Parser) *UDPTransport {
+func NewUDPTransport(par *parser.Parser) *UDPTransport {
 	p := &UDPTransport{
 		parser: par,
 		conn:   nil, // Making sure interface is nil in returns

@@ -14,6 +14,8 @@ import (
 // A HeaderParser is any function that turns raw header data into one or more Header objects.
 type HeaderParser func(headerName string, headerData string) (sip.Header, error)
 
+type mapHeadersParser map[string]HeaderParser
+
 type errComaDetected int
 
 func (e errComaDetected) Error() string {
@@ -21,7 +23,7 @@ func (e errComaDetected) Error() string {
 }
 
 // This needs to kept minimalistic in order to avoid overhead of parsing
-var headersParsers = map[string]HeaderParser{
+var headersParsers = mapHeadersParser{
 	"to":             parseToAddressHeader,
 	"t":              parseToAddressHeader,
 	"from":           parseFromAddressHeader,
@@ -48,6 +50,55 @@ var headersParsers = map[string]HeaderParser{
 // NOTE this API call may change
 func DefaultHeadersParser() map[string]HeaderParser {
 	return headersParsers
+}
+
+// parseMsgHeader will append any parsed header
+// in case comma seperated values it will add them as new in case comma is detected
+func (headersParser mapHeadersParser) parseMsgHeader(msg sip.Message, headerText string) (err error) {
+	// p.log.Tracef("parsing header \"%s\"", headerText)
+
+	colonIdx := strings.Index(headerText, ":")
+	if colonIdx == -1 {
+		err = fmt.Errorf("field name with no value in header: %s", headerText)
+		return
+	}
+
+	fieldName := strings.TrimSpace(headerText[:colonIdx])
+	lowerFieldName := sip.HeaderToLower(fieldName)
+	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
+
+	headerParser, ok := headersParsers[lowerFieldName]
+	if !ok {
+		// We have no registered parser for this header type,
+		// so we encapsulate the header data in a GenericHeader struct.
+
+		// TODO Should we check for comma here as well ??
+		header := sip.NewHeader(fieldName, fieldText)
+		msg.AppendHeader(header)
+		return nil
+	}
+
+	// Support comma seperated value
+	for {
+		// We have a registered parser for this header type - use it.
+		// headerParser should detect comma (,) and return as error
+		header, err := headerParser(lowerFieldName, fieldText)
+
+		// Mostly we will run with no error
+		if err == nil {
+			msg.AppendHeader(header)
+			return nil
+		}
+
+		commaErr, ok := err.(errComaDetected)
+		if !ok {
+			return err
+		}
+
+		// Ok we detected we have comma in header value
+		msg.AppendHeader(header)
+		fieldText = fieldText[commaErr+1:]
+	}
 }
 
 // parseCallId generates sip.CallIDHeader

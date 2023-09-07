@@ -90,7 +90,7 @@ func testParseHeader(t *testing.T, parser *Parser, header string) sip.Header {
 	// This is fake way to get parsing done. We use fake message and read first header
 	msg := sip.NewRequest(sip.INVITE, nil)
 	name := strings.Split(header, ":")[0]
-	err := parser.parseMsgHeader(msg, header)
+	err := parser.headersParsers.parseMsgHeader(msg, header)
 	require.Nil(t, err)
 	return msg.GetHeader(name)
 }
@@ -245,6 +245,38 @@ func BenchmarkParserHeaders(b *testing.B) {
 
 }
 
+func TestParseBadMessages(t *testing.T) {
+	parser := NewParser()
+
+	// 		The start-line, each message-header line, and the empty line MUST be
+	//    terminated by a carriage-return line-feed sequence (CRLF).  Note that
+	//    the empty line MUST be present even if the message-body is not.
+
+	t.Run("no empty line between header and body", func(t *testing.T) {
+		rawMsg := []string{
+			"SIP/2.0 180 Ringing",
+			"Via: SIP/2.0/UDP 127.0.0.20:5060;branch=z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22;alias, SIP/2.0/UDP 127.0.0.10:5060;branch=z9hG4bK-543537-1-0",
+			"Content-Length: 0",
+			"v=0",
+		}
+		msgstr := strings.Join(rawMsg, "\r\n")
+		_, err := parser.ParseSIP([]byte(msgstr))
+		require.ErrorIs(t, err, ErrParseInvalidMessage)
+	})
+	t.Run("finish empty line", func(t *testing.T) {
+		rawMsg := []string{
+			"SIP/2.0 180 Ringing",
+			"Via: SIP/2.0/UDP 127.0.0.20:5060;branch=z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22;alias, SIP/2.0/UDP 127.0.0.10:5060;branch=z9hG4bK-543537-1-0",
+			"Content-Length: 0",
+			"",
+		}
+		msgstr := strings.Join(rawMsg, "\r\n")
+		_, err := parser.ParseSIP([]byte(msgstr))
+		require.Error(t, err, ErrParseInvalidMessage)
+	})
+
+}
+
 func TestParseRequest(t *testing.T) {
 	branch := sip.GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
@@ -259,7 +291,7 @@ func TestParseRequest(t *testing.T) {
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
 		} {
 			_, err := parser.ParseSIP([]byte(msgstr))
-			assert.Equal(t, ErrLineNoCRLF, err)
+			assert.Equal(t, ErrParseLineNoCRLF, err)
 		}
 	})
 
@@ -332,6 +364,8 @@ func TestParseResponse(t *testing.T) {
 		"CSeq: 1 INVITE",
 		"Contact: <sip:127.0.0.30:5060;transport=UDP>",
 		"Content-Length: 0",
+		"",
+		"",
 	}
 
 	data := []byte(strings.Join(rawMsg, "\r\n"))
@@ -417,11 +451,13 @@ func BenchmarkParser(b *testing.B) {
 		"t=0 0",
 		"m=audio 6000 RTP/AVP 0",
 		"a=rtpmap:0 PCMU/8000",
+		"",
 	}
 	data := []byte(strings.Join(rawMsg, "\r\n"))
 	parser := NewParser()
 	b.ResetTimer()
-	testcase := func(b *testing.B) {
+
+	b.Run("SingleRoutine", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msg, err := parser.ParseSIP(data)
 			if err != nil {
@@ -431,9 +467,8 @@ func BenchmarkParser(b *testing.B) {
 				b.Fatal("Not INVITE")
 			}
 		}
-	}
+	})
 
-	b.Run("SingleRoutine", testcase)
 	b.Run("Paralel", func(b *testing.B) {
 		b.RunParallel(func(p *testing.PB) {
 			i := 0

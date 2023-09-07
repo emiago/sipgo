@@ -24,7 +24,12 @@ const abnfWs = " \t"
 const maxCseq = 2147483647
 
 var (
-	ErrLineNoCRLF = errors.New("line has no CRLF")
+	ErrParseLineNoCRLF     = errors.New("line has no CRLF")
+	ErrParseInvalidMessage = errors.New("invalid SIP message")
+
+	// Stream parse errors
+	ErrParseSipPartial         = errors.New("SIP partial data")
+	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 )
 
 var bufReader = sync.Pool{
@@ -46,7 +51,7 @@ func ParseMessage(msgData []byte) (sip.Message, error) {
 type Parser struct {
 	log zerolog.Logger
 	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
-	headersParsers map[string]HeaderParser
+	headersParsers mapHeadersParser
 }
 
 // ParserOption are addition option for NewParser. Check WithParser...
@@ -105,6 +110,9 @@ func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 		line, err := nextLine(reader)
 
 		if err != nil {
+			if err == io.EOF {
+				return nil, ErrParseInvalidMessage
+			}
 			return nil, err
 		}
 
@@ -113,7 +121,7 @@ func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 			break
 		}
 
-		err = p.parseMsgHeader(msg, line)
+		err = p.headersParsers.parseMsgHeader(msg, line)
 		if err != nil {
 			p.log.Info().Err(err).Str("line", line).Msg("skip header due to error")
 		}
@@ -127,7 +135,7 @@ func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 
 	// p.log.Debugf("%s reads body with length = %d bytes", p, contentLength)
 	body := make([]byte, contentLength)
-	total, err := nextChunk(reader, body)
+	total, err := reader.Read(body)
 	if err != nil {
 		return nil, fmt.Errorf("read message body failed: %w", err)
 	}
@@ -140,84 +148,19 @@ func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
 		)
 	}
 
-	if len(bytes.TrimSpace(body)) > 0 {
+	// Should we trim this?
+	// if len(bytes.TrimSpace(body)) > 0 {
+	if len(body) > 0 {
 		msg.SetBody(body)
 	}
 	return msg, nil
 }
 
-func (p *Parser) parseHeader(headerText string) (header sip.Header, err error) {
-	// p.log.Tracef("parsing header \"%s\"", headerText)
-
-	colonIdx := strings.Index(headerText, ":")
-	if colonIdx == -1 {
-		err = fmt.Errorf("field name with no value in header: %s", headerText)
-		return
-	}
-
-	fieldName := strings.TrimSpace(headerText[:colonIdx])
-	lowerFieldName := sip.HeaderToLower(fieldName)
-	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
-	if headerParser, ok := p.headersParsers[lowerFieldName]; ok {
-		// We have a registered parser for this header type - use it.
-		// header, err = headerParser(lowerFieldName, fieldText)
-		header, err = headerParser(lowerFieldName, fieldText)
-	} else {
-		// We have no registered parser for this header type,
-		// so we encapsulate the header data in a GenericHeader struct.
-		// p.log.Tracef("no parser for header type %s", fieldName)
-		header = sip.NewHeader(fieldName, fieldText)
-	}
-
-	return
-}
-
-// parseMsgHeader will append any parsed header
-// in case comma seperated values it will add them as new in case comma is detected
-func (p *Parser) parseMsgHeader(msg sip.Message, headerText string) (err error) {
-	// p.log.Tracef("parsing header \"%s\"", headerText)
-
-	colonIdx := strings.Index(headerText, ":")
-	if colonIdx == -1 {
-		err = fmt.Errorf("field name with no value in header: %s", headerText)
-		return
-	}
-
-	fieldName := strings.TrimSpace(headerText[:colonIdx])
-	lowerFieldName := sip.HeaderToLower(fieldName)
-	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
-
-	headerParser, ok := p.headersParsers[lowerFieldName]
-	if !ok {
-		// We have no registered parser for this header type,
-		// so we encapsulate the header data in a GenericHeader struct.
-
-		// TODO Should we check for comma here as well ??
-		header := sip.NewHeader(fieldName, fieldText)
-		msg.AppendHeader(header)
-		return nil
-	}
-
-	// Support comma seperated value
-	for {
-		// We have a registered parser for this header type - use it.
-		// headerParser should detect comma (,) and return as error
-		header, err := headerParser(lowerFieldName, fieldText)
-
-		// Mostly we will run with no error
-		if err == nil {
-			msg.AppendHeader(header)
-			return nil
-		}
-
-		commaErr, ok := err.(errComaDetected)
-		if !ok {
-			return err
-		}
-
-		// Ok we detected we have comma in header value
-		msg.AppendHeader(header)
-		fieldText = fieldText[commaErr+1:]
+// NewSIPStream implements SIP parsing contructor for stream
+// should be called per single stream
+func (p *Parser) NewSIPStream() *ParserStream {
+	return &ParserStream{
+		headersParsers: p.headersParsers, // safe as it read only
 	}
 }
 
@@ -247,16 +190,28 @@ func ParseLine(startLine string) (msg sip.Message, err error) {
 	return nil, fmt.Errorf("transmission beginning '%s' is not a SIP message", startLine)
 }
 
+// nextLine should read until it hits CRLF
+// ErrParseLineNoCRLF -> could not find CRLF in line
+//
+// https://datatracker.ietf.org/doc/html/rfc3261#section-7
+// empty line MUST be
+// terminated by a carriage-return line-feed sequence (CRLF).  Note that
+// the empty line MUST be present even if the message-body is not.
 func nextLine(reader *bytes.Buffer) (line string, err error) {
 	// Scan full line without buffer
 	// If we need to continue then try to grow
 	line, err = reader.ReadString('\n')
 	if err != nil {
-		if err == io.EOF {
-			return "", nil
-		}
+		// if err == io.EOF {
+		// 	if len(line) > 0 {
+		// 		return line, ErrParseLineNoCRLF
+		// 	}
 
-		return "", err
+		// 	return line, nil
+		// }
+
+		// We may get io.EOF and line till it was read
+		return line, err
 	}
 
 	// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
@@ -265,28 +220,15 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 	// the empty line MUST be present even if the message-body is not.
 	lenline := len(line)
 	if lenline < 2 {
-		return line, ErrLineNoCRLF
+		return line, ErrParseLineNoCRLF
 	}
 
 	if line[lenline-2] != '\r' {
-		return line, ErrLineNoCRLF
+		return line, ErrParseLineNoCRLF
 	}
 
 	line = line[:lenline-2]
 	return line, nil
-}
-
-func nextChunk(reader *bytes.Buffer, buf []byte) (n int, err error) {
-	var read int
-	total := 0
-	for total < len(buf) {
-		read, err = reader.Read(buf[total:])
-		total += read
-		if err != nil {
-			return
-		}
-	}
-	return total, nil
 }
 
 // Calculate the size of a SIP message's body, given the entire contents of the message as a byte array.

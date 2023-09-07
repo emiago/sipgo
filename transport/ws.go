@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -27,7 +28,7 @@ var (
 
 // WS transport implementation
 type WSTransport struct {
-	parser    sip.Parser
+	parser    *parser.Parser
 	log       zerolog.Logger
 	transport string
 
@@ -35,7 +36,7 @@ type WSTransport struct {
 	dialer ws.Dialer
 }
 
-func NewWSTransport(par sip.Parser) *WSTransport {
+func NewWSTransport(par *parser.Parser) *WSTransport {
 	p := &WSTransport{
 		parser:    par,
 		pool:      NewConnectionPool(),
@@ -127,6 +128,9 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler s
 	// defer t.pool.Del(raddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
 
+	// Create stream parser context
+	par := t.parser.NewSIPStream()
+
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
@@ -152,21 +156,35 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler s
 			continue
 		}
 
-		t.parse(data, raddr, handler)
+		// Check is keep alive
+		if len(data) <= 4 {
+			//One or 2 CRLF
+			if len(bytes.Trim(data, "\r\n")) == 0 {
+				t.log.Debug().Msg("Keep alive CRLF received")
+				continue
+			}
+		}
+
+		t.parseStream(par, data, raddr, handler)
 	}
 
 }
 
-func (t *WSTransport) parse(data []byte, src string, handler sip.MessageHandler) {
-	// Check is keep alive
-	if len(data) <= 4 {
-		//One or 2 CRLF
-		if len(bytes.Trim(data, "\r\n")) == 0 {
-			t.log.Debug().Msg("Keep alive CRLF received")
-			return
-		}
+// TODO: Try to reuse this from TCP transport as func are same
+func (t *WSTransport) parseStream(par *parser.ParserStream, data []byte, src string, handler sip.MessageHandler) {
+	msg, err := t.parser.ParseSIP(data) //Very expensive operation
+	if err != nil {
+		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
+		return
 	}
 
+	msg.SetTransport(t.transport)
+	msg.SetSource(src)
+	handler(msg)
+}
+
+// TODO use this when message size limit is defined
+func (t *WSTransport) parseFull(data []byte, src string, handler sip.MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")

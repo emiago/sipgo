@@ -8,25 +8,24 @@ import (
 	"net"
 	"sync"
 
+	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-var ()
-
 // TCP transport implementation
 type TCPTransport struct {
 	addr      string
 	transport string
-	parser    sip.Parser
+	parser    *parser.Parser
 	log       zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par sip.Parser) *TCPTransport {
+func NewTCPTransport(par *parser.Parser) *TCPTransport {
 	p := &TCPTransport{
 		parser:    par,
 		pool:      NewConnectionPool(),
@@ -148,6 +147,9 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 
 	defer t.pool.CloseAndDelete(conn, raddr)
 
+	// Create stream parser context
+	par := t.parser.NewSIPStream()
+
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
@@ -165,21 +167,39 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 			continue
 		}
 
+		// Check is keep alive
+		if len(data) <= 4 {
+			//One or 2 CRLF
+			if len(bytes.Trim(data, "\r\n")) == 0 {
+				t.log.Debug().Msg("Keep alive CRLF received")
+				continue
+			}
+		}
+
+		// TODO fallback to parseFull if message size limit is set
+
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		t.parse(data, raddr, handler)
+		t.parseStream(par, data, raddr, handler)
 	}
 }
 
-func (t *TCPTransport) parse(data []byte, src string, handler sip.MessageHandler) {
-	// Check is keep alive
-	if len(data) <= 4 {
-		//One or 2 CRLF
-		if len(bytes.Trim(data, "\r\n")) == 0 {
-			t.log.Debug().Msg("Keep alive CRLF received")
-			return
-		}
+func (t *TCPTransport) parseStream(par *parser.ParserStream, data []byte, src string, handler sip.MessageHandler) {
+	msg, err := par.ParseSIPStream(data)
+	if err == parser.ErrParseSipPartial {
+		return
+	}
+	if err != nil {
+		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
+		return
 	}
 
+	msg.SetTransport(t.Network())
+	msg.SetSource(src)
+	handler(msg)
+}
+
+// TODO use this when message size limit is defined
+func (t *TCPTransport) parseFull(data []byte, src string, handler sip.MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
