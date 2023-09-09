@@ -64,7 +64,7 @@ func UnmarshalParams(s string, seperator rune, ending rune, p sip.HeaderParams) 
 	}
 
 	// Do the last one
-	if sep > 0 && n >= 0 {
+	if sep > 0 && n >= 0 && (start < sep) {
 		p.Add(s[start:sep], s[sep+1:n])
 	}
 	// No seperator
