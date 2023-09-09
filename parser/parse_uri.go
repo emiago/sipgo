@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,6 +15,9 @@ type uriFSM func(uri *sip.Uri, s string) (uriFSM, string, error)
 // Following https://datatracker.ietf.org/doc/html/rfc3261#section-19.1.1
 // sip:user:password@host:port;uri-parameters?headers
 func ParseUri(uriStr string, uri *sip.Uri) (err error) {
+	if len(uriStr) == 0 {
+		return errors.New("Empty URI")
+	}
 	state := uriStateSIP
 	str := uriStr
 	for state != nil {
