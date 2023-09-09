@@ -27,12 +27,35 @@ func TestParseUri(t *testing.T) {
 		sip:alice;day=tuesday@atlanta.com
 	*/
 
-	str := "sip:alice@atlanta.com"
 	var uri sip.Uri
-	err := ParseUri(str, &uri)
-	require.Nil(t, err)
-	assert.Equal(t, "alice", uri.User)
-	assert.Equal(t, "atlanta.com", uri.Host)
+	var err error
+	var str string
+
+	testCases := []string{
+		"sip:alice@atlanta.com",
+		"SIP:alice@atlanta.com",
+		"sIp:alice@atlanta.com",
+	}
+	for _, testCase := range testCases {
+		err = ParseUri(testCase, &uri)
+		require.Nil(t, err)
+		assert.Equal(t, "alice", uri.User)
+		assert.Equal(t, "atlanta.com", uri.Host)
+		assert.False(t, uri.Encrypted)
+	}
+
+	testCases = []string{
+		"sips:alice@atlanta.com",
+		"SIPS:alice@atlanta.com",
+		"sIpS:alice@atlanta.com",
+	}
+	for _, testCase := range testCases {
+		err = ParseUri(testCase, &uri)
+		require.Nil(t, err)
+		assert.Equal(t, "alice", uri.User)
+		assert.Equal(t, "atlanta.com", uri.Host)
+		assert.True(t, uri.Encrypted)
+	}
 
 	uri = sip.Uri{}
 	str = "sips:alice@atlanta.com?subject=project%20x&priority=urgent"

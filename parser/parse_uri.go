@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/emiago/sipgo/sip"
 )
@@ -25,14 +26,12 @@ func ParseUri(uriStr string, uri *sip.Uri) (err error) {
 }
 
 func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
-	switch s[0] {
-	case 'S', 's':
-		if s[3] == 'S' || s[3] == 's' {
-			uri.Encrypted = true
-			return uriStateUser, s[5:], nil
-		}
+	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
 		return uriStateUser, s[4:], nil
-	default:
+	} else if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
+		uri.Encrypted = true
+		return uriStateUser, s[5:], nil
+	} else {
 		return uriStateHost, s, nil
 	}
 }
