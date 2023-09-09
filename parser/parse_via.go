@@ -64,6 +64,9 @@ func viaStateProtocolVersion(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 
 func viaStateProtocolTransport(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 	ind := strings.IndexAny(s, " \t")
+	if ind < 0 {
+		return nil, 0, errors.New("Malformed transport in Via header")
+	}
 	h.Transport = s[:ind]
 	return viaStateHost, ind + 1, nil
 }
