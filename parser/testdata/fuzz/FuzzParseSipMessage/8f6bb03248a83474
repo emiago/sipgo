@@ -1,0 +1,2 @@
+go test fuzz v1
+string("0 0 SIP\r\n00000000000000000000000\r\nm:0;0<\r\n")
