@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,9 @@ type viaFSM func(h *sip.ViaHeader, s string) (viaFSM, int, error)
 
 func viaStateProtocol(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 	ind := strings.IndexRune(s, '/')
+	if ind < 0 {
+		return nil, 0, errors.New("Malformed protocol name in Via header")
+	}
 	h.ProtocolName = s[:ind]
 	return viaStateProtocolVersion, ind + 1, nil
 }
