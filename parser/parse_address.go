@@ -22,8 +22,9 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 		case '"':
 			if startQuote < 0 {
 				startQuote = i
+			} else {
+				endQuote = i
 			}
-			endQuote = i
 		case '<':
 			if uriStart > 0 {
 				// This must be additional options parsing
