@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -81,6 +82,11 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 	if uriEnd < 0 {
 		uriEnd = len(addressText)
 	}
+
+	if uriStart > uriEnd {
+		return "", errors.New("Malormed URI")
+	}
+
 	err = ParseUri(addressText[uriStart:uriEnd], uri)
 	if err != nil {
 		return
