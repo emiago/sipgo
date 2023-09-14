@@ -239,10 +239,13 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 // ClientRequestAddRecordRoute is option for adding record route header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
 func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
+	// We will try to use our listen port. Host must be set to some none NAT IP
+	port := c.tp.GetListenPort(transport.NetworkToLower(r.Transport()))
+
 	rr := &sip.RecordRouteHeader{
 		Address: sip.Uri{
 			Host: c.host,
-			Port: c.port,
+			Port: port, // This must be listen port
 			UriParams: sip.HeaderParams{
 				// Transport must be provided as wesll
 				// https://datatracker.ietf.org/doc/html/rfc5658
