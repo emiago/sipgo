@@ -186,6 +186,14 @@ func (l *Layer) addListenPort(network string, port int) {
 	}
 }
 
+func (l *Layer) GetListenPort(network string) int {
+	ports, _ := l.listenPorts[network]
+	if len(ports) > 0 {
+		return ports[0]
+	}
+	return 0
+}
+
 func (l *Layer) WriteMsg(msg sip.Message) error {
 	network := msg.Transport()
 	addr := msg.Destination()
@@ -302,39 +310,52 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		return nil, fmt.Errorf("missing Via Header")
 	}
 
+	// TODO refactor code below
 	if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
 		c, _ := transport.GetConnection(addr)
 		if c != nil {
 			// Update Via sent by
 			// TODO avoid this parsing
-			laddr := c.LocalAddr().String()
-			host, port, err := sip.ParseAddr(laddr)
+
+			laddr := c.LocalAddr()
+			network := laddr.Network()
+			laddrStr := laddr.String()
+
+			// TODO handle broadcast address
+			host, port, err := sip.ParseAddr(laddrStr)
 			if err != nil {
-				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddr, err)
+				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
 			}
 
-			viaHop.Host = host
+			// In case client forced some host (like external IP) we do not want to overwrite
+			// Currently we always have this set as resolved IP
+			if viaHop.Host == "" {
+				viaHop.Host = host
+
+				// Leaving this for fallback as UDP can return us listener with on broadcast address (unspecified)
+				if network == "udp" {
+					// TODO refactor this
+					func() {
+						ip := net.ParseIP(host)
+						if ip == nil {
+							return
+						}
+						switch {
+						case ip.IsUnspecified():
+							l.log.Warn().Msg("External Via IP address is unspecified for UDP. Using 127.0.0.1")
+							viaHop.Host = "127.0.0.1" // TODO use resolve IP
+						default:
+							viaHop.Host = host
+						}
+					}()
+				}
+			}
+
 			viaHop.Port = port
 			return c, nil
 		}
 	}
-
-	// In case host is domain, IP will be nil and connection IP will be determine automatically
-	// We will still need to keep Host part as it is in Via for tracking
-
-	// rewrite our sent-by port
-	// if viaHop.Port <= 0 {
-	// 	// TODO should we here use connection port?
-	// 	// This makes no sense
-	// 	if ports, ok := l.listenPorts[network]; ok {
-	// 		port := ports[rand.Intn(len(ports))]
-	// 		viaHop.Port = port
-	// 	} else {
-	// 		defPort := sip.DefaultPort(network)
-	// 		viaHop.Port = int(defPort)
-	// 	}
-	// }
 
 	laddr := Addr{
 		IP: net.ParseIP(viaHop.Host),
@@ -349,15 +370,23 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		return nil, err
 	}
 
+	// TODO refactor this
 	switch {
-	case viaHop.Host == "" || laddr.IP == nil:
-		laddrStr := c.LocalAddr().String()
+	case viaHop.Host == "" || laddr.IP == nil: // If not specified by UAC we will override Via sent-by
+		fallthrough
+	case viaHop.Port == 0: // We still may need to rewrite sent-by port
+		// TODO avoid this parsing
+		l := c.LocalAddr()
+		laddrStr := l.String()
+
 		host, port, err = sip.ParseAddr(laddrStr)
 		if err != nil {
 			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
 		}
 
-		viaHop.Host = host
+		if viaHop.Host != "" {
+			viaHop.Host = host
+		}
 		viaHop.Port = port
 	}
 	return c, nil

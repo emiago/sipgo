@@ -1,6 +1,8 @@
 package transport
 
-import "testing"
+import (
+	"testing"
+)
 
 func BenchmarkSend(b *testing.B) {
 

@@ -56,7 +56,7 @@ func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			t.log.Error().Err(err).Msg("Fail to accept conenction")
+			t.log.Debug().Err(err).Msg("Fail to accept conenction")
 			return err
 		}
 
