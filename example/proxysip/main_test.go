@@ -359,6 +359,8 @@ func TestRegisterTCP(t *testing.T) {
 		"Expires: 90",
 		"Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
 		"l:  0",
+		"",
+		"",
 	})
 
 	res := client1.TestRequest(t, []byte(reg.String()))

@@ -75,13 +75,14 @@ func (req *Request) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString("\r\n")
 	// Write the headers.
 	req.headers.StringWrite(buffer)
+	// Empty line
+	buffer.WriteString("\r\n")
 	// message body
 	if req.body != nil {
-		buffer.WriteString("\r\n")
 		buffer.WriteString(string(req.body))
 		return
 	}
-	buffer.WriteString("\r\n")
+	// buffer.WriteString("\r\n")
 }
 
 func (req *Request) Clone() *Request {

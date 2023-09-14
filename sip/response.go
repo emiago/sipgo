@@ -77,12 +77,15 @@ func (res *Response) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString("\r\n")
 	// Write the headers.
 	res.headers.StringWrite(buffer)
+	// Empty line
+	buffer.WriteString("\r\n")
 	// message body
 	if res.body != nil {
-		buffer.WriteString("\r\n")
+		// buffer.WriteString("\r\n")
 		buffer.WriteString(string(res.body))
+		return
 	}
-	buffer.WriteString("\r\n")
+	// buffer.WriteString("\r\n")
 }
 
 func (res *Response) Clone() *Response {
