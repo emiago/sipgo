@@ -211,21 +211,24 @@ func NewResponseFromRequest(
 		res.AppendHeader(h.headerClone())
 	}
 
-	if statusCode == 100 {
+	// 8.2.6.2 Headers and Tags
+	// the response (with the exception of the 100 (Trying) response, in
+	// which a tag MAY be present). This serves to identify the UAS that is
+	// responding, possibly resulting in a component of a dialog ID. The
+	// same tag MUST be used for all responses to that request, both final
+	// and provisional (again excepting the 100 (Trying)). Procedures for
+	// the generation of tags are defined in Section 19.3.
+	switch statusCode {
+	case 100:
 		CopyHeaders("Timestamp", req, res)
-	}
-
-	if statusCode == 200 {
+	default:
 		if _, ok := res.to.Params["tag"]; !ok {
 			uuid, _ := uuid.NewV4()
 			res.to.Params["tag"] = uuid.String()
 		}
 	}
 
-	// if body != nil {
 	res.SetBody(body)
-	// }
-
 	res.SetTransport(req.Transport())
 	res.SetSource(req.Destination())
 	res.SetDestination(req.Source())

@@ -43,18 +43,22 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 	req.AppendHeader(&sip.FromHeader{
 		DisplayName: strings.ToUpper(sender.User),
 		Address: sip.Uri{
-			User: sender.User,
-			Host: sender.Host,
-			Port: sender.Port,
+			User:      sender.User,
+			Host:      sender.Host,
+			Port:      sender.Port,
+			UriParams: sip.NewParams(),
 		},
+		Params: sip.NewParams(),
 	})
 	req.AppendHeader(&sip.ToHeader{
 		DisplayName: strings.ToUpper(recipment.User),
 		Address: sip.Uri{
-			User: recipment.User,
-			Host: recipment.Host,
-			Port: recipment.Port,
+			User:      recipment.User,
+			Host:      recipment.Host,
+			Port:      recipment.Port,
+			UriParams: sip.NewParams(),
 		},
+		Params: sip.NewParams(),
 	})
 	callid := sip.CallIDHeader("gotest-" + time.Now().Format(time.RFC3339Nano))
 	req.AppendHeader(&callid)
