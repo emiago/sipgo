@@ -142,18 +142,19 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// A valid SIP request formulated by a UAC MUST, at a minimum, contain
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
 	// and Via;
+
 	if _, exists := req.Via(); !exists {
 		// Multi VIA value must be manually added
 		ClientRequestAddVia(c, req)
 	}
 
+	// From and To headers should not contain Port numbers, headers, uri params
 	if _, exists := req.From(); !exists {
 		from := sip.FromHeader{
 			DisplayName: c.name,
 			Address: sip.Uri{
 				User:      c.name,
 				Host:      c.host,
-				Port:      c.port,
 				UriParams: sip.NewParams(),
 				Headers:   sip.NewParams(),
 			},
@@ -169,9 +170,8 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 				Encrypted: req.Recipient.Encrypted,
 				User:      req.Recipient.User,
 				Host:      req.Recipient.Host,
-				Port:      req.Recipient.Port,
-				UriParams: req.Recipient.UriParams,
-				Headers:   req.Recipient.Headers,
+				UriParams: sip.NewParams(),
+				Headers:   sip.NewParams(),
 			},
 			Params: sip.NewParams(),
 		}

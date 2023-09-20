@@ -18,9 +18,11 @@ func TestClientRequestBuild(t *testing.T) {
 	require.Nil(t, err)
 
 	recipment := sip.Uri{
-		User: "bob",
-		Host: "10.2.2.2",
-		Port: 5060,
+		User:      "bob",
+		Host:      "10.2.2.2",
+		Port:      5060,
+		Headers:   sip.HeaderParams{"transport": "udp"},
+		UriParams: sip.HeaderParams{"foo": "bar"},
 	}
 
 	req := sip.NewRequest(sip.OPTIONS, &recipment)
@@ -32,11 +34,13 @@ func TestClientRequestBuild(t *testing.T) {
 
 	from, exists := req.From()
 	assert.True(t, exists)
+	// No ports should exists, headers, uriparams should exists, except tag
 	assert.Equal(t, "\"sipgo\" <sip:sipgo@10.0.0.0>;tag="+from.Params["tag"], from.Value())
 
 	to, exists := req.To()
 	assert.True(t, exists)
-	assert.Equal(t, "<"+recipment.String()+">", to.Value())
+	// No ports should exists, headers, uriparams should exists
+	assert.Equal(t, "<sip:bob@10.2.2.2>", to.Value())
 
 	callid, exists := req.CallID()
 	assert.True(t, exists)
@@ -80,11 +84,13 @@ func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 
 	from, exists := req.From()
 	assert.True(t, exists)
-	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com:5066>;tag="+from.Params["tag"], from.Value())
+	// No ports should exists
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com>;tag="+from.Params["tag"], from.Value())
 
 	to, exists := req.To()
 	assert.True(t, exists)
-	assert.Equal(t, "<"+recipment.String()+">", to.Value())
+	// No port should exists or special values
+	assert.Equal(t, "<sip:bob@10.2.2.2>", to.Value())
 }
 
 func TestClientRequestOptions(t *testing.T) {
