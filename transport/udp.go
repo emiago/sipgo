@@ -147,7 +147,7 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 
 	c := &UDPConnection{
 		Conn:     udpconn,
-		refcount: 1,
+		refcount: 1 + IdleConnection,
 	}
 
 	addr := uraddr.String()
