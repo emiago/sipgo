@@ -278,10 +278,8 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
-	addr := req.Destination()
-
 	// Resolve our remote address
-	host, port, err := sip.ParseAddr(addr)
+	host, port, err := sip.ParseAddr(req.Destination())
 	if err != nil {
 		return nil, fmt.Errorf("build address target for %s: %w", addr, err)
 	}
@@ -313,6 +311,7 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 	// TODO refactor code below
 	if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
+		addr := raddr.String()
 		c, _ := transport.GetConnection(addr)
 		if c != nil {
 			// Update Via sent by
@@ -355,6 +354,7 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 			viaHop.Port = port
 			return c, nil
 		}
+		l.log.Debug().Str("addr", addr).Msg("Active connection not found")
 	}
 
 	laddr := Addr{
@@ -396,6 +396,7 @@ func (l *Layer) resolveAddr(ctx context.Context, network string, host string, ad
 	// We need to try local resolving.
 	ip, err := net.ResolveIPAddr("ip", host)
 	if err == nil {
+		fmt.Println("Resolved ip ", ip.IP.String())
 		addr.IP = ip.IP
 		return nil
 	}
