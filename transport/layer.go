@@ -279,9 +279,10 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 	}
 
 	// Resolve our remote address
-	host, port, err := sip.ParseAddr(req.Destination())
+	a := req.Destination()
+	host, port, err := sip.ParseAddr(a)
 	if err != nil {
-		return nil, fmt.Errorf("build address target for %s: %w", addr, err)
+		return nil, fmt.Errorf("build address target for %s: %w", a, err)
 	}
 
 	// dns srv lookup
