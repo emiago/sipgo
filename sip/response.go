@@ -238,7 +238,7 @@ func NewResponseFromRequest(
 
 // NewSDPResponseFromRequest is wrapper for 200 response with SDP body
 func NewSDPResponseFromRequest(req *Request, body []byte) *Response {
-	res := NewResponseFromRequest(req, StatusOK, "OK", nil)
+	res := NewResponseFromRequest(req, StatusOK, "OK", body)
 	res.AppendHeader(NewHeader("Content-Type", "application/sdp"))
 	res.SetBody(body)
 	return res
