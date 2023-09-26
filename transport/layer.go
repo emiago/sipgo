@@ -397,7 +397,6 @@ func (l *Layer) resolveAddr(ctx context.Context, network string, host string, ad
 	// We need to try local resolving.
 	ip, err := net.ResolveIPAddr("ip", host)
 	if err == nil {
-		fmt.Println("Resolved ip ", ip.IP.String())
 		addr.IP = ip.IP
 		return nil
 	}
@@ -454,15 +453,6 @@ func (l *Layer) Close() error {
 }
 
 func IsReliable(network string) bool {
-	switch network {
-	case "tcp", "tls", "ws", "wss", "TCP", "TLS", "WS", "WSS":
-		return true
-	default:
-		return false
-	}
-}
-
-func IsStreamed(network string) bool {
 	switch network {
 	case "tcp", "tls", "ws", "wss", "TCP", "TLS", "WS", "WSS":
 		return true
