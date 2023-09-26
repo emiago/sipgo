@@ -93,10 +93,6 @@ func (t *TCPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 			IP:   laddr.IP,
 			Port: laddr.Port,
 		}
-
-		if tladdr.Port == 0 {
-			tladdr.Port = sip.DefaultTcpPort
-		}
 	}
 
 	traddr := &net.TCPAddr{

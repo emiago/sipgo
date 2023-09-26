@@ -129,10 +129,6 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 			IP:   laddr.IP,
 			Port: laddr.Port,
 		}
-
-		if uladdr.Port == 0 {
-			uladdr.Port = sip.DefaultUdpPort
-		}
 	}
 
 	uraddr := &net.UDPAddr{

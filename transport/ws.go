@@ -223,10 +223,6 @@ func (t *WSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Messa
 			IP:   laddr.IP,
 			Port: laddr.Port,
 		}
-
-		if tladdr.Port == 0 {
-			tladdr.Port = sip.DefaultTcpPort
-		}
 	}
 
 	traddr := &net.TCPAddr{
