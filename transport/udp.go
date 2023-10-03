@@ -2,6 +2,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -103,7 +104,7 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 }
 
 // CreateConnection will create new connection
-func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveUDPAddr("udp", addr)
 	// if err != nil {
 	// 	return nil, err

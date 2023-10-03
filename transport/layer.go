@@ -228,8 +228,9 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	//    one indicated in the top Via, the value in the top Via MUST be
 	//    changed.
 	case *sip.Request:
+		var ctx = context.Background()
 		//Every new request must be handled in seperate connection
-		conn, err = l.ClientRequestConnection(m)
+		conn, err = l.ClientRequestConnection(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -274,7 +275,7 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 //
 // In case req destination is DNS resolved, destination will be cached or in
 // other words SetDestination will be called
-func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err error) {
+func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
 	transport, ok := l.transports[network]
 	if !ok {
@@ -295,7 +296,6 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		Port: port,
 	}
 	if raddr.IP == nil {
-		ctx := context.Background()
 		// TODO: how to cache this address, for example reusing in dialog routing
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
 			return nil, err
@@ -372,7 +372,7 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 
 	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Msg("Via header used for creating connection")
 
-	c, err = transport.CreateConnection(laddr, raddr, l.handleMessage)
+	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 	if err != nil {
 		return nil, err
 	}

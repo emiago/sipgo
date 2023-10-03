@@ -41,7 +41,7 @@ func (t *TLSTransport) String() string {
 }
 
 // CreateConnection creates TLS connection for TCP transport
-func (t *TLSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -60,10 +60,10 @@ func (t *TLSTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 		Port: raddr.Port,
 	}
 
-	return t.createConnection(tladdr, traddr, handler)
+	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TLSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
