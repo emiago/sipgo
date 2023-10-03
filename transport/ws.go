@@ -236,9 +236,6 @@ func (t *WSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, 
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	// How to define local interface
 	if laddr != nil {
 		log.Error().Str("laddr", laddr.String()).Msg("Dialing with local IP is not supported on ws")

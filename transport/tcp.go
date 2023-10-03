@@ -107,7 +107,10 @@ func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	conn, err := net.DialTCP("tcp", laddr, raddr)
+	d := net.Dialer{
+		LocalAddr: laddr,
+	}
+	conn, err := d.DialContext(ctx, "tcp", raddr.String())
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
@@ -67,9 +66,6 @@ func (t *WSSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 func (t *WSSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	// How to pass local interface
 

@@ -123,7 +123,10 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		Port: raddr.Port,
 	}
 
-	udpconn, err := net.DialUDP("udp", uladdr, uraddr)
+	d := net.Dialer{
+		LocalAddr: uladdr,
+	}
+	udpconn, err := d.DialContext(ctx, "udp", uraddr.String())
 	if err != nil {
 		return nil, err
 	}
