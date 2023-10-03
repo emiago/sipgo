@@ -86,6 +86,14 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	return ua, nil
 }
 
+func (ua *UserAgent) Close() error {
+	// stop transaction layer
+	ua.tx.Close()
+
+	// stop transport layer
+	return ua.tp.Close()
+}
+
 // Listen adds listener for serve
 func (ua *UserAgent) setIP(ip net.IP) (err error) {
 	ua.ip = ip

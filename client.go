@@ -81,12 +81,9 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
+// Close client handle. UserAgent must be closed for full transaction and transport layer closing.
 func (c *Client) Close() error {
-	// stop transaction layer
-	c.tx.Close()
-
-	// stop transport layer
-	return c.tp.Close()
+	return nil
 }
 
 func (c *Client) GetHostname() string {

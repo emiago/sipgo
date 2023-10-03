@@ -260,5 +260,5 @@ func (tx *ClientTx) delete() {
 		tx.timer_d = nil
 	}
 	tx.mu.Unlock()
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Destroyed")
+	tx.log.Debug().Str("tx", tx.Key()).Msg("Client transaction destroyed")
 }

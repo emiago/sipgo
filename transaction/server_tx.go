@@ -222,6 +222,7 @@ func (tx *ServerTx) passResp() error {
 }
 
 func (tx *ServerTx) Terminate() {
+	tx.log.Debug().Msg("Server transaction terminating")
 	tx.delete()
 }
 
@@ -253,6 +254,11 @@ func (tx *ServerTx) delete() {
 		close(tx.done)
 		tx.mu.Unlock()
 		tx.onTerminate(tx.key)
+
+		// TODO with ref this can be added, but normally we expect client does closing
+		// if _, err := tx.conn.TryClose(); err != nil {
+		// 	tx.log.Info().Err(err).Msg("Closing connection returned error")
+		// }
 	})
 
 	// time.Sleep(time.Microsecond)
@@ -280,5 +286,5 @@ func (tx *ServerTx) delete() {
 		tx.timer_1xx = nil
 	}
 	tx.mu.Unlock()
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Destroyed")
+	tx.log.Debug().Str("tx", tx.Key()).Msg("Server transaction destroyed")
 }

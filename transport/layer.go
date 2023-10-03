@@ -271,6 +271,9 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 // ClientRequestConnection is based on
 // https://www.rfc-editor.org/rfc/rfc3261#section-18.1.1
 // It is wrapper for getting and creating connection
+//
+// In case req destination is DNS resolved, destination will be cached or in
+// other words SetDestination will be called
 func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
 	transport, ok := l.transports[network]
@@ -293,9 +296,12 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 	}
 	if raddr.IP == nil {
 		ctx := context.Background()
+		// TODO: how to cache this address, for example reusing in dialog routing
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
 			return nil, err
 		}
+		// Save destination in request to avoid repeated resolving
+		req.SetDestination(raddr.String())
 	}
 
 	// Now use Via header to determine our local address

@@ -29,7 +29,6 @@ var (
 type UDPTransport struct {
 	// listener *net.UDPConn
 	parser *parser.Parser
-	conn   *UDPConnection
 
 	pool      ConnectionPool
 	listeners []*UDPConnection
@@ -40,7 +39,6 @@ type UDPTransport struct {
 func NewUDPTransport(par *parser.Parser) *UDPTransport {
 	p := &UDPTransport{
 		parser: par,
-		conn:   nil, // Making sure interface is nil in returns
 		pool:   NewConnectionPool(),
 	}
 	p.log = log.Logger.With().Str("caller", "transport<UDP>").Logger()
@@ -71,14 +69,6 @@ func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) er
 
 	c := &UDPConnection{PacketConn: conn}
 
-	// In case single connection avoid pool
-	if len(t.listeners) == 0 {
-		t.conn = c
-	} else {
-		t.conn = nil
-	}
-
-	// t.listenersPool.Add(conn.LocalAddr().String(), c)
 	t.listeners = append(t.listeners, c)
 
 	for i := 0; i < UDPReadWorkers-1; i++ {
@@ -102,10 +92,6 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 	// Pool must be checked as it can be Client mode only and connection is created
 	if conn := t.pool.Get(addr); conn != nil {
 		return conn, nil
-	}
-
-	if t.conn != nil {
-		return t.conn, nil
 	}
 
 	// TODO: How to pick listener. Some address range mapping
@@ -160,7 +146,6 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 	defer conn.Close()
 	for {
 		num, raddr, err := conn.ReadFrom(buf)
-
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				t.log.Debug().Err(err).Msg("Read connection closed")
@@ -293,6 +278,7 @@ func (c *UDPConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", 0).Msg("UDP doing hard close")
 	return c.Conn.Close()
 }
 
@@ -315,7 +301,7 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return 0, nil
 	}
 
-	// log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("TCP closing")
+	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP closing")
 	return 0, c.Conn.Close()
 }
 
@@ -373,13 +359,18 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 	} else {
 		var err error
 
-		dst := msg.Destination()
-		raddr, err := net.ResolveUDPAddr("udp", dst)
+		// TODO lets return this better
+		dst := msg.Destination() // Destination should be already resolved by transport layer
+		host, port, err := sip.ParseAddr(dst)
 		if err != nil {
 			return err
 		}
+		raddr := net.UDPAddr{
+			IP:   net.ParseIP(host),
+			Port: port,
+		}
 
-		n, err = c.WriteTo(data, raddr)
+		n, err = c.WriteTo(data, &raddr)
 		if err != nil {
 			return fmt.Errorf("udp conn %s err. %w", c.PacketConn.LocalAddr().String(), err)
 		}

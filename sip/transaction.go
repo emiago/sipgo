@@ -18,6 +18,8 @@ type ServerTransaction interface {
 
 type ClientTransaction interface {
 	Transaction
+	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
+	// Cancel sends cancel request
 	Cancel() error
 }

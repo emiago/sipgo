@@ -246,12 +246,9 @@ func (srv *Server) WriteResponse(r *sip.Response) error {
 	return srv.tp.WriteMsg(r)
 }
 
-// Shutdown gracefully shutdowns SIP server
-func (srv *Server) Close() {
-	// stop transaction layer
-	srv.tx.Close()
-	// stop transport layer
-	srv.tp.Close()
+// Close server handle. UserAgent must be closed for full transaction and transport layer closing.
+func (srv *Server) Close() error {
+	return nil
 }
 
 // OnRequest registers new request callback. Can be used as generic way to add handler
