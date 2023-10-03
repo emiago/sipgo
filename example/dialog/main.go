@@ -92,8 +92,10 @@ func (h *Handler) route(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
+	ctx := context.Background()
+
 	// Start client transaction and relay our request
-	clTx, err := h.c.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+	clTx, err := h.c.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
 	if err != nil {
 		log.Error().Err(err).Msg("RequestWithContext  failed")
 		reply(tx, req, 500, "")
