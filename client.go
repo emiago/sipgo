@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -101,10 +102,10 @@ func (c *Client) GetHostname() string {
 // Passing options will override this behavior, that is it is expected
 // that you have request fully built
 // This is useful when using client handle in proxy building as request are already parsed
-func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
+func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
-		return c.tx.Request(req)
+		return c.tx.Request(ctx, req)
 	}
 
 	for _, o := range options {
@@ -112,7 +113,7 @@ func (c *Client) TransactionRequest(req *sip.Request, options ...ClientRequestOp
 			return nil, err
 		}
 	}
-	return c.tx.Request(req)
+	return c.tx.Request(ctx, req)
 }
 
 // WriteRequest sends request directly to transport layer
