@@ -105,13 +105,14 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 	}()
 
 	switch network {
-	case "udp":
+	case "udp", "udp4":
 		// resolve local UDP endpoint
-		laddr, err := net.ResolveUDPAddr("udp", addr)
+		laddr, err := net.ResolveUDPAddr(network, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
 		}
-		udpConn, err := net.ListenUDP("udp", laddr)
+
+		udpConn, err := net.ListenUDP(network, laddr)
 		if err != nil {
 			return fmt.Errorf("listen udp error. err=%w", err)
 		}
@@ -123,12 +124,12 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		return srv.tp.ServeUDP(udpConn)
 
 	case "ws", "tcp":
-		laddr, err := net.ResolveTCPAddr("tcp", addr)
+		laddr, err := net.ResolveTCPAddr(network, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
 		}
 
-		conn, err := net.ListenTCP("tcp", laddr)
+		conn, err := net.ListenTCP(network, laddr)
 		if err != nil {
 			return fmt.Errorf("listen tcp error. err=%w", err)
 		}

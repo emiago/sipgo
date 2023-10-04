@@ -100,7 +100,9 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		log.Fatal().Err(err).Msg("Fail to setup server handle")
 	}
 
-	client, err := sipgo.NewClient(ua)
+	client, err := sipgo.NewClient(ua, sipgo.WithClientAddr(
+		ip,
+	))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup client handle")
 	}

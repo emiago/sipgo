@@ -66,8 +66,7 @@ func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) er
 	/*
 		Multiple readers makes problem, which can delay writing response
 	*/
-
-	c := &UDPConnection{PacketConn: conn}
+	c := &UDPConnection{PacketConn: conn, PacketAddr: conn.LocalAddr().String()}
 
 	t.listeners = append(t.listeners, c)
 
@@ -88,15 +87,15 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 	// Single udp connection as listener can only be used as long IP of a packet in same network
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
+	for _, l := range t.listeners {
+		if l.PacketAddr == addr {
+			return l, nil
+		}
+	}
 
 	// Pool must be checked as it can be Client mode only and connection is created
 	if conn := t.pool.Get(addr); conn != nil {
 		return conn, nil
-	}
-
-	// TODO: How to pick listener. Some address range mapping
-	if len(t.listeners) > 0 {
-		return t.listeners[0], nil
 	}
 
 	return nil, nil
@@ -104,11 +103,6 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 
 // CreateConnection will create new connection
 func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
-	// raddr, err := net.ResolveUDPAddr("udp", addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	var uladdr *net.UDPAddr = nil
 	if laddr.IP != nil {
 		uladdr = &net.UDPAddr{
@@ -122,6 +116,9 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 		Port: raddr.Port,
 	}
 
+	// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
+	// via unicast 127.0.0.1
+	// This GO will fail to read as it is getting responses from 0.0.0.0
 	udpconn, err := net.DialUDP("udp", uladdr, uraddr)
 	if err != nil {
 		return nil, err
@@ -144,6 +141,8 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
+
+	var lastRaddr string
 	for {
 		num, raddr, err := conn.ReadFrom(buf)
 		if err != nil {
@@ -159,8 +158,15 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 		if len(bytes.Trim(data, "\x00")) == 0 {
 			continue
 		}
+		rastr := raddr.String()
+		if lastRaddr != rastr {
+			// In most cases we are in single connection mode so no need to keep adding in pool
+			// TODO this will never be cleaned
+			t.pool.Add(rastr, conn)
+		}
 
-		t.parseAndHandle(data, raddr.String(), handler)
+		t.parseAndHandle(data, rastr, handler)
+		lastRaddr = rastr
 	}
 }
 
@@ -171,7 +177,6 @@ func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.
 
 	for {
 		num, err := conn.Read(buf)
-
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug().Err(err).Msg("Read connection closed")
@@ -243,7 +248,9 @@ type UDPConnection struct {
 	// mutual exclusive for now
 	// TODO Refactor
 	PacketConn net.PacketConn
-	Conn       net.Conn
+	PacketAddr string // For faster matching
+
+	Conn net.Conn
 
 	mu       sync.RWMutex
 	refcount int
@@ -323,7 +330,7 @@ func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
 	if err == nil && SIPDebug {
-		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+		log.Debug().Msgf("UDP read from %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
 	}
 	return n, addr, err
 }
@@ -332,7 +339,7 @@ func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.PacketConn.WriteTo(b, addr)
 	if SIPDebug {
-		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+		log.Debug().Msgf("UDP write to %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
 	}
 	return n, err
 }

@@ -79,7 +79,8 @@ func MakeDialogIDFromRequest(msg *Request) (string, error) {
 
 func MakeDialogIDFromResponse(msg *Response) (string, error) {
 	var callID, innerID, externalID string = "", "", ""
-	if err := getDialogIDFromMessage(msg, &callID, &externalID, &innerID); err != nil {
+	// TODO switching this fields make no sense?
+	if err := getDialogIDFromMessage(msg, &callID, &innerID, &externalID); err != nil {
 		return "", err
 	}
 	return MakeDialogID(callID, innerID, externalID), nil

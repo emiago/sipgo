@@ -296,10 +296,10 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 	}
 	if raddr.IP == nil {
 		ctx := context.Background()
-		// TODO: how to cache this address, for example reusing in dialog routing
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
 			return nil, err
 		}
+
 		// Save destination in request to avoid repeated resolving
 		req.SetDestination(raddr.String())
 	}
@@ -315,15 +315,21 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 		return nil, fmt.Errorf("missing Via Header")
 	}
 
+	laddr := Addr{
+		IP: net.ParseIP(viaHop.Host),
+		// IP:   lIP,
+		Port: viaHop.Port,
+	}
+
 	// TODO refactor code below
 	if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
 		addr := raddr.String()
+
 		c, _ := transport.GetConnection(addr)
 		if c != nil {
 			// Update Via sent by
 			// TODO avoid this parsing
-
 			laddr := c.LocalAddr()
 			network := laddr.Network()
 			laddrStr := laddr.String()
@@ -339,35 +345,31 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 			if viaHop.Host == "" {
 				viaHop.Host = host
 
-				// Leaving this for fallback as UDP can return us listener with on broadcast address (unspecified)
-				if network == "udp" {
-					// TODO refactor this
-					func() {
-						ip := net.ParseIP(host)
-						if ip == nil {
-							return
-						}
-						switch {
-						case ip.IsUnspecified():
-							l.log.Warn().Msg("External Via IP address is unspecified for UDP. Using 127.0.0.1")
-							viaHop.Host = "127.0.0.1" // TODO use resolve IP
-						default:
-							viaHop.Host = host
-						}
-					}()
-				}
 			}
 
 			viaHop.Port = port
 			return c, nil
 		}
-		l.log.Debug().Str("addr", addr).Msg("Active connection not found")
-	}
 
-	laddr := Addr{
-		IP: net.ParseIP(viaHop.Host),
-		// IP:   lIP,
-		Port: viaHop.Port,
+		// In case client handle sets address same as UDP listen addr
+		// try grabbing listener for udp and send packet connectionless
+		if c == nil && network == "udp" && laddr.IP != nil && laddr.Port > 0 {
+			c, _ = transport.GetConnection(laddr.String())
+
+			if c != nil {
+				viaHop.Host = laddr.IP.String()
+				viaHop.Port = laddr.Port
+
+				// DO NOT USE unspecified IP with client handle
+				// switch {
+				// case laddr.IP.IsUnspecified():
+				// 	l.log.Warn().Msg("External Via IP address is unspecified for UDP. Using 127.0.0.1")
+				// 	viaHop.Host = "127.0.0.1" // TODO use resolve IP
+				// }
+				return c, nil
+			}
+		}
+		l.log.Debug().Str("addr", addr).Msg("Active connection not found")
 	}
 
 	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Msg("Via header used for creating connection")
@@ -400,6 +402,13 @@ func (l *Layer) ClientRequestConnection(req *sip.Request) (c Connection, err err
 }
 
 func (l *Layer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
+	defer func(start time.Time) {
+		if dur := time.Since(start); dur > 50*time.Millisecond {
+			l.log.Warn().Dur("dur", dur).Msg("DNS resolution is slow")
+		}
+	}(time.Now())
+
+	l.log.Debug().Str("host", host).Msg("DNS Resolving")
 	// We need to try local resolving.
 	ip, err := net.ResolveIPAddr("ip", host)
 	if err == nil {

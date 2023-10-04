@@ -169,8 +169,8 @@ func (hs *headers) PrependHeader(headers ...Header) {
 func (hs *headers) ReplaceHeader(header Header) {
 	for i, h := range hs.headerOrder {
 		if h.Name() == header.Name() {
-			hs.headerOrder[i] = h
-			hs.setHeaderRef(h)
+			hs.headerOrder[i] = header
+			hs.setHeaderRef(header)
 			break
 		}
 	}
