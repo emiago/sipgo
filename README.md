@@ -4,9 +4,11 @@
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/emiago/sipgo/LICENCE) 
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/emiago/sipgo)
 
-Library for writing fast SIP servers in GO language.  
+Library for writing fast SIP services in GO language.  
 It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)) optimized for fast parsing.
 
+For experimental features checkout also   
+[github.com/emiago/sipgox](https://github.com/emiago/sipgox)
 
 Fetch lib with:
 
