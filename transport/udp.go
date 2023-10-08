@@ -2,6 +2,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -102,7 +103,7 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 }
 
 // CreateConnection will create new connection
-func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
 	var uladdr *net.UDPAddr = nil
 	if laddr.IP != nil {
 		uladdr = &net.UDPAddr{
@@ -119,7 +120,10 @@ func (t *UDPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 	// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
 	// via unicast 127.0.0.1
 	// This GO will fail to read as it is getting responses from 0.0.0.0
-	udpconn, err := net.DialUDP("udp", uladdr, uraddr)
+	d := net.Dialer{
+		LocalAddr: uladdr,
+	}
+	udpconn, err := d.DialContext(ctx, "udp", uraddr.String())
 	if err != nil {
 		return nil, err
 	}

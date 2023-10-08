@@ -79,9 +79,10 @@ Forwarding request is done via client handle:
 ```go
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+    ctx := context.Background()
     req.SetDestination("10.1.2.3") // Change sip.Request destination
     // Start client transaction and relay our request. Add Via and Record-Route header
-    clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+    clTx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
     // Send back response
     res := <-cltx.Responses()
     tx.Respond(res)
@@ -134,18 +135,20 @@ srv.OnACK(ackHandler)
 Using client handle allows easy creating and sending request. All you need is this.
 ```go
 req := sip.NewRequest(sip.INVITE, recipient)
-tx, err := client.TransactionRequest(req, opts...) // Send request and get client transaction handle
+ctx := context.Background()
+tx, err := client.TransactionRequest(ctx, req, opts...) // Send request and get client transaction handle
 ```
 Unless you customize transaction request with opts by default `client.TransactionRequest` will build all other
 headers needed to pass correct sip request.
 
 Here is full example:
 ```go
+ctx := context.Background()
 client, _ := sipgo.NewClient(ua) // Creating client handle
 
 // Request is either from server request handler or created
 req.SetDestination("10.1.2.3") // Change sip.Request destination
-tx, err := client.TransactionRequest(req) // Send request and get client transaction handle
+tx, err := client.TransactionRequest(ctx, req) // Send request and get client transaction handle
 
 defer tx.Terminate() // Client Transaction must be terminated for cleanup
 ...
@@ -250,5 +253,3 @@ If you find this project interesting for bigger support or contributing, you can
 [mail](emirfreelance91@gmail.com) 
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
-
-

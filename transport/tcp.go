@@ -2,6 +2,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -81,7 +82,7 @@ func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *TCPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
 	// We are letting transport layer to resolve our address
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
@@ -99,14 +100,17 @@ func (t *TCPTransport) CreateConnection(laddr Addr, raddr Addr, handler sip.Mess
 		IP:   raddr.IP,
 		Port: raddr.Port,
 	}
-	return t.createConnection(tladdr, traddr, handler)
+	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TCPTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
-	conn, err := net.DialTCP("tcp", laddr, raddr)
+	d := net.Dialer{
+		LocalAddr: laddr,
+	}
+	conn, err := d.DialContext(ctx, "tcp", raddr.String())
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

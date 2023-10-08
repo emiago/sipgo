@@ -137,9 +137,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			return
 		}
 
+		ctx := context.Background()
+
 		req.SetDestination(dst)
 		// Start client transaction and relay our request
-		clTx, err := client.TransactionRequest(req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+		clTx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
 		if err != nil {
 			log.Error().Err(err).Msg("RequestWithContext  failed")
 			reply(tx, req, 500, "")

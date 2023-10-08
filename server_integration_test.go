@@ -172,7 +172,7 @@ func TestSimpleCall(t *testing.T) {
 			}
 
 			req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
-			tx, err := client.TransactionRequest(req)
+			tx, err := client.TransactionRequest(ctx, req)
 			require.NoError(t, err)
 
 			res := <-tx.Responses()

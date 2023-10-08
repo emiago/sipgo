@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"net"
 	"strconv"
 
@@ -36,7 +37,7 @@ const (
 type Transport interface {
 	Network() string
 	GetConnection(addr string) (Connection, error)
-	CreateConnection(laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error)
+	CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error)
 	String() string
 	Close() error
 }
