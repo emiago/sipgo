@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/emiago/sipgo/sip"
@@ -135,7 +136,7 @@ func (txl *Layer) handleResponse(res *sip.Response) {
 	}
 }
 
-func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
+func (txl *Layer) Request(ctx context.Context, req *sip.Request) (*ClientTx, error) {
 	if req.IsAck() {
 		return nil, fmt.Errorf("ACK request must be sent directly through transport")
 	}
@@ -149,7 +150,7 @@ func (txl *Layer) Request(req *sip.Request) (*ClientTx, error) {
 		return nil, fmt.Errorf("transaction %q already exists", key)
 	}
 
-	conn, err := txl.tpl.ClientRequestConnection(req)
+	conn, err := txl.tpl.ClientRequestConnection(ctx, req)
 	if err != nil {
 		return nil, err
 	}

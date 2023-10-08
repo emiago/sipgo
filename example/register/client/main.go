@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -64,7 +65,8 @@ func main() {
 	// Send request and parse response
 	// req.SetDestination(*dst)
 	log.Info().Msg(req.StartLine())
-	tx, err := client.TransactionRequest(req)
+	ctx := context.Background()
+	tx, err := client.TransactionRequest(ctx, req)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to create transaction")
 	}
@@ -95,7 +97,8 @@ func main() {
 		newReq := req.Clone()
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
-		tx, err := client.TransactionRequest(newReq)
+		ctx := context.Background()
+		tx, err := client.TransactionRequest(ctx, newReq)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Fail to create transaction")
 		}
