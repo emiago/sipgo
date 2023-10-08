@@ -313,24 +313,26 @@ func (c *UDPConnection) TryClose() (int, error) {
 }
 
 func (c *UDPConnection) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
 	if SIPDebug {
-		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b))
+		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
 	}
-	return c.Conn.Read(b)
+	return n, err
 }
 
 func (c *UDPConnection) Write(b []byte) (n int, err error) {
+	n, err = c.Conn.Write(b)
 	if SIPDebug {
-		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b))
+		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
 	}
-	return c.Conn.Write(b)
+	return n, err
 }
 
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
-	if err == nil && SIPDebug {
-		log.Debug().Msgf("UDP read from %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+	if SIPDebug {
+		log.Debug().Msgf("UDP read from %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
 	}
 	return n, addr, err
 }
@@ -339,7 +341,7 @@ func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.PacketConn.WriteTo(b, addr)
 	if SIPDebug {
-		log.Debug().Msgf("UDP write to %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b))
+		log.Debug().Msgf("UDP write to %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
 	}
 	return n, err
 }
