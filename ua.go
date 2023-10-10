@@ -48,6 +48,7 @@ func WithUserAgentDNSResolver(r *net.Resolver) UserAgentOption {
 }
 
 // WithUserAgenTLSConfig allows customizing default tls config.
+// This is for Client Transactions creating dials
 func WithUserAgenTLSConfig(c *tls.Config) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.tlsConfig = c
@@ -110,4 +111,8 @@ func (ua *UserAgent) Name() string {
 
 func (ua *UserAgent) TransportLayer() *transport.Layer {
 	return ua.tp
+}
+
+func (ua *UserAgent) TLSConfig() *tls.Config {
+	return ua.tlsConfig
 }

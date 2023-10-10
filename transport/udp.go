@@ -141,7 +141,6 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// Wrap it in reference
 	t.pool.Add(addr, c)
 	go t.readConnectedConnection(c, handler)
-
 	return c, err
 }
 

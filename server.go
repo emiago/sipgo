@@ -11,6 +11,7 @@ import (
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
+	"github.com/quic-go/quic-go"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -153,7 +154,6 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		if err != nil {
 			return fmt.Errorf("listen tcp error. err=%w", err)
 		}
-
 		connCloser = conn
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
 			close(v.(ListenReadyCtxValue))
@@ -209,9 +209,45 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 		}
 
 		return srv.tp.ServeTLS(listener)
+
+	case "quic":
+		laddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		l, err := net.ListenUDP("udp", laddr)
+		if err != nil {
+			return err
+		}
+
+		// . error handling
+		tr := quic.Transport{
+			Conn: l,
+		}
+
+		// lne, err := tr.ListenEarly(t.tlsConfig, &quic.Config{})
+		ln, err := tr.Listen(conf, &quic.Config{
+			// EnableDatagrams: true,
+		})
+		if err != nil {
+			return err
+		}
+
+		connCloser = ln
+		if v := ctx.Value(ListenReadyCtxKey); v != nil {
+			close(v.(ListenReadyCtxValue))
+		}
+
+		return srv.tp.ServeQuic(ln)
 	}
 
 	return transport.ErrNetworkNotSuported
+}
+
+// ServeUDP starts serving request on UDP type listener.
+func (srv *Server) ServeQuic(l *quic.Listener) error {
+	return srv.tp.ServeQuic(l)
 }
 
 // ServeUDP starts serving request on UDP type listener.

@@ -62,6 +62,10 @@ func (tx *commonTx) OnTerminate(f FnTxTerminate) {
 	tx.onTerminate = f
 }
 
+func (tx *commonTx) Connection() transport.Connection {
+	return tx.conn
+}
+
 // Choose the right FSM init function depending on request method.
 func (tx *commonTx) spinFsm(in FsmInput) {
 	tx.fsmMu.Lock()

@@ -18,9 +18,10 @@ func Init() {
 
 type Client struct {
 	*UserAgent
-	host string
-	port int
-	log  zerolog.Logger
+	host     string
+	port     int
+	username string
+	log      zerolog.Logger
 }
 
 type ClientOption func(c *Client) error
@@ -50,6 +51,14 @@ func WithClientPort(port int) ClientOption {
 	}
 }
 
+// WithClientPort allows setting default route port
+func WithClientUsername(username string) ClientOption {
+	return func(s *Client) error {
+		s.username = username
+		return nil
+	}
+}
+
 // WithClientAddr is merge of WithClientHostname and WithClientPort
 // addr is format <host>:<port>
 func WithClientAddr(addr string) ClientOption {
@@ -69,6 +78,7 @@ func WithClientAddr(addr string) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
+		username:  ua.name, // Default username is useragent DISPLAY name unless set otherwise
 		host:      ua.GetIP().String(),
 		log:       log.Logger.With().Str("caller", "Client").Logger(),
 	}
@@ -151,7 +161,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		from := sip.FromHeader{
 			DisplayName: c.name,
 			Address: sip.Uri{
-				User:      c.name,
+				User:      c.username,
 				Host:      c.host,
 				UriParams: sip.NewParams(),
 				Headers:   sip.NewParams(),

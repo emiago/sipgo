@@ -659,10 +659,10 @@ func (h *CSeqHeader) ValueStringWrite(buffer io.StringWriter) {
 }
 
 func (h *CSeqHeader) headerClone() Header {
-	if h == nil {
-		var newCSeq *CSeqHeader
-		return newCSeq
-	}
+	// if h == nil {
+	// 	var newCSeq *CSeqHeader
+	// 	return newCSeq
+	// }
 
 	return &CSeqHeader{
 		SeqNo:      h.SeqNo,

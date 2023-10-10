@@ -95,6 +95,7 @@ func TestIntegrationClientServer(t *testing.T) {
 		{transport: "ws", serverAddr: "127.1.1.100:5061"},
 		{transport: "tls", serverAddr: "127.1.1.100:5062", encrypted: true},
 		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
+		{transport: "quic", serverAddr: "127.1.1.100:5064", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -188,6 +189,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		{transport: "ws", serverAddr: "127.1.1.100:5061"},
 		{transport: "tls", serverAddr: "127.1.1.100:5062", encrypted: true},
 		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
+		{transport: "quic", serverAddr: "127.1.1.100:5064", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())

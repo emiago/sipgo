@@ -12,6 +12,7 @@ import (
 
 	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
+	"github.com/quic-go/quic-go"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,11 +28,12 @@ func init() {
 
 // Layer implementation.
 type Layer struct {
-	udp *UDPTransport
-	tcp *TCPTransport
-	tls *TLSTransport
-	ws  *WSTransport
-	wss *WSSTransport
+	udp  *UDPTransport
+	tcp  *TCPTransport
+	tls  *TLSTransport
+	ws   *WSTransport
+	wss  *WSSTransport
+	quic *QuicTransport
 
 	transports map[string]Transport
 
@@ -74,12 +76,15 @@ func NewLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.wss = NewWSSTransport(sipparser, tlsConfig)
 
+	l.quic = NewQuicTransport(sipparser, tlsConfig)
+
 	// Fill map for fast access
 	l.transports["udp"] = l.udp
 	l.transports["tcp"] = l.tcp
 	l.transports["tls"] = l.tls
 	l.transports["ws"] = l.ws
 	l.transports["wss"] = l.wss
+	l.transports["quic"] = l.quic
 
 	return l
 }
@@ -113,6 +118,21 @@ func (l *Layer) handleMessage(msg sip.Message) {
 	for _, h := range l.handlers {
 		h(msg)
 	}
+}
+
+// TODO this needs tls config, but we will use from UserAgent for now
+func (l *Layer) ServeQuic(c *quic.Listener) error {
+	// udpConn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 1234})
+
+	_, port, err := sip.ParseAddr(c.Addr().String())
+	if err != nil {
+		return err
+	}
+
+	l.addListenPort("quic", port)
+
+	return l.quic.Serve(c, l.handleMessage)
+
 }
 
 // ServeUDP will listen on udp connection
@@ -491,6 +511,8 @@ func NetworkToLower(network string) string {
 		return "ws"
 	case "WSS":
 		return "wss"
+	case "QUIC":
+		return "quic"
 	default:
 		return sip.ASCIIToLower(network)
 	}

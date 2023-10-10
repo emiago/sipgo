@@ -133,6 +133,11 @@ func (tx *ClientTx) Err() error {
 	return err
 }
 
+// Connection returns underlying connection
+func (tx *ClientTx) Connection() transport.Connection {
+	return tx.conn
+}
+
 func (tx *ClientTx) cancel() {
 	if !tx.origin.IsInvite() {
 		return
