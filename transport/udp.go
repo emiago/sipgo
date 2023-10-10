@@ -123,7 +123,9 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	d := net.Dialer{
 		LocalAddr: uladdr,
 	}
-	udpconn, err := d.DialContext(ctx, "udp", uraddr.String())
+
+	addr := uraddr.String()
+	udpconn, err := d.DialContext(ctx, "udp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +135,6 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		refcount: 1 + IdleConnection,
 	}
 
-	addr := uraddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("New connection")
 
 	// Wrap it in reference

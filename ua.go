@@ -104,6 +104,10 @@ func (ua *UserAgent) GetIP() net.IP {
 	return ua.ip
 }
 
+func (ua *UserAgent) Name() string {
+	return ua.name
+}
+
 func (ua *UserAgent) TransportLayer() *transport.Layer {
 	return ua.tp
 }
