@@ -354,6 +354,7 @@ func TestParseRequest(t *testing.T) {
 		"a=ssrc:1129373754 cname:2ab364994c4b0b3f",
 		"a=rtcp:58805 IN IP4 192.168.178.22",
 		"a=rtcp-mux",
+		"",
 	}
 
 	msgstr := strings.Join(rawMsg, "\r\n")
