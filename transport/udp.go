@@ -131,8 +131,9 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	}
 
 	c := &UDPConnection{
-		Conn:     udpconn,
-		refcount: 1 + IdleConnection,
+		Conn: udpconn,
+		// 1 ref for current return , 2 ref for reader
+		refcount: 2 + IdleConnection,
 	}
 
 	t.log.Debug().Str("raddr", addr).Msg("New connection")
@@ -140,6 +141,7 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// Wrap it in reference
 	t.pool.Add(addr, c)
 	go t.readConnectedConnection(c, handler)
+
 	return c, err
 }
 

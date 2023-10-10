@@ -112,6 +112,9 @@ func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	// }
 
 	c := t.initConnection(conn, addr, handler)
+
+	// Increase ref by 1 before returnin
+	c.Ref(1)
 	return c, nil
 }
 

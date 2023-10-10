@@ -84,5 +84,6 @@ func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	}
 
 	c := t.initConnection(conn, addr, handler)
+	c.Ref(1)
 	return c, nil
 }

@@ -75,5 +75,6 @@ func (t *WSSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	}
 
 	c := t.initConnection(conn, addr, true, handler)
+	c.Ref(1)
 	return c, nil
 }
