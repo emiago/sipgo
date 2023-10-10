@@ -65,19 +65,7 @@ func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	}
 }
 
-func (t *TCPTransport) ResolveAddr(addr string) (net.Addr, error) {
-	return net.ResolveTCPAddr("tcp", addr)
-}
-
 func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	addr = raddr.String()
-
-	t.log.Debug().Str("addr", addr).Msg("Getting connection")
-
 	c := t.pool.Get(addr)
 	return c, nil
 }

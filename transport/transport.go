@@ -36,6 +36,9 @@ const (
 // Protocol implements network specific features.
 type Transport interface {
 	Network() string
+
+	// GetConnection returns connection from transport
+	// addr must be resolved to IP:port
 	GetConnection(addr string) (Connection, error)
 	CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error)
 	String() string

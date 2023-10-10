@@ -447,6 +447,7 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
+	l.log.Debug().Str("network", network).Str("addr", addr).Msg("getting connection")
 	c, err := transport.GetConnection(addr)
 	if err == nil && c == nil {
 		return nil, fmt.Errorf("connection %q does not exist", addr)
