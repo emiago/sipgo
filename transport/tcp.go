@@ -175,18 +175,21 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 }
 
 func (t *TCPTransport) parseStream(par *parser.ParserStream, data []byte, src string, handler sip.MessageHandler) {
-	msg, err := par.ParseSIPStream(data)
+	msgs, err := par.ParseSIPStream(data)
 	if err == parser.ErrParseSipPartial {
 		return
 	}
-	if err != nil {
-		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
-		return
-	}
 
-	msg.SetTransport(t.Network())
-	msg.SetSource(src)
-	handler(msg)
+	for _, msg := range msgs {
+		if err != nil {
+			t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
+			return
+		}
+
+		msg.SetTransport(t.Network())
+		msg.SetSource(src)
+		handler(msg)
+	}
 }
 
 // TODO use this when message size limit is defined

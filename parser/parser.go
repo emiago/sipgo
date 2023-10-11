@@ -30,6 +30,7 @@ var (
 	// Stream parse errors
 	ErrParseSipPartial         = errors.New("SIP partial data")
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
+	ErrParseMoreMessages       = errors.New("Stream has more message")
 )
 
 var bufReader = sync.Pool{

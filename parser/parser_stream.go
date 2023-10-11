@@ -48,7 +48,7 @@ func (p *ParserStream) reset() {
 
 // ParseSIPStream parsing messages comming in stream
 // It has slight overhead vs parsing full message
-func (p *ParserStream) ParseSIPStream(data []byte) (msg sip.Message, err error) {
+func (p *ParserStream) ParseSIPStream(data []byte) (msgs []sip.Message, err error) {
 	if p.reader == nil {
 		p.reader = streamBufReader.Get().(*bytes.Buffer)
 		p.reader.Reset()
@@ -59,7 +59,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msg sip.Message, err error) 
 
 	unparsed := reader.Bytes() // TODO find a better way as we only want to move our offset
 
-	msg, err = func(reader *bytes.Buffer) (msg sip.Message, err error) {
+	parseSingle := func(reader *bytes.Buffer) (msg sip.Message, err error) {
 
 		// TODO change this with functions and store last function state
 		switch p.state {
@@ -160,19 +160,36 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msg sip.Message, err error) 
 		default:
 			return nil, fmt.Errorf("Parser is in unknown state")
 		}
+	}
 
-	}(reader)
+	for {
+		msg, err := parseSingle(reader)
+		switch err {
+		case ErrParseLineNoCRLF, ErrParseReadBodyIncomplete:
+			reader.Reset()
+			reader.Write(unparsed)
+			return nil, ErrParseSipPartial
+		}
 
-	switch err {
-	case ErrParseLineNoCRLF, ErrParseReadBodyIncomplete:
+		if err != nil {
+			return nil, err
+		}
+
+		msgs = append(msgs, msg)
+		if len(unparsed) == 0 {
+			// Maybe we need to check did empty spaces left
+			break
+		}
+
+		p.reset()
 		reader.Reset()
 		reader.Write(unparsed)
-		return nil, ErrParseSipPartial
+		p.reader = reader
 	}
 
 	// IN all other cases do reset
 	streamBufReader.Put(reader)
 	p.reset()
 
-	return msg, err
+	return
 }

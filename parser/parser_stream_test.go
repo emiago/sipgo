@@ -172,7 +172,8 @@ func TestParserStreamMessage(t *testing.T) {
 		require.ErrorIs(t, err, ErrParseSipPartial)
 
 		t.Logf("Parsing part 3:\n%s", string(part3))
-		msg, err := parser.ParseSIPStream(part3)
+		msgs, err := parser.ParseSIPStream(part3)
+		msg := msgs[0]
 		require.NoError(t, err)
 		require.NotNil(t, msg)
 		require.Len(t, msg.Body(), 3119)
@@ -239,6 +240,63 @@ func TestParserStreamChunky(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParserStreamMultiple(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+	lines := []string{
+		"SIP/2.0 100 Trying",
+		"Via: SIP/2.0/quic 192.168.100.11:56410;branch=z9hG4bK.DRYA6NEOgFJO1t91;alias",
+		"From: \"sipgo\" <sip:sipgo@192.168.100.11>;tag=ywgNMIh4OhKwGSFa",
+		"To: <sips:123@127.1.1.100>",
+		"Call-ID: e3644aeb-f2bb-4499-9620-68b5ffd27017",
+		"CSeq: 1 INVITE",
+		"Content-Length: 0",
+		"",
+		"SIP/2.0 200 OK",
+		"Via: SIP/2.0/quic 192.168.100.11:56410;branch=z9hG4bK.DRYA6NEOgFJO1t91;alias",
+		"From: \"sipgo\" <sip:sipgo@192.168.100.11>;tag=ywgNMIh4OhKwGSFa",
+		"To: <sips:123@127.1.1.100>;tag=7f9b9f9b-319b-48f4-98bf-9922c498fcaf",
+		"Call-ID: e3644aeb-f2bb-4499-9620-68b5ffd27017",
+		"CSeq: 1 INVITE",
+		"Content-Length: 183",
+		"Content-Type: application/sdp",
+		"",
+		"v=0",
+		"o=user1 3906001344 3906001344 IN IP4 192.168.100.11",
+		"s=Sip Go Media",
+		"c=IN IP4 192.168.100.11",
+		"t=0 0",
+		"m=audio 0 RTP/AVP 0 8",
+		"a=sendrecv",
+		"a=rtpmap:0 PCMU/8000",
+		"a=rtpmap:8 PCMA/8000",
+	}
+
+	data := []byte((strings.Join(lines, "\r\n")))
+
+	msgs, err := parser.ParseSIPStream(data)
+	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	require.Equal(t, msgs[0].(*sip.Response).StartLine(), "SIP/2.0 100 Trying")
+	require.Equal(t, msgs[1].(*sip.Response).StartLine(), "SIP/2.0 200 OK")
+
+	t.Run("with chunks", func(t *testing.T) {
+		chunks := [][]byte{
+			data[:100],
+			data[100:200],
+			data[200:],
+		}
+
+		var msgs []sip.Message
+		var err error
+		for _, c := range chunks {
+			msgs, err = parser.ParseSIPStream(c)
+		}
+		require.NoError(t, err)
+		require.Len(t, msgs, 2)
+	})
+}
+
 func BenchmarkParserStream(b *testing.B) {
 	branch := sip.GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
@@ -276,11 +334,12 @@ func BenchmarkParserStream(b *testing.B) {
 			var msg sip.Message
 			var err error
 
-			msg, err = pstream.ParseSIPStream(data)
+			msgs, err := pstream.ParseSIPStream(data)
 			if err != nil {
 				b.Fatal("Parsing failed", err)
 			}
 
+			msg = msgs[0]
 			if req, _ := msg.(*sip.Request); !req.IsInvite() {
 				b.Fatal("Not INVITE")
 			}
@@ -291,17 +350,18 @@ func BenchmarkParserStream(b *testing.B) {
 	b.Run("SingleRoutine", func(b *testing.B) {
 		pstream := parser.NewSIPStream()
 		for i := 0; i < b.N; i++ {
-			var msg sip.Message
+			var msgs []sip.Message
 			var err error
 
 			for _, data := range chunks {
-				msg, err = pstream.ParseSIPStream(data)
+				msgs, err = pstream.ParseSIPStream(data)
 			}
 
 			if err != nil {
 				b.Fatal("Parsing failed", err)
 			}
 
+			msg := msgs[0]
 			if req, _ := msg.(*sip.Request); !req.IsInvite() {
 				b.Fatal("Not INVITE")
 			}
@@ -313,15 +373,16 @@ func BenchmarkParserStream(b *testing.B) {
 			i := 0
 			pstream := parser.NewSIPStream()
 			for p.Next() {
-				var msg sip.Message
+				var msgs []sip.Message
 				var err error
 
 				for _, data := range chunks {
-					msg, err = pstream.ParseSIPStream(data)
+					msgs, err = pstream.ParseSIPStream(data)
 				}
 				if err != nil {
 					b.Fatal("Parsing failed", err)
 				}
+				msg := msgs[0]
 
 				if req, _ := msg.(*sip.Request); !req.IsInvite() {
 					b.Fatal("Not INVITE")
