@@ -1,4 +1,4 @@
-package sipgotest
+package siptest
 
 import (
 	"github.com/emiago/sipgo/sip"
