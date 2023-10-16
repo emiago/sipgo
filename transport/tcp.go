@@ -98,7 +98,7 @@ func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	d := net.Dialer{
 		LocalAddr: laddr,
 	}
-	conn, err := d.DialContext(ctx, "tcp", raddr.String())
+	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}

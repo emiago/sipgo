@@ -470,10 +470,10 @@ func (l *Layer) Close() error {
 
 func IsReliable(network string) bool {
 	switch network {
-	case "tcp", "tls", "ws", "wss", "TCP", "TLS", "WS", "WSS":
-		return true
-	default:
+	case "udp", "UDP":
 		return false
+	default:
+		return true
 	}
 }
 
