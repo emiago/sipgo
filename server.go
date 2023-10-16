@@ -16,6 +16,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	// Used only for testing, better way is to pass listener with Serve{Transport}
+	ListenReadyCtxKey = "ListenReadyCtxKey"
+)
+
+type ListenReadyCtxValue chan struct{}
+
 // RequestHandler is a callback that will be called on the incoming request
 type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
 
@@ -79,11 +86,6 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-var (
-	// Used only for testing, better way is to pass listener with Serve{Transport}
-	ctxTestListenAndServeReady = "ctxTestListenAndServeReady"
-)
-
 // Serve will fire all listeners
 // Network supported: udp, tcp, ws
 func (srv *Server) ListenAndServe(ctx context.Context, network string, addr string) error {
@@ -118,12 +120,12 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = udpConn
-		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
-			close(v.(chan any))
+		if v := ctx.Value(ListenReadyCtxKey); v != nil {
+			close(v.(ListenReadyCtxValue))
 		}
 		return srv.tp.ServeUDP(udpConn)
 
-	case "ws", "tcp":
+	case "tcp", "tcp4":
 		laddr, err := net.ResolveTCPAddr(network, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -135,15 +137,29 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = conn
-		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
-			close(v.(chan any))
-		}
-		// and uses listener to buffer
-		if network == "ws" {
-			return srv.tp.ServeWS(conn)
+		if v := ctx.Value(ListenReadyCtxKey); v != nil {
+			close(v.(ListenReadyCtxValue))
 		}
 
 		return srv.tp.ServeTCP(conn)
+	case "ws":
+		network = "tcp"
+		laddr, err := net.ResolveTCPAddr(network, addr)
+		if err != nil {
+			return fmt.Errorf("fail to resolve address. err=%w", err)
+		}
+
+		conn, err := net.ListenTCP(network, laddr)
+		if err != nil {
+			return fmt.Errorf("listen tcp error. err=%w", err)
+		}
+
+		connCloser = conn
+		if v := ctx.Value(ListenReadyCtxKey); v != nil {
+			close(v.(ListenReadyCtxValue))
+		}
+		// and uses listener to buffer
+		return srv.tp.ServeWS(conn)
 	}
 	return transport.ErrNetworkNotSuported
 }
@@ -185,8 +201,8 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 
 		connCloser = listener
 
-		if v := ctx.Value(ctxTestListenAndServeReady); v != nil {
-			close(v.(chan any))
+		if v := ctx.Value(ListenReadyCtxKey); v != nil {
+			close(v.(ListenReadyCtxValue))
 		}
 		if network == "ws" || network == "wss" {
 			return srv.tp.ServeWSS(listener)

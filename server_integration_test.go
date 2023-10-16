@@ -1,5 +1,3 @@
-//go:build integration
-
 package sipgo
 
 import (
@@ -9,6 +7,7 @@ import (
 	_ "embed"
 	"errors"
 	"net"
+	"os"
 	"sync"
 	"testing"
 
@@ -78,7 +77,12 @@ func testClientTlsConfig(t *testing.T) *tls.Config {
 	return tlsConf
 }
 
-func TestSimpleCall(t *testing.T) {
+func TestIntegrationSimpleCall(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
 	ua, _ := NewUA()
 
 	serverTLS := testServerTlsConfig(t)
@@ -122,8 +126,8 @@ func TestSimpleCall(t *testing.T) {
 		wg.Add(1)
 
 		// Trick to make sure we are listening
-		serverReady := make(chan any)
-		ctx = context.WithValue(ctx, ctxTestListenAndServeReady, serverReady)
+		serverReady := make(chan struct{})
+		ctx = context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(serverReady))
 
 		go func(transport string, serverAddr string, encrypted bool) {
 			defer wg.Done()
