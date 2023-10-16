@@ -821,6 +821,7 @@ func (h *ViaHeader) Clone() *ViaHeader {
 	if h.Params != nil {
 		newHop.Params = h.Params.clone()
 	}
+
 	return newHop
 }
 

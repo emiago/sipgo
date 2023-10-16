@@ -317,14 +317,21 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	return cancelReq
 }
 
-// NewByeRequest creates bye request from invite
-// TODO do some testing
-func NewByeRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
-	Recipient := inviteRequest.Recipient
+// NewByeRequestUAC creates bye request from established dialog
+// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.1
+// TODO UAS
+func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
+
+	recipient := inviteRequest.Recipient
+	cont, exists := inviteResponse.Contact()
+	if exists {
+		// BYE is subsequent request
+		recipient = &cont.Address
+	}
 
 	byeRequest := NewRequest(
 		BYE,
-		Recipient,
+		recipient,
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
 	CopyHeaders("Via", inviteRequest, byeRequest)
@@ -369,7 +376,7 @@ func NewByeRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	byeRequest.SetBody(body)
 	byeRequest.SetTransport(inviteRequest.Transport())
 	byeRequest.SetSource(inviteRequest.Source())
-	byeRequest.SetDestination(inviteRequest.Destination())
+	// byeRequest.SetDestination(inviteRequest.Destination())
 
 	return byeRequest
 }
