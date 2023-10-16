@@ -67,7 +67,7 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 	return req
 }
 
-func createTestInvite(t *testing.T, targetSipUri string, transport, addr string) (*sip.Request, string, string) {
+func createTestInvite(t testing.TB, targetSipUri string, transport, addr string) (*sip.Request, string, string) {
 	branch := sip.GenerateBranch()
 	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
 	ftag := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -84,7 +84,7 @@ func createTestInvite(t *testing.T, targetSipUri string, transport, addr string)
 	}).(*sip.Request), callid, ftag
 }
 
-func createTestBye(t *testing.T, targetSipUri string, transport, addr string, callid string, ftag string, totag string) *sip.Request {
+func createTestBye(t testing.TB, targetSipUri string, transport, addr string, callid string, ftag string, totag string) *sip.Request {
 	branch := sip.GenerateBranch()
 	return testCreateMessage(t, []string{
 		"BYE " + targetSipUri + " SIP/2.0",

@@ -38,7 +38,7 @@ var (
 	clientKEY []byte
 )
 
-func testServerTlsConfig(t *testing.T) *tls.Config {
+func testServerTlsConfig(t testing.TB) *tls.Config {
 	require.NotEmpty(t, serverCRT)
 	require.NotEmpty(t, serverKEY)
 
@@ -51,7 +51,7 @@ func testServerTlsConfig(t *testing.T) *tls.Config {
 	return cfg
 }
 
-func testClientTlsConfig(t *testing.T) *tls.Config {
+func testClientTlsConfig(t testing.TB) *tls.Config {
 	require.NotEmpty(t, clientCRT)
 	require.NotEmpty(t, clientKEY)
 	require.NotEmpty(t, rootCA)
@@ -77,7 +77,7 @@ func testClientTlsConfig(t *testing.T) *tls.Config {
 	return tlsConf
 }
 
-func TestIntegrationSimpleCall(t *testing.T) {
+func TestIntegrationClientServer(t *testing.T) {
 	if os.Getenv("TEST_INTEGRATION") == "" {
 		t.Skip("Use TEST_INTEGRATION env value to run this test")
 		return
@@ -183,6 +183,108 @@ func TestIntegrationSimpleCall(t *testing.T) {
 			assert.Equal(t, sip.StatusCode(200), res.StatusCode)
 
 			tx.Terminate()
+		})
+	}
+}
+
+func BenchmarkIntegrationClientServer(t *testing.B) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
+	ua, _ := NewUA()
+
+	serverTLS := testServerTlsConfig(t)
+	clientTLS := testClientTlsConfig(t)
+
+	testCases := []struct {
+		transport  string
+		serverAddr string
+		encrypted  bool
+	}{
+		{transport: "udp", serverAddr: "127.1.1.100:5060"},
+		{transport: "tcp", serverAddr: "127.1.1.100:5060"},
+		{transport: "ws", serverAddr: "127.1.1.100:5061"},
+		{transport: "tls", serverAddr: "127.1.1.100:5062", encrypted: true},
+		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
+	}
+
+	srv, err := NewServer(ua)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to setup dialog server")
+	}
+
+	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+		if err := tx.Respond(res); err != nil {
+			t.Fatal(err)
+		}
+		<-tx.Done()
+	})
+
+	ctx, shutdown := context.WithCancel(context.Background())
+	wg := sync.WaitGroup{}
+
+	t.Cleanup(func() {
+		shutdown()
+		wg.Wait()
+	})
+
+	for _, tc := range testCases {
+		wg.Add(1)
+
+		// Trick to make sure we are listening
+		serverReady := make(chan struct{})
+		ctx = context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(serverReady))
+
+		go func(transport string, serverAddr string, encrypted bool) {
+			defer wg.Done()
+
+			if encrypted {
+				err := srv.ListenAndServeTLS(ctx, transport, serverAddr, serverTLS)
+				if err != nil && !errors.Is(err, net.ErrClosed) {
+					t.Error("ListenAndServe error: ", err)
+				}
+				return
+			}
+
+			err := srv.ListenAndServe(ctx, transport, serverAddr)
+			if err != nil && !errors.Is(err, net.ErrClosed) {
+				t.Error("ListenAndServe error: ", err)
+			}
+		}(tc.transport, tc.serverAddr, tc.encrypted)
+		<-serverReady
+	}
+
+	t.Log("Server ready")
+
+	for _, tc := range testCases {
+		t.Run(tc.transport, func(t *testing.B) {
+			// Doing gracefull shutdown
+
+			// Build UAC
+			ua, _ = NewUA(WithUserAgenTLSConfig(clientTLS))
+			client, err := NewClient(ua)
+			require.NoError(t, err)
+
+			proto := "sip"
+			if tc.encrypted {
+				proto = "sips"
+			}
+
+			t.ResetTimer()
+			for i := 0; i < t.N; i++ {
+				req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+				tx, err := client.TransactionRequest(ctx, req)
+				require.NoError(t, err)
+
+				res := <-tx.Responses()
+				assert.Equal(t, sip.StatusCode(200), res.StatusCode)
+
+				tx.Terminate()
+			}
+			t.ReportMetric(float64(t.N)/t.Elapsed().Seconds(), "req/s")
 		})
 	}
 }
