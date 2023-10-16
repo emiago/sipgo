@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -83,8 +82,6 @@ func TestIntegrationClientServer(t *testing.T) {
 		return
 	}
 
-	ua, _ := NewUA()
-
 	serverTLS := testServerTlsConfig(t)
 	clientTLS := testClientTlsConfig(t)
 
@@ -100,36 +97,33 @@ func TestIntegrationClientServer(t *testing.T) {
 		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
 	}
 
-	srv, err := NewServer(ua)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup dialog server")
-	}
-
-	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-		t.Log("Invite received")
-		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-		if err := tx.Respond(res); err != nil {
-			t.Fatal(err)
-		}
-		<-tx.Done()
-	})
-
 	ctx, shutdown := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
-
 	t.Cleanup(func() {
 		shutdown()
 		wg.Wait()
 	})
 
 	for _, tc := range testCases {
-		wg.Add(1)
+		ua, _ := NewUA()
+		srv, err := NewServer(ua)
+		require.NoError(t, err)
+
+		srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+			t.Log("Invite received")
+			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+			if err := tx.Respond(res); err != nil {
+				t.Fatal(err)
+			}
+			<-tx.Done()
+		})
 
 		// Trick to make sure we are listening
 		serverReady := make(chan struct{})
 		ctx = context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(serverReady))
 
-		go func(transport string, serverAddr string, encrypted bool) {
+		wg.Add(1)
+		go func(srv *Server, transport string, serverAddr string, encrypted bool) {
 			defer wg.Done()
 
 			if encrypted {
@@ -144,32 +138,20 @@ func TestIntegrationClientServer(t *testing.T) {
 			if err != nil && !errors.Is(err, net.ErrClosed) {
 				t.Error("ListenAndServe error: ", err)
 			}
-		}(tc.transport, tc.serverAddr, tc.encrypted)
+		}(srv, tc.transport, tc.serverAddr, tc.encrypted)
 		<-serverReady
+		t.Log("Server ready")
 	}
-
-	t.Log("Server ready")
 
 	for _, tc := range testCases {
 		t.Run(tc.transport, func(t *testing.T) {
 			// Doing gracefull shutdown
 
 			// Build UAC
-			ua, _ = NewUA(WithUserAgenTLSConfig(clientTLS))
+			ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
 			client, err := NewClient(ua)
 			require.NoError(t, err)
 
-			// csrv, err := NewServer(ua) // Create server handle
-			// require.Nil(t, err)
-
-			// wg.Add(1)
-			// go func() {
-			// 	defer wg.Done()
-			// 	err := csrv.ListenAndServe(ctx, tc.transport, "127.1.1.200:5066")
-			// 	if err != nil && !errors.Is(err, net.ErrClosed) {
-			// 		t.Error("ListenAndServe error: ", err)
-			// 	}
-			// }()
 			proto := "sip"
 			if tc.encrypted {
 				proto = "sips"
@@ -193,8 +175,6 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		return
 	}
 
-	ua, _ := NewUA()
-
 	serverTLS := testServerTlsConfig(t)
 	clientTLS := testClientTlsConfig(t)
 
@@ -210,35 +190,33 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
 	}
 
-	srv, err := NewServer(ua)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup dialog server")
-	}
-
-	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-		if err := tx.Respond(res); err != nil {
-			t.Fatal(err)
-		}
-		<-tx.Done()
-	})
-
 	ctx, shutdown := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
-
 	t.Cleanup(func() {
 		shutdown()
 		wg.Wait()
 	})
 
 	for _, tc := range testCases {
-		wg.Add(1)
+		ua, _ := NewUA()
+		srv, err := NewServer(ua)
+		require.NoError(t, err)
+
+		srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+			t.Log("Invite received")
+			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+			if err := tx.Respond(res); err != nil {
+				t.Fatal(err)
+			}
+			<-tx.Done()
+		})
 
 		// Trick to make sure we are listening
 		serverReady := make(chan struct{})
 		ctx = context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(serverReady))
 
-		go func(transport string, serverAddr string, encrypted bool) {
+		wg.Add(1)
+		go func(srv *Server, transport string, serverAddr string, encrypted bool) {
 			defer wg.Done()
 
 			if encrypted {
@@ -253,18 +231,15 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 			if err != nil && !errors.Is(err, net.ErrClosed) {
 				t.Error("ListenAndServe error: ", err)
 			}
-		}(tc.transport, tc.serverAddr, tc.encrypted)
+		}(srv, tc.transport, tc.serverAddr, tc.encrypted)
 		<-serverReady
+		t.Log("Server ready")
 	}
-
-	t.Log("Server ready")
 
 	for _, tc := range testCases {
 		t.Run(tc.transport, func(t *testing.B) {
-			// Doing gracefull shutdown
-
 			// Build UAC
-			ua, _ = NewUA(WithUserAgenTLSConfig(clientTLS))
+			ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
 			client, err := NewClient(ua)
 			require.NoError(t, err)
 
