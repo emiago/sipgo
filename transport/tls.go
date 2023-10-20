@@ -78,7 +78,7 @@ func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 		Config: t.tlsConf,
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", raddr.String())
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
