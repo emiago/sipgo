@@ -16,6 +16,26 @@ Fetch lib with:
 
 **NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
+## Supported protocols
+
+- [x] UDP
+- [x] TCP
+- [x] TLS
+- [x] WS
+- [x] WSS
+
+## Examples
+
+- Stateful proxy [example/proxysip](example/proxysip)  
+- Register with authentication [example/register](example/register)  
+- Dialog [example/dialog](example/dialog)  
+
+## Tools developed:
+- CLI softphone for easy testing [gophone](https://github.com/emiago/sipgo-tools#gophone)
+- Simple proxy where NAT is problem [psip](https://github.com/emiago/sipgo-tools#psip)
+- ... your tool can be here
+
+***If you use this lib in some way, open issue for more sharing.***
 ## Performance
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
@@ -24,16 +44,9 @@ To find out more about performance check the latest results:
 
 (Contributions are welcome, I would place your results here)
 
-## Examples
-
-- Stateful proxy [example/proxysip](example/proxysip)  
-- Register with authentication [example/register](example/register)  
-- Dialog [example/dialog](example/dialog)  
-
-***If you use this lib in some way, open issue for more sharing.***
 ## Usage
 
-Lib allows you to write easily sip servers(or clients) or to build up stateful proxies, registrar or any sip routing.
+Lib allows you to write easily sip servers, clients, stateful proxies, registrars or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
 
@@ -226,13 +239,7 @@ Content-Length:  0
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
 
 
-## Supported protocols
 
-- [x] UDP
-- [x] TCP
-- [x] TLS
-- [x] WS
-- [x] WSS
 
 
 ## Tests
