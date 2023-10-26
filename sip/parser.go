@@ -100,7 +100,7 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 		return nil, err
 	}
 
-	msg, err = ParseLine(startLine)
+	msg, err = parseLine(startLine)
 	if err != nil {
 		return nil, err
 	}
@@ -163,10 +163,10 @@ func (p *Parser) NewSIPStream() *ParserStream {
 	}
 }
 
-func ParseLine(startLine string) (msg Message, err error) {
+func parseLine(startLine string) (msg Message, err error) {
 	if isRequest(startLine) {
 		recipient := Uri{}
-		method, sipVersion, err := ParseRequestLine(startLine, &recipient)
+		method, sipVersion, err := parseRequestLine(startLine, &recipient)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func ParseLine(startLine string) (msg Message, err error) {
 	}
 
 	if isResponse(startLine) {
-		sipVersion, statusCode, reason, err := ParseStatusLine(startLine)
+		sipVersion, statusCode, reason, err := parseStatusLine(startLine)
 		if err != nil {
 			return nil, err
 		}
@@ -295,7 +295,7 @@ func isResponse(startLine string) bool {
 //
 //	INVITE bob@example.com SIP/2.0
 //	REGISTER jane@telco.com SIP/1.0
-func ParseRequestLine(requestLine string, recipient *Uri) (
+func parseRequestLine(requestLine string, recipient *Uri) (
 	method RequestMethod, sipVersion string, err error) {
 	parts := strings.Split(requestLine, " ")
 	if len(parts) != 3 {
@@ -319,7 +319,7 @@ func ParseRequestLine(requestLine string, recipient *Uri) (
 //
 //	SIP/2.0 200 OK
 //	SIP/1.0 403 Forbidden
-func ParseStatusLine(statusLine string) (
+func parseStatusLine(statusLine string) (
 	sipVersion string, statusCode StatusCode, reasonPhrase string, err error) {
 	parts := strings.Split(statusLine, " ")
 	if len(parts) < 3 {

@@ -526,7 +526,7 @@ func BenchmarkParseStartLine(b *testing.B) {
 	d := "INVITE sip:bob@127.0.0.1:5060 SIP/2.0"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := ParseLine(d)
+		_, err := parseLine(d)
 		if err != nil {
 			b.Fatal(err)
 		}

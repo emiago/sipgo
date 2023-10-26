@@ -71,7 +71,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 				return nil, err
 			}
 
-			msg, err = ParseLine(startLine)
+			msg, err = parseLine(startLine)
 			if err != nil {
 				return nil, err
 			}
