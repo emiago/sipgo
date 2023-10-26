@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/fakes"
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transport"
 
@@ -26,14 +25,14 @@ var (
 )
 
 func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
-	msg, err := parser.ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
+	msg, err := sip.ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return msg
 }
 
-func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *parser.Parser) {
+func inviteScenario(t testing.TB, client1, client2 fakes.TestConnection, p *sip.Parser) {
 	// client2 := testCreateUDPListener(t, "udp", client2Addr)
 	// defer client2.Close()
 
@@ -204,7 +203,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestInviteCallUDP(t *testing.T) {
-	p := parser.NewParser()
+	p := sip.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()
 	client2Reader, client2Writer := io.Pipe()
@@ -252,7 +251,7 @@ func TestInviteCallUDP(t *testing.T) {
 
 func TestInviteCallTCP(t *testing.T) {
 	transport.SIPDebug = true
-	p := parser.NewParser()
+	p := sip.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	serverReader2, serverWriter2 := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()
@@ -308,7 +307,7 @@ func TestInviteCallTCP(t *testing.T) {
 }
 
 func TestRegisterTCP(t *testing.T) {
-	p := parser.NewParser()
+	p := sip.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	// serverReader2, serverWriter2 := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()

@@ -9,7 +9,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -20,13 +19,13 @@ import (
 type TCPTransport struct {
 	addr      string
 	transport string
-	parser    *parser.Parser
+	parser    *sip.Parser
 	log       zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par *parser.Parser) *TCPTransport {
+func NewTCPTransport(par *sip.Parser) *TCPTransport {
 	p := &TCPTransport{
 		parser:    par,
 		pool:      NewConnectionPool(),
@@ -174,9 +173,9 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 	}
 }
 
-func (t *TCPTransport) parseStream(par *parser.ParserStream, data []byte, src string, handler sip.MessageHandler) {
+func (t *TCPTransport) parseStream(par *sip.ParserStream, data []byte, src string, handler sip.MessageHandler) {
 	msgs, err := par.ParseSIPStream(data)
-	if err == parser.ErrParseSipPartial {
+	if err == sip.ErrParseSipPartial {
 		return
 	}
 

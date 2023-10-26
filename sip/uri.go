@@ -36,7 +36,7 @@ type Uri struct {
 
 	// Any headers to be included on requests constructed from this URI.
 	// These appear as a '&'-separated list at the end of the URI, introduced by '?'.
-	// Although the values of the map are sip.strings, they will never be NoString in practice as the parser
+	// Although the values of the map are strings, they will never be NoString in practice as the parser
 	// guarantees to not return blank values for header elements in SIP URIs.
 	// You should not set the values of headers to NoString.
 	Headers HeaderParams

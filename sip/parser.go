@@ -1,4 +1,4 @@
-package parser
+package sip
 
 import (
 	"bytes"
@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -42,12 +40,12 @@ var bufReader = sync.Pool{
 	},
 }
 
-func ParseMessage(msgData []byte) (sip.Message, error) {
+func ParseMessage(msgData []byte) (Message, error) {
 	parser := NewParser()
 	return parser.ParseSIP(msgData)
 }
 
-// Parser is implementation of sip.SIPParser
+// Parser is implementation of SIPParser
 // It is optimized with faster header parsing
 type Parser struct {
 	log zerolog.Logger
@@ -91,7 +89,7 @@ func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
 }
 
 // ParseSIP converts data to sip message. Buffer must contain full sip message
-func (p *Parser) ParseSIP(data []byte) (msg sip.Message, err error) {
+func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 	reader := bufReader.Get().(*bytes.Buffer)
 	defer bufReader.Put(reader)
 	reader.Reset()
@@ -165,15 +163,15 @@ func (p *Parser) NewSIPStream() *ParserStream {
 	}
 }
 
-func ParseLine(startLine string) (msg sip.Message, err error) {
+func ParseLine(startLine string) (msg Message, err error) {
 	if isRequest(startLine) {
-		recipient := sip.Uri{}
+		recipient := Uri{}
 		method, sipVersion, err := ParseRequestLine(startLine, &recipient)
 		if err != nil {
 			return nil, err
 		}
 
-		m := sip.NewRequest(method, &recipient)
+		m := NewRequest(method, &recipient)
 		m.SipVersion = sipVersion
 		return m, nil
 	}
@@ -184,7 +182,7 @@ func ParseLine(startLine string) (msg sip.Message, err error) {
 			return nil, err
 		}
 
-		m := sip.NewResponse(statusCode, reason)
+		m := NewResponse(statusCode, reason)
 		m.SipVersion = sipVersion
 		return m, nil
 	}
@@ -271,7 +269,7 @@ func isRequest(startLine string) bool {
 		return false
 	}
 
-	return sip.UriIsSIP(part2[:3])
+	return UriIsSIP(part2[:3])
 }
 
 // Heuristic to determine if the given transmission looks like a SIP response.
@@ -290,22 +288,22 @@ func isResponse(startLine string) bool {
 		return false
 	}
 
-	return sip.UriIsSIP(startLine[:3])
+	return UriIsSIP(startLine[:3])
 }
 
 // Parse the first line of a SIP request, e.g:
 //
 //	INVITE bob@example.com SIP/2.0
 //	REGISTER jane@telco.com SIP/1.0
-func ParseRequestLine(requestLine string, recipient *sip.Uri) (
-	method sip.RequestMethod, sipVersion string, err error) {
+func ParseRequestLine(requestLine string, recipient *Uri) (
+	method RequestMethod, sipVersion string, err error) {
 	parts := strings.Split(requestLine, " ")
 	if len(parts) != 3 {
 		err = fmt.Errorf("request line should have 2 spaces: '%s'", requestLine)
 		return
 	}
 
-	method = sip.RequestMethod(strings.ToUpper(parts[0]))
+	method = RequestMethod(strings.ToUpper(parts[0]))
 	err = ParseUri(parts[1], recipient)
 	sipVersion = parts[2]
 
@@ -322,7 +320,7 @@ func ParseRequestLine(requestLine string, recipient *sip.Uri) (
 //	SIP/2.0 200 OK
 //	SIP/1.0 403 Forbidden
 func ParseStatusLine(statusLine string) (
-	sipVersion string, statusCode sip.StatusCode, reasonPhrase string, err error) {
+	sipVersion string, statusCode StatusCode, reasonPhrase string, err error) {
 	parts := strings.Split(statusLine, " ")
 	if len(parts) < 3 {
 		err = fmt.Errorf("status line has too few spaces: '%s'", statusLine)
@@ -331,7 +329,7 @@ func ParseStatusLine(statusLine string) (
 
 	sipVersion = parts[0]
 	statusCodeRaw, err := strconv.ParseUint(parts[1], 10, 16)
-	statusCode = sip.StatusCode(statusCodeRaw)
+	statusCode = StatusCode(statusCodeRaw)
 	reasonPhrase = strings.Join(parts[2:], " ")
 
 	return

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog/log"
@@ -20,7 +19,7 @@ type WSSTransport struct {
 }
 
 // NewWSSTransport needs dialTLSConf for creating connections when dialing
-func NewWSSTransport(par *parser.Parser, dialTLSConf *tls.Config) *WSSTransport {
+func NewWSSTransport(par *sip.Parser, dialTLSConf *tls.Config) *WSSTransport {
 	tcptrans := NewWSTransport(par)
 	tcptrans.transport = TransportWSS
 	// Set our TLS config

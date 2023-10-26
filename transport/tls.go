@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog/log"
@@ -23,7 +22,7 @@ type TLSTransport struct {
 }
 
 // NewTLSTransport needs dialTLSConf for creating connections when dialing
-func NewTLSTransport(par *parser.Parser, dialTLSConf *tls.Config) *TLSTransport {
+func NewTLSTransport(par *sip.Parser, dialTLSConf *tls.Config) *TLSTransport {
 	tcptrans := NewTCPTransport(par)
 	tcptrans.transport = TransportTLS //Override transport
 	p := &TLSTransport{

@@ -1,4 +1,4 @@
-package parser
+package sip
 
 import (
 	"bytes"
@@ -6,8 +6,6 @@ import (
 	"io"
 	"strconv"
 	"sync"
-
-	"github.com/emiago/sipgo/sip"
 )
 
 const (
@@ -34,7 +32,7 @@ type ParserStream struct {
 
 	// runtime values
 	reader            *bytes.Buffer
-	msg               sip.Message
+	msg               Message
 	readContentLength int
 	state             int
 }
@@ -48,7 +46,7 @@ func (p *ParserStream) reset() {
 
 // ParseSIPStream parsing messages comming in stream
 // It has slight overhead vs parsing full message
-func (p *ParserStream) ParseSIPStream(data []byte) (msgs []sip.Message, err error) {
+func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 	if p.reader == nil {
 		p.reader = streamBufReader.Get().(*bytes.Buffer)
 		p.reader.Reset()
@@ -59,7 +57,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []sip.Message, err erro
 
 	unparsed := reader.Bytes() // TODO find a better way as we only want to move our offset
 
-	parseSingle := func(reader *bytes.Buffer) (msg sip.Message, err error) {
+	parseSingle := func(reader *bytes.Buffer) (msg Message, err error) {
 
 		// TODO change this with functions and store last function state
 		switch p.state {
@@ -120,7 +118,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []sip.Message, err erro
 
 			// TODO: Have fast reference instead casting
 			var contentLength int
-			if clh, ok := h.(*sip.ContentLengthHeader); ok {
+			if clh, ok := h.(*ContentLengthHeader); ok {
 				contentLength = int(*clh)
 			} else {
 				n, err := strconv.Atoi(h.Value())

@@ -1,4 +1,4 @@
-package parser
+package sip
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/stretchr/testify/require"
 )
 
@@ -277,8 +276,8 @@ func TestParserStreamMultiple(t *testing.T) {
 	msgs, err := parser.ParseSIPStream(data)
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
-	require.Equal(t, msgs[0].(*sip.Response).StartLine(), "SIP/2.0 100 Trying")
-	require.Equal(t, msgs[1].(*sip.Response).StartLine(), "SIP/2.0 200 OK")
+	require.Equal(t, msgs[0].(*Response).StartLine(), "SIP/2.0 100 Trying")
+	require.Equal(t, msgs[1].(*Response).StartLine(), "SIP/2.0 200 OK")
 
 	t.Run("with chunks", func(t *testing.T) {
 		chunks := [][]byte{
@@ -287,7 +286,7 @@ func TestParserStreamMultiple(t *testing.T) {
 			data[200:],
 		}
 
-		var msgs []sip.Message
+		var msgs []Message
 		var err error
 		for _, c := range chunks {
 			msgs, err = parser.ParseSIPStream(c)
@@ -298,7 +297,7 @@ func TestParserStreamMultiple(t *testing.T) {
 }
 
 func BenchmarkParserStream(b *testing.B) {
-	branch := sip.GenerateBranch()
+	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
 	rawMsg := []string{
 		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
@@ -331,7 +330,7 @@ func BenchmarkParserStream(b *testing.B) {
 	b.Run("NoChunks", func(b *testing.B) {
 		pstream := parser.NewSIPStream()
 		for i := 0; i < b.N; i++ {
-			var msg sip.Message
+			var msg Message
 			var err error
 
 			msgs, err := pstream.ParseSIPStream(data)
@@ -340,7 +339,7 @@ func BenchmarkParserStream(b *testing.B) {
 			}
 
 			msg = msgs[0]
-			if req, _ := msg.(*sip.Request); !req.IsInvite() {
+			if req, _ := msg.(*Request); !req.IsInvite() {
 				b.Fatal("Not INVITE")
 			}
 
@@ -350,7 +349,7 @@ func BenchmarkParserStream(b *testing.B) {
 	b.Run("SingleRoutine", func(b *testing.B) {
 		pstream := parser.NewSIPStream()
 		for i := 0; i < b.N; i++ {
-			var msgs []sip.Message
+			var msgs []Message
 			var err error
 
 			for _, data := range chunks {
@@ -362,7 +361,7 @@ func BenchmarkParserStream(b *testing.B) {
 			}
 
 			msg := msgs[0]
-			if req, _ := msg.(*sip.Request); !req.IsInvite() {
+			if req, _ := msg.(*Request); !req.IsInvite() {
 				b.Fatal("Not INVITE")
 			}
 		}
@@ -373,7 +372,7 @@ func BenchmarkParserStream(b *testing.B) {
 			i := 0
 			pstream := parser.NewSIPStream()
 			for p.Next() {
-				var msgs []sip.Message
+				var msgs []Message
 				var err error
 
 				for _, data := range chunks {
@@ -384,7 +383,7 @@ func BenchmarkParserStream(b *testing.B) {
 				}
 				msg := msgs[0]
 
-				if req, _ := msg.(*sip.Request); !req.IsInvite() {
+				if req, _ := msg.(*Request); !req.IsInvite() {
 					b.Fatal("Not INVITE")
 				}
 

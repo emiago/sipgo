@@ -1,20 +1,18 @@
-package parser
+package sip
 
 import (
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/emiago/sipgo/sip"
 )
 
-type uriFSM func(uri *sip.Uri, s string) (uriFSM, string, error)
+type uriFSM func(uri *Uri, s string) (uriFSM, string, error)
 
 // ParseUri converts a string representation of a URI into a Uri object.
 // Following https://datatracker.ietf.org/doc/html/rfc3261#section-19.1.1
 // sip:user:password@host:port;uri-parameters?headers
-func ParseUri(uriStr string, uri *sip.Uri) (err error) {
+func ParseUri(uriStr string, uri *Uri) (err error) {
 	if len(uriStr) == 0 {
 		return errors.New("Empty URI")
 	}
@@ -29,7 +27,7 @@ func ParseUri(uriStr string, uri *sip.Uri) (err error) {
 	return
 }
 
-func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
 		return uriStateUser, s[4:], nil
 	} else if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
@@ -40,7 +38,7 @@ func uriStateSIP(uri *sip.Uri, s string) (uriFSM, string, error) {
 	}
 }
 
-func uriStateUser(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStateUser(uri *Uri, s string) (uriFSM, string, error) {
 	var userend int = 0
 	for i, c := range s {
 		if c == ':' {
@@ -61,7 +59,7 @@ func uriStateUser(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return uriStateHost, s, nil
 }
 
-func uriStatePassword(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStatePassword(uri *Uri, s string) (uriFSM, string, error) {
 	for i, c := range s {
 		if c == '@' {
 			uri.Password = s[:i]
@@ -72,7 +70,7 @@ func uriStatePassword(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return nil, "", fmt.Errorf("missing @")
 }
 
-func uriStateHost(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStateHost(uri *Uri, s string) (uriFSM, string, error) {
 	for i, c := range s {
 		if c == ':' {
 			uri.Host = s[:i]
@@ -94,7 +92,7 @@ func uriStateHost(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return uriStateUriParams, "", nil
 }
 
-func uriStatePort(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStatePort(uri *Uri, s string) (uriFSM, string, error) {
 	var err error
 	for i, c := range s {
 		if c == ';' {
@@ -112,15 +110,15 @@ func uriStatePort(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return nil, s, err
 }
 
-func uriStateUriParams(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStateUriParams(uri *Uri, s string) (uriFSM, string, error) {
 	var n int
 	var err error
 	if len(s) == 0 {
-		uri.UriParams = sip.NewParams()
-		uri.Headers = sip.NewParams()
+		uri.UriParams = NewParams()
+		uri.Headers = NewParams()
 		return nil, s, nil
 	}
-	uri.UriParams = sip.NewParams()
+	uri.UriParams = NewParams()
 	// uri.UriParams, n, err = ParseParams(s, 0, ';', '?', true, true)
 	n, err = UnmarshalParams(s, ';', '?', uri.UriParams)
 	if err != nil {
@@ -138,10 +136,10 @@ func uriStateUriParams(uri *sip.Uri, s string) (uriFSM, string, error) {
 	return uriStateHeaders, s[n+1:], nil
 }
 
-func uriStateHeaders(uri *sip.Uri, s string) (uriFSM, string, error) {
+func uriStateHeaders(uri *Uri, s string) (uriFSM, string, error) {
 	var err error
 	// uri.Headers, _, err = ParseParams(s, 0, '&', 0, true, false)
-	uri.Headers = sip.NewParams()
+	uri.Headers = NewParams()
 	_, err = UnmarshalParams(s, '&', 0, uri.Headers)
 	return nil, s, err
 }

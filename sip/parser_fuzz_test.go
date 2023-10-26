@@ -1,4 +1,4 @@
-package parser
+package sip
 
 import (
 	"os"

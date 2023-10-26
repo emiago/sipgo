@@ -1,8 +1,4 @@
-package parser
-
-import (
-	"github.com/emiago/sipgo/sip"
-)
+package sip
 
 const (
 	paramsStateNone = iota
@@ -12,7 +8,7 @@ const (
 	paramsStateQuote
 )
 
-func UnmarshalParams(s string, seperator rune, ending rune, p sip.HeaderParams) (n int, err error) {
+func UnmarshalParams(s string, seperator rune, ending rune, p HeaderParams) (n int, err error) {
 	var start, sep, quote int = 0, 0, -1
 	state := paramsStateKey
 	n = len(s)

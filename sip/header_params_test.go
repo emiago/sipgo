@@ -44,7 +44,7 @@ func BenchmarkHeaderParams(b *testing.B) {
 	// Lot of allocations makes slower parsing
 	// b.Run("GOSIP", func(b *testing.B) {
 	// 	for i := 0; i < b.N; i++ {
-	// 		hp := sip.NewParams()
+	// 		hp := NewParams()
 	// 		testParams(b, hp.(Params))
 	// 	}
 	// })

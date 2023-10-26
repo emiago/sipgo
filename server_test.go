@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/fakes"
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
 	"github.com/emiago/sipgo/transport"
@@ -21,7 +20,7 @@ import (
 )
 
 func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
-	msg, err := parser.ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
+	msg, err := sip.ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +121,7 @@ func TestUDPUAS(t *testing.T) {
 	require.Nil(t, err)
 	defer srv.Close()
 
-	p := parser.NewParser()
+	p := sip.NewParser()
 
 	serverReader, serverWriter := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()
@@ -220,7 +219,7 @@ func TestTCPUAS(t *testing.T) {
 	require.Nil(t, err)
 	defer srv.Close()
 
-	p := parser.NewParser()
+	p := sip.NewParser()
 
 	serverReader, serverWriter := io.Pipe()
 	client1Reader, client1Writer := io.Pipe()

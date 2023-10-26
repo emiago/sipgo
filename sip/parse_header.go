@@ -1,18 +1,16 @@
-package parser
+package sip
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/emiago/sipgo/sip"
 )
 
 // Here we have collection of headers parsing.
 // Some of headers parsing are moved to different files for better maintance
 
 // A HeaderParser is any function that turns raw header data into one or more Header objects.
-type HeaderParser func(headerName string, headerData string) (sip.Header, error)
+type HeaderParser func(headerName string, headerData string) (Header, error)
 
 type mapHeadersParser map[string]HeaderParser
 
@@ -54,7 +52,7 @@ func DefaultHeadersParser() map[string]HeaderParser {
 
 // parseMsgHeader will append any parsed header
 // in case comma seperated values it will add them as new in case comma is detected
-func (headersParser mapHeadersParser) parseMsgHeader(msg sip.Message, headerText string) (err error) {
+func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText string) (err error) {
 	// p.log.Tracef("parsing header \"%s\"", headerText)
 
 	colonIdx := strings.Index(headerText, ":")
@@ -64,7 +62,7 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg sip.Message, headerText
 	}
 
 	fieldName := strings.TrimSpace(headerText[:colonIdx])
-	lowerFieldName := sip.HeaderToLower(fieldName)
+	lowerFieldName := HeaderToLower(fieldName)
 	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
 
 	headerParser, ok := headersParsers[lowerFieldName]
@@ -73,7 +71,7 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg sip.Message, headerText
 		// so we encapsulate the header data in a GenericHeader struct.
 
 		// TODO Should we check for comma here as well ??
-		header := sip.NewHeader(fieldName, fieldText)
+		header := NewHeader(fieldName, fieldText)
 		msg.AppendHeader(header)
 		return nil
 	}
@@ -101,9 +99,9 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg sip.Message, headerText
 	}
 }
 
-// parseCallId generates sip.CallIDHeader
+// parseCallId generates CallIDHeader
 func parseCallId(headerName string, headerText string) (
-	header sip.Header, err error) {
+	header Header, err error) {
 	headerText = strings.TrimSpace(headerText)
 
 	if len(headerText) == 0 {
@@ -111,26 +109,26 @@ func parseCallId(headerName string, headerText string) (
 		return
 	}
 
-	var callId = sip.CallIDHeader(headerText)
+	var callId = CallIDHeader(headerText)
 
 	return &callId, nil
 }
 
-// parseCallId generates sip.MaxForwardsHeader
-func parseMaxForwards(headerName string, headerText string) (header sip.Header, err error) {
+// parseCallId generates MaxForwardsHeader
+func parseMaxForwards(headerName string, headerText string) (header Header, err error) {
 	val, err := strconv.ParseUint(headerText, 10, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	maxfwd := sip.MaxForwardsHeader(val)
+	maxfwd := MaxForwardsHeader(val)
 	return &maxfwd, nil
 }
 
-// parseCSeq generates sip.CSeqHeader
+// parseCSeq generates CSeqHeader
 func parseCSeq(headerName string, headerText string) (
-	headers sip.Header, err error) {
-	var cseq sip.CSeqHeader
+	headers Header, err error) {
+	var cseq CSeqHeader
 	ind := strings.IndexAny(headerText, abnfWs)
 	if ind < 1 || len(headerText)-ind < 2 {
 		err = fmt.Errorf(
@@ -153,23 +151,23 @@ func parseCSeq(headerName string, headerText string) (
 	}
 
 	cseq.SeqNo = uint32(seqno)
-	cseq.MethodName = sip.RequestMethod(headerText[ind+1:])
+	cseq.MethodName = RequestMethod(headerText[ind+1:])
 	return &cseq, nil
 }
 
-// parseContentLength generates sip.ContentLengthHeader
-func parseContentLength(headerName string, headerText string) (header sip.Header, err error) {
-	var contentLength sip.ContentLengthHeader
+// parseContentLength generates ContentLengthHeader
+func parseContentLength(headerName string, headerText string) (header Header, err error) {
+	var contentLength ContentLengthHeader
 	var value uint64
 	value, err = strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
-	contentLength = sip.ContentLengthHeader(value)
+	contentLength = ContentLengthHeader(value)
 	return &contentLength, err
 }
 
-// parseContentLength generates sip.ContentTypeHeader
-func parseContentType(headerName string, headerText string) (headers sip.Header, err error) {
-	// var contentType sip.ContentType
+// parseContentLength generates ContentTypeHeader
+func parseContentType(headerName string, headerText string) (headers Header, err error) {
+	// var contentType ContentType
 	headerText = strings.TrimSpace(headerText)
-	contentType := sip.ContentTypeHeader(headerText)
+	contentType := ContentTypeHeader(headerText)
 	return &contentType, nil
 }

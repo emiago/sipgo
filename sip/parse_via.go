@@ -1,11 +1,9 @@
-package parser
+package sip
 
 import (
 	"errors"
 	"strconv"
 	"strings"
-
-	"github.com/emiago/sipgo/sip"
 )
 
 // Via header is important header
@@ -14,10 +12,10 @@ import (
 // these should not be treated as separate logical Via headers, but as multiple values on a single
 // Via header.
 func parseViaHeader(headerName string, headerText string) (
-	header sip.Header, err error) {
+	header Header, err error) {
 	// sections := strings.Split(headerText, ",")
-	h := sip.ViaHeader{
-		Params: sip.HeaderParams{},
+	h := ViaHeader{
+		Params: HeaderParams{},
 	}
 	state := viaStateProtocol
 	str := headerText
@@ -42,9 +40,9 @@ func parseViaHeader(headerName string, headerText string) (
 	return &h, nil
 }
 
-type viaFSM func(h *sip.ViaHeader, s string) (viaFSM, int, error)
+type viaFSM func(h *ViaHeader, s string) (viaFSM, int, error)
 
-func viaStateProtocol(h *sip.ViaHeader, s string) (viaFSM, int, error) {
+func viaStateProtocol(h *ViaHeader, s string) (viaFSM, int, error) {
 	ind := strings.IndexRune(s, '/')
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed protocol name in Via header")
@@ -53,7 +51,7 @@ func viaStateProtocol(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 	return viaStateProtocolVersion, ind + 1, nil
 }
 
-func viaStateProtocolVersion(h *sip.ViaHeader, s string) (viaFSM, int, error) {
+func viaStateProtocolVersion(h *ViaHeader, s string) (viaFSM, int, error) {
 	ind := strings.IndexRune(s, '/')
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed protocol version in Via header")
@@ -62,7 +60,7 @@ func viaStateProtocolVersion(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 	return viaStateProtocolTransport, ind + 1, nil
 }
 
-func viaStateProtocolTransport(h *sip.ViaHeader, s string) (viaFSM, int, error) {
+func viaStateProtocolTransport(h *ViaHeader, s string) (viaFSM, int, error) {
 	ind := strings.IndexAny(s, " \t")
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed transport in Via header")
@@ -71,7 +69,7 @@ func viaStateProtocolTransport(h *sip.ViaHeader, s string) (viaFSM, int, error) 
 	return viaStateHost, ind + 1, nil
 }
 
-func viaStateHost(h *sip.ViaHeader, s string) (viaFSM, int, error) {
+func viaStateHost(h *ViaHeader, s string) (viaFSM, int, error) {
 	var colonInd int
 	var endIndex int = len(s)
 	var err error
@@ -105,7 +103,7 @@ loop:
 	return viaStateParams, endIndex + 1, nil
 }
 
-func viaStateParams(h *sip.ViaHeader, s string) (viaFSM, int, error) {
+func viaStateParams(h *ViaHeader, s string) (viaFSM, int, error) {
 	var err error
 	coma := strings.IndexRune(s, ',')
 	if coma > 0 {
@@ -115,8 +113,8 @@ func viaStateParams(h *sip.ViaHeader, s string) (viaFSM, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		// h.Next = &sip.ViaHeader{
-		// 	Params: sip.HeaderParams{},
+		// h.Next = &ViaHeader{
+		// 	Params: HeaderParams{},
 		// }
 		return viaStateProtocol, coma, errComaDetected(coma)
 	}

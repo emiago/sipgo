@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
@@ -53,7 +52,7 @@ type Layer struct {
 // tls config - can be nil to use default tls
 func NewLayer(
 	dnsResolver *net.Resolver,
-	sipparser *parser.Parser,
+	sipparser *sip.Parser,
 	tlsConfig *tls.Config,
 ) *Layer {
 	l := &Layer{

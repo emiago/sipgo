@@ -5,9 +5,6 @@ import (
 	"strings"
 )
 
-// Whitespace recognised by SIP protocol.
-const abnfWs = " \t"
-
 type Params interface {
 	Get(key string) (string, bool)
 	Add(key string, val string) Params

@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"net"
 
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
 	"github.com/emiago/sipgo/transport"
@@ -81,7 +80,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	}
 
 	// TODO export parser to be configurable
-	ua.tp = transport.NewLayer(ua.dnsResolver, parser.NewParser(), ua.tlsConfig)
+	ua.tp = transport.NewLayer(ua.dnsResolver, sip.NewParser(), ua.tlsConfig)
 	ua.tx = transaction.NewLayer(ua.tp)
 	return ua, nil
 }

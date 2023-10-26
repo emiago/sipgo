@@ -20,12 +20,6 @@ const (
 	RFC3261BranchMagicCookie = "z9hG4bK"
 )
 
-// The buffer size of the parser input channel.
-// Parser is interface for decoding full message into sip message
-type Parser interface {
-	ParseSIP(data []byte) (Message, error)
-}
-
 // GenerateBranch returns random unique branch ID.
 func GenerateBranch() string {
 	return GenerateBranchN(16)

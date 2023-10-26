@@ -1,19 +1,17 @@
-package parser
+package sip
 
 import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/emiago/sipgo/sip"
 )
 
 // ParseAddressValue parses an address - such as from a From, To, or
 // Contact header. It returns:
 // See RFC 3261 section 20.10 for details on parsing an address.
 // Note that this method will not accept a comma-separated list of addresses.
-func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.HeaderParams) (displayName string, err error) {
-	// headerParams = sip.NewParams()
+func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) (displayName string, err error) {
+	// headerParams = NewParams()
 	var semicolon, equal, startQuote, endQuote int = -1, -1, -1, -1
 	var name string
 	var uriStart, uriEnd int = 0, -1
@@ -72,7 +70,7 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 			if startQuote > 0 || uriStart > 0 {
 				continue
 			}
-			uri = &sip.Uri{
+			uri = &Uri{
 				Wildcard: true,
 			}
 			return
@@ -108,12 +106,12 @@ func ParseAddressValue(addressText string, uri *sip.Uri, headerParams sip.Header
 	return
 }
 
-// parseToAddressHeader generates sip.ToHeader
-func parseToAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
+// parseToAddressHeader generates ToHeader
+func parseToAddressHeader(headerName string, headerText string) (header Header, err error) {
 
-	h := &sip.ToHeader{
-		Address: sip.Uri{},
-		Params:  sip.NewParams(),
+	h := &ToHeader{
+		Address: Uri{},
+		Params:  NewParams(),
 	}
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
 	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
@@ -129,12 +127,12 @@ func parseToAddressHeader(headerName string, headerText string) (header sip.Head
 	return h, err
 }
 
-// parseFromAddressHeader generates sip.FromHeader
-func parseFromAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
+// parseFromAddressHeader generates FromHeader
+func parseFromAddressHeader(headerName string, headerText string) (header Header, err error) {
 
-	h := sip.FromHeader{
-		Address: sip.Uri{},
-		Params:  sip.NewParams(),
+	h := FromHeader{
+		Address: Uri{},
+		Params:  NewParams(),
 	}
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
 	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
@@ -153,13 +151,13 @@ func parseFromAddressHeader(headerName string, headerText string) (header sip.He
 	return &h, nil
 }
 
-// parseContactAddressHeader generates sip.ContactHeader
-func parseContactAddressHeader(headerName string, headerText string) (header sip.Header, err error) {
+// parseContactAddressHeader generates ContactHeader
+func parseContactAddressHeader(headerName string, headerText string) (header Header, err error) {
 	inBrackets := false
 	inQuotes := false
 
-	h := sip.ContactHeader{
-		Params: sip.NewParams(),
+	h := ContactHeader{
+		Params: NewParams(),
 	}
 
 	endInd := len(headerText)
@@ -195,26 +193,26 @@ func parseContactAddressHeader(headerName string, headerText string) (header sip
 	return &h, err
 }
 
-// parseRouteHeader generates sip.RouteHeader
-func parseRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
+// parseRouteHeader generates RouteHeader
+func parseRouteHeader(headerName string, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
-	h := sip.RouteHeader{}
+	h := RouteHeader{}
 	parseRouteAddress(headerText, &h.Address)
 
 	return &h, nil
 }
 
-// parseRouteHeader generates sip.RecordRouteHeader
-func parseRecordRouteHeader(headerName string, headerText string) (header sip.Header, err error) {
+// parseRouteHeader generates RecordRouteHeader
+func parseRecordRouteHeader(headerName string, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
-	h := sip.RecordRouteHeader{}
+	h := RecordRouteHeader{}
 	parseRouteAddress(headerText, &h.Address)
 	return &h, nil
 }
 
-func parseRouteAddress(headerText string, address *sip.Uri) (err error) {
+func parseRouteAddress(headerText string, address *Uri) (err error) {
 	inBrackets := false
 	inQuotes := false
 	end := len(headerText) - 1
