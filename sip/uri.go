@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// Uri is parsed form of
+// sip:user:password@host:port;uri-parameters?headers
+// In case of `sips:“ Encrypted is set to true
 type Uri struct {
 	// True if and only if the URI is a SIPS URI.
 	Encrypted bool
@@ -17,7 +20,6 @@ type Uri struct {
 
 	// The password field of the URI. This is represented in the URI as joe:hunter2@bloggs.com.
 	// Note that if a URI has a password field, it *must* have a user field as well.
-	// This is a pointer, so that URIs without a password field can have 'nil'.
 	// Note that RFC 3261 strongly recommends against the use of password fields in SIP URIs,
 	// as they are fundamentally insecure.
 	Password string
@@ -36,9 +38,6 @@ type Uri struct {
 
 	// Any headers to be included on requests constructed from this URI.
 	// These appear as a '&'-separated list at the end of the URI, introduced by '?'.
-	// Although the values of the map are strings, they will never be NoString in practice as the parser
-	// guarantees to not return blank values for header elements in SIP URIs.
-	// You should not set the values of headers to NoString.
 	Headers HeaderParams
 }
 

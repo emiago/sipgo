@@ -244,6 +244,8 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 
 ## Tests
 
+Coverage: 36.7%
+
 Library will be covered with more tests. Focus is more on benchmarking currently.
 ```
 go test ./...  

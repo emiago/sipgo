@@ -155,8 +155,8 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 	return msg, nil
 }
 
-// NewSIPStream implements SIP parsing contructor for stream
-// should be called per single stream
+// NewSIPStream implements SIP parsing contructor for IO that stream SIP message
+// It should be created per each stream
 func (p *Parser) NewSIPStream() *ParserStream {
 	return &ParserStream{
 		headersParsers: p.headersParsers, // safe as it read only
@@ -197,18 +197,8 @@ func parseLine(startLine string) (msg Message, err error) {
 // terminated by a carriage-return line-feed sequence (CRLF).  Note that
 // the empty line MUST be present even if the message-body is not.
 func nextLine(reader *bytes.Buffer) (line string, err error) {
-	// Scan full line without buffer
-	// If we need to continue then try to grow
 	line, err = reader.ReadString('\n')
 	if err != nil {
-		// if err == io.EOF {
-		// 	if len(line) > 0 {
-		// 		return line, ErrParseLineNoCRLF
-		// 	}
-
-		// 	return line, nil
-		// }
-
 		// We may get io.EOF and line till it was read
 		return line, err
 	}
