@@ -28,7 +28,7 @@ Fetch lib with:
 
 - Stateful proxy [example/proxysip](example/proxysip)  
 - Register with authentication [example/register](example/register)  
-- Dialog [example/dialog](example/dialog)  
+- RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)  
 
 ## Tools developed:
 - CLI softphone for easy testing [gophone](https://github.com/emiago/sipgo-tools#gophone)
