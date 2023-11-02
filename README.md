@@ -9,6 +9,7 @@ It comes with SIP stack ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc326
 
 For experimental features checkout also   
 [github.com/emiago/sipgox](https://github.com/emiago/sipgox)
+It adds media, call, dialog creation on top of sipgo more easily.
 
 Fetch lib with:
 
@@ -36,6 +37,12 @@ Fetch lib with:
 - ... your tool can be here
 
 ***If you use this lib in some way, open issue for more sharing.***
+
+## E2E/integration testing
+
+If you are interested using lib for your testing services then checkout 
+[article on how easy you can make calls and other](https://github.com/emiago/sipgo/wiki/E2E-testing)
+
 ## Performance
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
