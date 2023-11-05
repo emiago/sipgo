@@ -32,11 +32,16 @@ type ServerTxRecorder struct {
 }
 
 // Result returns sip response. Can be nil if none was processed
-func (r *ServerTxRecorder) Result() *sip.Response {
+func (r *ServerTxRecorder) Result() []*sip.Response {
 	if len(r.c.msgs) == 0 {
 		return nil
 	}
-	return r.c.msgs[0].(*sip.Response).Clone()
+	resps := make([]*sip.Response, len(r.c.msgs))
+	for i, m := range r.c.msgs {
+		resps[i] = m.(*sip.Response).Clone()
+	}
+
+	return resps
 }
 
 // func (r *ServerTxRecorder) Terminate() {
