@@ -190,13 +190,12 @@ func (store *transactionStore) drop(key string) bool {
 	return exists
 }
 
-func (store *transactionStore) all() []sip.Transaction {
-	all := make([]sip.Transaction, 0)
+func (store *transactionStore) terminateAll() {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 	for _, tx := range store.transactions {
-		all = append(all, tx)
+		store.mu.RUnlock()
+		tx.Terminate() // Calls on terminate to be deleted from store. It is deadlock if called inside loop
+		store.mu.RLock()
 	}
-
-	return all
 }

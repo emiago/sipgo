@@ -2,17 +2,27 @@ package sipgo
 
 import (
 	"context"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIntegrationDialog(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
 	ua, _ := NewUA()
 	defer ua.Close()
 	srv, _ := NewServer(ua)
 	cli, _ := NewClient(ua)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	uasContact := sip.ContactHeader{
 		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
@@ -21,18 +31,18 @@ func TestIntegrationDialog(t *testing.T) {
 	dialogSrv := NewDialogServer(cli, uasContact)
 
 	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-		dtx := dialogSrv.ReadInvite(req, tx)
+		dlg := dialogSrv.ReadInvite(req, tx)
 
-		err := dtx.WriteResponse(sip.StatusTrying, "Trying", nil)
+		err := dlg.WriteResponse(sip.StatusTrying, "Trying", nil)
 		require.Nil(t, err)
 
-		err = dtx.WriteResponse(sip.StatusRinging, "Ringing", nil)
+		err = dlg.WriteResponse(sip.StatusRinging, "Ringing", nil)
 		require.Nil(t, err)
 
-		err = dtx.WriteResponse(sip.StatusOK, "OK", nil)
+		err = dlg.WriteResponse(sip.StatusOK, "OK", nil)
 		require.Nil(t, err)
 
-		// <-dtx.Done()
+		<-tx.Done()
 	})
 
 	srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -44,18 +54,21 @@ func TestIntegrationDialog(t *testing.T) {
 	})
 
 	srv.ServeRequest(func(r *sip.Request) {
-		t.Log("UAS: ", r.StartLine())
+		t.Log("UAS server: ", r.StartLine())
 	})
 
 	srvReady := make(chan struct{})
-	ctx := context.WithValue(context.Background(), ListenReadyCtxKey, ListenReadyCtxValue(srvReady))
-	go srv.ListenAndServe(ctx, "udp", uasContact.Address.HostPort())
+	go srv.ListenAndServe(
+		context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady)),
+		"udp",
+		uasContact.Address.HostPort(),
+	)
 	// Wait server to be ready
 	<-srvReady
 
 	// Client
 	{
-		ua, err := NewUA()
+		ua, _ := NewUA()
 		defer ua.Close()
 
 		srv, _ := NewServer(ua)
@@ -64,46 +77,72 @@ func TestIntegrationDialog(t *testing.T) {
 		contactHDR := sip.ContactHeader{
 			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 		}
+		dialogCli := NewDialogClient(cli, contactHDR)
+
+		// Setup server side
+		srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+			err := dialogCli.ReadBye(req, tx)
+			require.NoError(t, err)
+		})
+		srv.ServeRequest(func(r *sip.Request) {
+			t.Log("UAC server: ", r.StartLine())
+		})
 
 		srvReady := make(chan struct{})
-		ctx := context.WithValue(context.Background(), ListenReadyCtxKey, ListenReadyCtxValue(srvReady))
+		ctx := context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady))
 		go srv.ListenAndServe(ctx, "udp", contactHDR.Address.HostPort())
 		// Wait server to be ready
 		<-srvReady
+		time.Sleep(200 * time.Millisecond)
 
-		dialogCli := NewDialogClient(cli, contactHDR)
+		t.Run("UAS hangup", func(t *testing.T) {
+			dialogSrv.OnSession = func(s *DialogServerSession) {
+				time.Sleep(1 * time.Second)
+				t.Log("GOT", s.ID)
+				ctx, _ := context.WithTimeout(ctx, 1*time.Second)
+				err := s.Bye(ctx)
+				require.NoError(t, err)
+			}
 
-		// INVITE
-		req := sip.NewRequest(sip.INVITE, uasContact.Address.Clone())
-		t.Log("UAC: ", req.StartLine())
+			// INVITE
+			req := sip.NewRequest(sip.INVITE, uasContact.Address.Clone())
+			t.Log("UAC: ", req.StartLine())
 
-		sess, err := dialogCli.WriteInvite(context.TODO(), req)
-		require.NoError(t, err)
-		require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
+			sess, err := dialogCli.WriteInvite(context.TODO(), req)
+			require.NoError(t, err)
+			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
 
-		// ACK
-		{
+			// ACK
 			t.Log("UAC: ACK")
-			err := sess.Ack(context.TODO())
+			err = sess.Ack(context.TODO())
 			require.NoError(t, err)
-		}
-		// BYE
-		{
-			t.Log("UAC: BYE")
-			err := sess.Bye(context.TODO())
+
+			<-sess.Done()
+		})
+
+		t.Run("UAC hangup", func(t *testing.T) {
+			// INVITE
+			req := sip.NewRequest(sip.INVITE, uasContact.Address.Clone())
+			t.Log("UAC: ", req.StartLine())
+
+			sess, err := dialogCli.WriteInvite(context.TODO(), req)
 			require.NoError(t, err)
-		}
-	}
+			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
 
-}
+			// ACK
+			{
+				t.Log("UAC: ACK")
+				err := sess.Ack(context.TODO())
+				require.NoError(t, err)
+			}
+			// BYE
+			{
+				t.Log("UAC: BYE")
+				err := sess.Bye(context.TODO())
+				require.NoError(t, err)
+			}
 
-func readResponse(tx sip.ClientTransaction) (*sip.Response, error) {
-	for {
-		select {
-		case r := <-tx.Responses():
-			return r, nil
-		case <-tx.Done():
-			return nil, tx.Err()
-		}
+			<-sess.Done()
+		})
 	}
 }
