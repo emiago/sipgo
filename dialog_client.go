@@ -47,19 +47,19 @@ func (e ErrDialogResponse) Error() string {
 // Invite sends INVITE request and waits for success response or returns ErrDialogResponse in case non 2xx
 // Canceling context while waiting 2xx will send Cancel request
 // For more customizing Invite request use WriteInvite instead
-func (c *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, contentTypeHdr sip.ContentTypeHeader) (*DialogClientSession, error) {
+func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, contentTypeHdr sip.ContentTypeHeader) (*DialogClientSession, error) {
 	req := sip.NewRequest(sip.INVITE, recipient)
 	if body != nil {
 		req.SetBody(body)
 		req.AppendHeader(&contentTypeHdr)
 	}
-	return c.WriteInvite(ctx, req)
+	return dc.WriteInvite(ctx, req)
 }
 
-func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
-	cli := c.c
+func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+	cli := dc.c
 
-	inviteRequest.AppendHeader(&c.contactHDR)
+	inviteRequest.AppendHeader(&dc.contactHDR)
 
 	// TODO passing client transaction options is now hidden
 	tx, err := cli.TransactionRequest(ctx, inviteRequest)
@@ -84,15 +84,14 @@ func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Reque
 			continue
 		}
 
-		if !r.IsSuccess() {
-			// Send ACK
-			ack := sip.NewAckRequest(inviteRequest, r, nil)
-			cli.WriteRequest(ack)
-
-			return nil, &ErrDialogResponse{r: r}
+		if r.IsSuccess() {
+			break
 		}
 
-		break
+		// Send ACK
+		ack := sip.NewAckRequest(inviteRequest, r, nil)
+		cli.WriteRequest(ack)
+		return nil, &ErrDialogResponse{r: r}
 	}
 
 	id, err := sip.MakeDialogIDFromResponse(r)
@@ -104,17 +103,41 @@ func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Reque
 		ID:       id,
 		Invite:   inviteRequest,
 		Response: r,
-		State:    sip.DialogStateEstablished,
+		state:    sip.DialogStateEstablished,
 	}
 
 	dtx := &DialogClientSession{
 		Dialog:   d,
-		dc:       c,
+		dc:       dc,
 		inviteTx: tx,
 	}
 
-	c.dialogs.Store(id, dtx)
+	dc.dialogs.Store(id, dtx)
 	return dtx, nil
+}
+
+func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
+	callid, _ := req.CallID()
+	from, _ := req.From()
+	to, _ := req.To()
+
+	id := sip.MakeDialogID(callid.Value(), from.Params["tag"], to.Params["tag"])
+
+	dt := dc.LoadDialog(id)
+	if dt == nil {
+		return ErrDialogDoesNotExists
+	}
+
+	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+	if err := tx.Respond(res); err != nil {
+		return err
+	}
+	dt.inviteTx.Terminate() // Terminates Invite transaction
+
+	select {
+	case <-tx.Done():
+		return tx.Err()
+	}
 }
 
 type DialogClientSession struct {
@@ -133,7 +156,7 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	if err := s.dc.c.WriteRequest(ack); err != nil {
 		return err
 	}
-	s.Dialog.State = sip.DialogStateConfirmed
+	s.Dialog.state = sip.DialogStateConfirmed
 	return nil
 }
 
@@ -160,7 +183,7 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		if res.StatusCode != 200 {
 			return ErrDialogResponse{res}
 		}
-		s.Dialog.State = sip.DialogStateConfirmed
+		s.Dialog.state = sip.DialogStateConfirmed
 		return nil
 	case <-tx.Done():
 		return tx.Err()
@@ -169,26 +192,6 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	}
 }
 
-func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	id, err := sip.MakeDialogIDFromRequest(req)
-	if err != nil {
-		// Non dialog Bye?
-		return nil
-	}
-
-	dt := s.dc.LoadDialog(id)
-	if dt == nil {
-		return fmt.Errorf("no existing dialog")
-	}
-	defer dt.inviteTx.Terminate() // Terminates Invite transaction
-
-	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-	if err := tx.Respond(res); err != nil {
-		return err
-	}
-
-	select {
-	case <-tx.Done():
-		return tx.Err()
-	}
+func (s *DialogClientSession) Done() <-chan struct{} {
+	return s.inviteTx.Done()
 }

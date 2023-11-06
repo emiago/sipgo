@@ -228,13 +228,8 @@ func (txl *Layer) getServerTx(key string) (*ServerTx, bool) {
 }
 
 func (txl *Layer) Close() {
-	for _, tx := range txl.clientTransactions.all() {
-		tx.Terminate()
-	}
-
-	for _, tx := range txl.serverTransactions.all() {
-		tx.Terminate()
-	}
+	txl.clientTransactions.terminateAll()
+	txl.serverTransactions.terminateAll()
 	txl.log.Debug().Msg("transaction layer closed")
 }
 
