@@ -47,11 +47,14 @@ func (e ErrDialogResponse) Error() string {
 // Invite sends INVITE request and waits for success response or returns ErrDialogResponse in case non 2xx
 // Canceling context while waiting 2xx will send Cancel request
 // For more customizing Invite request use WriteInvite instead
-func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, contentTypeHdr sip.ContentTypeHeader) (*DialogClientSession, error) {
+func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
 	req := sip.NewRequest(sip.INVITE, recipient)
 	if body != nil {
 		req.SetBody(body)
-		req.AppendHeader(&contentTypeHdr)
+	}
+
+	for _, h := range headers {
+		req.AppendHeader(h)
 	}
 	return dc.WriteInvite(ctx, req)
 }

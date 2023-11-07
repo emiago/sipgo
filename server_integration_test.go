@@ -106,6 +106,9 @@ func TestIntegrationClientServer(t *testing.T) {
 
 	for _, tc := range testCases {
 		ua, _ := NewUA()
+		t.Cleanup(func() {
+			ua.Close()
+		})
 		srv, err := NewServer(ua)
 		require.NoError(t, err)
 
