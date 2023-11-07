@@ -105,10 +105,8 @@ func TestIntegrationDialog(t *testing.T) {
 			}
 
 			// INVITE
-			req := sip.NewRequest(sip.INVITE, uasContact.Address.Clone())
-			t.Log("UAC: ", req.StartLine())
-
-			sess, err := dialogCli.WriteInvite(context.TODO(), req)
+			t.Log("UAC: INVITE")
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
 			require.NoError(t, err)
 			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
 
@@ -122,25 +120,19 @@ func TestIntegrationDialog(t *testing.T) {
 
 		t.Run("UAC hangup", func(t *testing.T) {
 			// INVITE
-			req := sip.NewRequest(sip.INVITE, uasContact.Address.Clone())
-			t.Log("UAC: ", req.StartLine())
-
-			sess, err := dialogCli.WriteInvite(context.TODO(), req)
+			t.Log("UAC: INVITE")
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
 			require.NoError(t, err)
 			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
 
 			// ACK
-			{
-				t.Log("UAC: ACK")
-				err := sess.Ack(context.TODO())
-				require.NoError(t, err)
-			}
+			t.Log("UAC: ACK")
+			err = sess.Ack(context.TODO())
+			require.NoError(t, err)
 			// BYE
-			{
-				t.Log("UAC: BYE")
-				err := sess.Bye(context.TODO())
-				require.NoError(t, err)
-			}
+			t.Log("UAC: BYE")
+			err = sess.Bye(context.TODO())
+			require.NoError(t, err)
 
 			<-sess.Done()
 		})
