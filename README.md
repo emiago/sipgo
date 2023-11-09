@@ -192,32 +192,6 @@ req := sip.NewRequest(method, &recipment)
 // Send request and forget
 client.WriteRequest(req)
 ```
-
-### Dialogs (experiment)
-
-NOTE: This may be redesigned to have more control
-
-`ServerDialog` is extended type of Server with Dialog support. 
-For now this is in experiment.
-
-```go
-srv, err := sipgo.NewServerDialog(ua)
-...
-srv.OnDialog(func(d sip.Dialog) {
-    switch d.State {
-	case sip.DialogStateEstablished:
-		// 200 response
-	case sip.DialogStateConfirmed:
-		// ACK send
-	case sip.DialogStateEnded:
-		// BYE send
-	}
-})
-
-```
-
-`ClientDialog` TODO...
-
 ## SIP Debug
 
 You can have full SIP messages dumped from transport into Debug level message.

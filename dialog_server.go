@@ -11,24 +11,6 @@ import (
 	"github.com/emiago/sipgo/transaction"
 )
 
-type Dialog struct {
-	ID string
-
-	Invite   *sip.Request
-	Response *sip.Response
-
-	state int
-}
-
-var (
-	ErrDialogOutsideDialog = errors.New("Call/Transaction outside dialog")
-	ErrDialogDoesNotExists = errors.New("Call/Transaction Does Not Exist")
-)
-
-func (d *Dialog) Body() []byte {
-	return d.Response.Body()
-}
-
 type DialogServer struct {
 	dialogs    sync.Map // TODO replace with typed version
 	contactHDR sip.ContactHeader
@@ -39,7 +21,7 @@ type DialogServer struct {
 	OnSession func(s *DialogServerSession)
 }
 
-func (s *DialogServer) LoadDialog(id string) *DialogServerSession {
+func (s *DialogServer) loadDialog(id string) *DialogServerSession {
 	val, ok := s.dialogs.Load(id)
 	if !ok || val == nil {
 		return nil
@@ -64,9 +46,14 @@ func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer
 
 // ReadInvite should read from your OnInvite handler for which it creates dialog context
 // You need to use DialogServerSession for all further responses
-func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) *DialogServerSession {
+func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
+	_, exists := req.Contact()
+	if !exists {
+		return nil, ErrDialogInviteNoContact
+	}
+
 	d := Dialog{
-		Invite: req,
+		InviteRequest: req,
 	}
 
 	dtx := &DialogServerSession{
@@ -75,7 +62,7 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) *D
 		s:        s,
 	}
 
-	return dtx
+	return dtx, nil
 }
 
 // ReadAck should read from your OnAck handler
@@ -85,7 +72,7 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 		return errors.Join(ErrDialogOutsideDialog, err)
 	}
 
-	dt := s.LoadDialog(id)
+	dt := s.loadDialog(id)
 	if dt == nil {
 		// res := sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil)
 		// if err := tx.Respond(res); err != nil {
@@ -109,7 +96,7 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		return err
 	}
 
-	dt := s.LoadDialog(id)
+	dt := s.loadDialog(id)
 	if dt == nil {
 		// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.2
 		// If the BYE does not
@@ -128,10 +115,7 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		return err
 	}
 
-	select {
-	case <-tx.Done():
-		return tx.Err()
-	}
+	return nil
 }
 
 type DialogServerSession struct {
@@ -144,16 +128,22 @@ type DialogServerSession struct {
 // Respond should be called for Invite request, you may want to call this multiple times like
 // 100 Progress or 180 Ringing
 // 2xx for creating dialog or other code in case failure
-func (t *DialogServerSession) WriteResponse(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
-	tx := t.inviteTx
+func (t *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
 	// Must copy Record-Route headers. Done by this command
-	res := sip.NewResponseFromRequest(t.Invite, statusCode, reason, body)
-	// Must add contact header
-	res.AppendHeader(&t.s.contactHDR)
+	res := sip.NewResponseFromRequest(t.InviteRequest, statusCode, reason, body)
 
 	for _, h := range headers {
 		res.AppendHeader(h)
 	}
+
+	return t.WriteResponse(res)
+}
+
+func (t *DialogServerSession) WriteResponse(res *sip.Response) error {
+	tx := t.inviteTx
+
+	// Must add contact header
+	res.AppendHeader(&t.s.contactHDR)
 
 	if !res.IsSuccess() {
 		// This will not create dialog so we will just respond
@@ -166,7 +156,7 @@ func (t *DialogServerSession) WriteResponse(statusCode sip.StatusCode, reason st
 	}
 
 	t.Dialog.ID = id
-	t.Dialog.Response = res
+	t.Dialog.InviteResponse = res
 	t.Dialog.state = sip.DialogStateEstablished
 
 	t.s.dialogs.Store(id, t)
@@ -189,8 +179,8 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	defer s.inviteTx.Terminate()   // Terminates INVITE in all cases
 
 	// Reverse from and to
-	req := s.Dialog.Invite
-	res := s.Dialog.Response
+	req := s.Dialog.InviteRequest
+	res := s.Dialog.InviteResponse
 
 	if !res.IsSuccess() {
 		return fmt.Errorf("Can not send bye on NON success response")

@@ -2,10 +2,12 @@ package sipgo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/icholy/digest"
 )
 
 type DialogClient struct {
@@ -14,7 +16,7 @@ type DialogClient struct {
 	contactHDR sip.ContactHeader
 }
 
-func (s *DialogClient) LoadDialog(id string) *DialogClientSession {
+func (s *DialogClient) loadDialog(id string) *DialogClientSession {
 	val, ok := s.dialogs.Load(id)
 	if !ok || val == nil {
 		return nil
@@ -37,11 +39,11 @@ func NewDialogClient(client *Client, contactHDR sip.ContactHeader) *DialogClient
 }
 
 type ErrDialogResponse struct {
-	r *sip.Response
+	Res *sip.Response
 }
 
 func (e ErrDialogResponse) Error() string {
-	return fmt.Sprintf("Invite failed with response: %s", e.r.StartLine())
+	return fmt.Sprintf("Invite failed with response: %s", e.Res.StartLine())
 }
 
 // Invite sends INVITE request and waits for success response or returns ErrDialogResponse in case non 2xx
@@ -56,10 +58,18 @@ func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []b
 	for _, h := range headers {
 		req.AppendHeader(h)
 	}
-	return dc.WriteInvite(ctx, req)
+	return dc.WriteInvite(ctx, req, InviteOptions{})
 }
 
-func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+type InviteOptions struct {
+	OnResponse func(res *sip.Response)
+
+	// For digest authentication
+	Username string
+	Password string
+}
+
+func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request, opts InviteOptions) (*DialogClientSession, error) {
 	cli := dc.c
 
 	inviteRequest.AppendHeader(&dc.contactHDR)
@@ -74,27 +84,49 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 	for {
 		select {
 		case r = <-tx.Responses():
+			// just pass
 		case <-ctx.Done():
 			// Send cancel
 			defer tx.Terminate()
-			return nil, tx.Cancel()
+			if err := tx.Cancel(); err != nil {
+				return nil, errors.Join(err, ctx.Err())
+			}
+			return nil, ctx.Err()
 
 		case <-tx.Done():
 			return nil, tx.Err()
 		}
 
-		if r.IsProvisional() {
-			continue
+		if opts.OnResponse != nil {
+			opts.OnResponse(r)
 		}
 
 		if r.IsSuccess() {
 			break
 		}
 
-		// Send ACK
-		ack := sip.NewAckRequest(inviteRequest, r, nil)
-		cli.WriteRequest(ack)
-		return nil, &ErrDialogResponse{r: r}
+		if r.IsProvisional() {
+			continue
+		}
+
+		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" {
+			h := inviteRequest.GetHeader("Authorization")
+			if h == nil {
+				tx.Terminate()
+				tx, err = digestTransactionRequest(ctx, dc.c, inviteRequest, r, digest.Options{
+					Method:   sip.INVITE.String(),
+					Username: opts.Username,
+					Password: opts.Password,
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			continue
+		}
+
+		return nil, &ErrDialogResponse{Res: r}
 	}
 
 	id, err := sip.MakeDialogIDFromResponse(r)
@@ -103,10 +135,10 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 	}
 
 	d := Dialog{
-		ID:       id,
-		Invite:   inviteRequest,
-		Response: r,
-		state:    sip.DialogStateEstablished,
+		ID:             id,
+		InviteRequest:  inviteRequest,
+		InviteResponse: r,
+		state:          sip.DialogStateEstablished,
 	}
 
 	dtx := &DialogClientSession{
@@ -126,7 +158,7 @@ func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) erro
 
 	id := sip.MakeDialogID(callid.Value(), from.Params["tag"], to.Params["tag"])
 
-	dt := dc.LoadDialog(id)
+	dt := dc.loadDialog(id)
 	if dt == nil {
 		return ErrDialogDoesNotExists
 	}
@@ -137,10 +169,11 @@ func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) erro
 	}
 	dt.inviteTx.Terminate() // Terminates Invite transaction
 
-	select {
-	case <-tx.Done():
-		return tx.Err()
-	}
+	// select {
+	// case <-tx.Done():
+	// 	return tx.Err()
+	// }
+	return nil
 }
 
 type DialogClientSession struct {
@@ -151,7 +184,7 @@ type DialogClientSession struct {
 
 // Ack sends ack. Use WriteAck for more customizing
 func (s *DialogClientSession) Ack(ctx context.Context) error {
-	ack := sip.NewAckRequest(s.Invite, s.Response, nil)
+	ack := sip.NewAckRequest(s.InviteRequest, s.InviteResponse, nil)
 	return s.WriteAck(ctx, ack)
 }
 
@@ -165,7 +198,7 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 
 // Bye sends bye and terminates session. Use WriteBye if you want to customize bye request
 func (s *DialogClientSession) Bye(ctx context.Context) error {
-	bye := sip.NewByeRequestUAC(s.Invite, s.Response, nil)
+	bye := sip.NewByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
 	return s.WriteBye(ctx, bye)
 }
 
@@ -197,4 +230,31 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 
 func (s *DialogClientSession) Done() <-chan struct{} {
 	return s.inviteTx.Done()
+}
+
+// digestTransactionRequest checks response if 401 and sends digest auth
+func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	// Get WwW-Authenticate
+	wwwAuth := res.GetHeader("WWW-Authenticate")
+	chal, err := digest.ParseChallenge(wwwAuth.Value())
+	if err != nil {
+		return nil, fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
+	}
+
+	// Reply with digest
+	cred, err := digest.Digest(chal, opts)
+	if err != nil {
+		return nil, fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	cseq, _ := req.CSeq()
+	cseq.SeqNo++
+	// newReq := req.Clone()
+
+	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+	// defer req.RemoveHeader("Authorization")
+
+	req.RemoveHeader("Via")
+	tx, err := client.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
+	return tx, err
 }

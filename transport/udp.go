@@ -119,6 +119,11 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
 	// via unicast 127.0.0.1
 	// This GO will fail to read as it is getting responses from 0.0.0.0
+
+	// More bigger problem are responses that are ariving from different IP ranges
+	// ex
+	// 192.168.... -> 127.0.0.1
+	// 192.168..... <- 192.168..  This will not work as connected connection can not handle this
 	d := net.Dialer{
 		LocalAddr: uladdr,
 	}
@@ -180,6 +185,7 @@ func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.
 	buf := make([]byte, transportBufferSize)
 	raddr := conn.Conn.RemoteAddr().String()
 	defer t.pool.CloseAndDelete(conn, raddr)
+	defer t.log.Debug().Str("raddr", raddr).Msg("Read connected connection stopped")
 
 	for {
 		num, err := conn.Read(buf)

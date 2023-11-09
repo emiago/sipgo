@@ -31,15 +31,16 @@ func TestIntegrationDialog(t *testing.T) {
 	dialogSrv := NewDialogServer(cli, uasContact)
 
 	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-		dlg := dialogSrv.ReadInvite(req, tx)
+		dlg, err := dialogSrv.ReadInvite(req, tx)
+		require.NoError(t, err)
 
-		err := dlg.WriteResponse(sip.StatusTrying, "Trying", nil)
+		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
 		require.Nil(t, err)
 
-		err = dlg.WriteResponse(sip.StatusRinging, "Ringing", nil)
+		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
 		require.Nil(t, err)
 
-		err = dlg.WriteResponse(sip.StatusOK, "OK", nil)
+		err = dlg.Respond(sip.StatusOK, "OK", nil)
 		require.Nil(t, err)
 
 		<-tx.Done()
@@ -108,7 +109,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
 			require.NoError(t, err)
-			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
+			require.Equal(t, sip.StatusOK, sess.InviteResponse.StatusCode)
 
 			// ACK
 			t.Log("UAC: ACK")
@@ -123,7 +124,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
 			require.NoError(t, err)
-			require.Equal(t, sip.StatusOK, sess.Response.StatusCode)
+			require.Equal(t, sip.StatusOK, sess.InviteResponse.StatusCode)
 
 			// ACK
 			t.Log("UAC: ACK")
