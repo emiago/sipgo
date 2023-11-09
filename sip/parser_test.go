@@ -2,6 +2,8 @@ package sip
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -305,14 +307,18 @@ func TestParseRequest(t *testing.T) {
 	t.Run("NoCRLF", func(t *testing.T) {
 		// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
 		// In case of missing CRLF
+		m := "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0"
+		_, err := parser.ParseSIP([]byte(m))
+		assert.ErrorIs(t, err, io.EOF)
+
 		for _, msgstr := range []string{
-			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
+			// "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\n",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
 		} {
 			_, err := parser.ParseSIP([]byte(msgstr))
-			assert.Equal(t, ErrParseLineNoCRLF, err)
+			assert.ErrorIs(t, err, ErrParseInvalidMessage)
 		}
 	})
 
@@ -451,6 +457,61 @@ func TestRegisterRequestFail(t *testing.T) {
 	c, exists := req.Contact()
 	require.True(t, exists)
 	assert.Equal(t, "test", c.Address.User)
+}
+
+// https://www.rfc-editor.org/rfc/rfc4475#section-3.1.1
+func TestSIPTortuous(t *testing.T) {
+	// This currently parses without error but fails parsing on header level
+	if os.Getenv("TORTUOUS_TEST") == "" {
+		t.Skip()
+	}
+	rawMsg := []string{
+		`INVITE sip:vivekg@chair-dnrc.example.com;unknownparam SIP/2.0`,
+		`TO :
+sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n`,
+		`from   : "J Rosenberg \\\""       <sip:jdrosen@example.com>
+;
+tag = 98asjd8`,
+		`MaX-fOrWaRdS: 0068`,
+		`Call-ID: wsinv.ndaksdj@192.0.2.1`,
+		`Content-Length   : 150`,
+		`cseq: 0009
+  INVITE`,
+		`Via  : SIP  /   2.0
+/UDP
+	192.0.2.2;branch=390skdjuw`,
+		`s :`,
+		`NewFangledHeader:   newfangled value
+ continued newfangled value`,
+		`UnknownHeaderWithUnusualValue: ;;,,;;,;`,
+		`Content-Type: application/sdp`,
+		`Route:
+<sip:services.example.com;lr;unknownwith=value;unknown-no-value>`,
+		`v:  SIP  / 2.0  / TCP     spindle.example.com   ;
+branch  =   z9hG4bK9ikj8  ,
+SIP  /    2.0   / UDP  192.168.255.111   ; branch=
+z9hG4bK30239`,
+		`m:"Quoted string \"\"" <sip:jdrosen@example.com> ; newparam =
+	newvalue ;
+secondparam ; q = 0.33`,
+		``,
+		`v=0
+o=mhandley 29739 7272939 IN IP4 192.0.2.3
+s=-
+c=IN IP4 192.0.2.4
+t=0 0
+m=audio 49217 RTP/AVP 0 12
+m=video 3227 RTP/AVP 31
+a=rtpmap:31 LPC`,
+	}
+
+	data := []byte(strings.Join(rawMsg, "\r\n"))
+	parser := NewParser()
+	msg, err := parser.ParseSIP(data)
+	require.Nil(t, err, err)
+
+	// TODO check each header
+	t.Log(msg.String())
 }
 
 func BenchmarkParser(b *testing.B) {

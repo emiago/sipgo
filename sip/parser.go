@@ -197,26 +197,34 @@ func parseLine(startLine string) (msg Message, err error) {
 // terminated by a carriage-return line-feed sequence (CRLF).  Note that
 // the empty line MUST be present even if the message-body is not.
 func nextLine(reader *bytes.Buffer) (line string, err error) {
-	line, err = reader.ReadString('\n')
-	if err != nil {
-		// We may get io.EOF and line till it was read
-		return line, err
-	}
-
 	// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
 	// The start-line, each message-header line, and the empty line MUST be
 	// terminated by a carriage-return line-feed sequence (CRLF).  Note that
 	// the empty line MUST be present even if the message-body is not.
+
+	// Lines could be multiline as well so this is also acceptable
+	// TO :
+	// sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n
+
+	line, err = reader.ReadString('\r')
+	if err != nil {
+		// We may get io.EOF and line till it was read
+		return line, err
+	}
+	br, err := reader.ReadByte()
+	if err != nil {
+		return line, err
+	}
+
+	if br != '\n' {
+		return line, ErrParseLineNoCRLF
+	}
 	lenline := len(line)
-	if lenline < 2 {
+	if lenline < 1 {
 		return line, ErrParseLineNoCRLF
 	}
 
-	if line[lenline-2] != '\r' {
-		return line, ErrParseLineNoCRLF
-	}
-
-	line = line[:lenline-2]
+	line = line[:lenline-1]
 	return line, nil
 }
 
