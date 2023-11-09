@@ -91,26 +91,6 @@ srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
 ```
 
-## Stateful Proxy build
-
-Proxy is combination client and server handle that creates server/client transaction. They need to share
-same ua same like uac/uas build.
-Forwarding request is done via client handle:
-```go
-
-srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-    ctx := context.Background()
-    req.SetDestination("10.1.2.3") // Change sip.Request destination
-    // Start client transaction and relay our request. Add Via and Record-Route header
-    clTx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
-    // Send back response
-    res := <-cltx.Responses()
-    tx.Respond(res)
-})
-```
-
-Checkout `/example/proxysip` for more how to build simple stateful proxy.
-
 
 ### Server Transaction
 
@@ -152,12 +132,7 @@ srv.OnACK(ackHandler)
 
 ### Client Transaction
 
-Using client handle allows easy creating and sending request. All you need is this.
-```go
-req := sip.NewRequest(sip.INVITE, recipient)
-ctx := context.Background()
-tx, err := client.TransactionRequest(ctx, req, opts...) // Send request and get client transaction handle
-```
+Using client handle allows easy creating and sending request. 
 Unless you customize transaction request with opts by default `client.TransactionRequest` will build all other
 headers needed to pass correct sip request.
 
@@ -182,8 +157,6 @@ select {
 }
 
 ```
-NOTE: If you are building UA that also has server handle on UDP. UDP listener will be reused to also send packets.
-
 ### Client stateless request
 
 ```go
@@ -192,6 +165,75 @@ req := sip.NewRequest(method, &recipment)
 // Send request and forget
 client.WriteRequest(req)
 ```
+
+## Dialog handling (NEW)
+
+`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions
+
+**UAC**:
+```go
+contactHDR := sip.ContactHeader{
+    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
+}
+dialogCli := NewDialogClient(cli, contactHDR)
+
+// Attach Bye handling for dialog
+srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+    err := dialogCli.ReadBye(req, tx)
+    //handle error
+})
+
+// Create dialog session
+dialog, err := dialogCli.Invite(ctx, recipientURI, nil)
+// Check dialog response (SDP) and return ACK
+err = dialog.Ack(ctx)
+// Send BYE to terminate call
+err = sess.Bye(ctx)
+```
+
+**UAS**:
+```go
+uasContact := sip.ContactHeader{
+    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+}
+dialogSrv := NewDialogServer(cli, uasContact)
+
+srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+    dlg, err := dialogSrv.ReadInvite(req, tx)
+    // handle error
+
+    dlg.Respond(sip.StatusTrying, "Trying", nil)
+    dlg.Respond(sip.StatusOK, "OK", nil)
+    <-tx.Done()
+})
+
+srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
+    dialogSrv.ReadAck(req, tx)
+})
+
+srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+    dialogSrv.ReadBye(req, tx)
+})
+```
+
+## Stateful Proxy build
+
+Proxy is combination client and server handle that creates server/client transaction. They need to share
+same ua same like uac/uas build.
+Forwarding request is done via client handle:
+```go
+
+srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+    ctx := context.Background()
+    req.SetDestination("10.1.2.3") // Change sip.Request destination
+    // Start client transaction and relay our request. Add Via and Record-Route header
+    clTx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
+    // Send back response
+    res := <-cltx.Responses()
+    tx.Respond(res)
+})
+```
+
 ## SIP Debug
 
 You can have full SIP messages dumped from transport into Debug level message.
