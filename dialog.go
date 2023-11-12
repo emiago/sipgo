@@ -2,6 +2,7 @@ package sipgo
 
 import (
 	"errors"
+	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
 )
@@ -18,9 +19,13 @@ type Dialog struct {
 	InviteRequest  *sip.Request
 	InviteResponse *sip.Response
 
-	state int
+	state atomic.Int32
 }
 
 func (d *Dialog) Body() []byte {
 	return d.InviteResponse.Body()
+}
+
+func (d *Dialog) setState(s int32) {
+	d.state.Store(s)
 }

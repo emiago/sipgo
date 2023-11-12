@@ -52,12 +52,10 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 		return nil, ErrDialogInviteNoContact
 	}
 
-	d := Dialog{
-		InviteRequest: req,
-	}
-
 	dtx := &DialogServerSession{
-		Dialog:   d,
+		Dialog: Dialog{
+			InviteRequest: req,
+		},
 		inviteTx: tx,
 		s:        s,
 	}
@@ -81,9 +79,7 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 		return ErrDialogDoesNotExists
 	}
 
-	dt.mu.Lock()
-	dt.state = sip.DialogStateConfirmed
-	dt.mu.Unlock()
+	dt.setState(sip.DialogStateConfirmed)
 
 	// Acks are normally just absorbed, but in case of proxy
 	// they still need to be passed
@@ -122,28 +118,27 @@ type DialogServerSession struct {
 	Dialog
 	inviteTx sip.ServerTransaction
 	s        *DialogServer
-	mu       sync.Mutex
 }
 
 // Respond should be called for Invite request, you may want to call this multiple times like
 // 100 Progress or 180 Ringing
 // 2xx for creating dialog or other code in case failure
-func (t *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
+func (s *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
 	// Must copy Record-Route headers. Done by this command
-	res := sip.NewResponseFromRequest(t.InviteRequest, statusCode, reason, body)
+	res := sip.NewResponseFromRequest(s.InviteRequest, statusCode, reason, body)
 
 	for _, h := range headers {
 		res.AppendHeader(h)
 	}
 
-	return t.WriteResponse(res)
+	return s.WriteResponse(res)
 }
 
-func (t *DialogServerSession) WriteResponse(res *sip.Response) error {
-	tx := t.inviteTx
+func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
+	tx := s.inviteTx
 
 	// Must add contact header
-	res.AppendHeader(&t.s.contactHDR)
+	res.AppendHeader(&s.s.contactHDR)
 
 	if !res.IsSuccess() {
 		// This will not create dialog so we will just respond
@@ -155,19 +150,19 @@ func (t *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return err
 	}
 
-	t.Dialog.ID = id
-	t.Dialog.InviteResponse = res
-	t.Dialog.state = sip.DialogStateEstablished
+	s.Dialog.ID = id
+	s.Dialog.InviteResponse = res
+	s.setState(sip.DialogStateEstablished)
 
-	t.s.dialogs.Store(id, t)
+	s.s.dialogs.Store(id, s)
 
 	if err := tx.Respond(res); err != nil {
 		return err
 	}
 
 	// TODO: Should we maybe fork this
-	if t.s.OnSession != nil {
-		t.s.OnSession(t)
+	if s.s.OnSession != nil {
+		s.s.OnSession(s)
 	}
 	return nil
 }
@@ -191,9 +186,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	// until it has received an ACK for its 2xx response or until the server
 	// transaction times out.
 	for {
-		s.mu.Lock()
-		state := s.state
-		s.mu.Unlock()
+		state := s.state.Load()
 
 		if state < sip.DialogStateConfirmed {
 			select {
@@ -246,9 +239,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	}
 	defer tx.Terminate() // Terminates current transaction
 
-	s.mu.Lock()
-	s.state = sip.DialogStateEnded
-	s.mu.Unlock()
+	s.setState(sip.DialogStateEnded)
 
 	// Wait 200
 	select {

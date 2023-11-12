@@ -185,7 +185,9 @@ srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
 
 // Create dialog session
 dialog, err := dialogCli.Invite(ctx, recipientURI, nil)
-// Check dialog response (SDP) and return ACK
+// Wait for answer
+err = dialog.WaitAnswer(ctx, AnswerOptions{})
+// Check dialog response dialog.InviteResponse (SDP) and return ACK
 err = dialog.Ack(ctx)
 // Send BYE to terminate call
 err = sess.Bye(ctx)

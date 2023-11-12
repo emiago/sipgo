@@ -2,9 +2,9 @@ package sip
 
 const (
 	// Dialog received 200 response
-	DialogStateEstablished = iota
+	DialogStateEstablished int32 = 1
 	// Dialog received ACK
-	DialogStateConfirmed
+	DialogStateConfirmed int32 = 2
 	// Dialog received BYE
-	DialogStateEnded
+	DialogStateEnded int32 = 3
 )

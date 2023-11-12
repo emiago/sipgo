@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
@@ -46,9 +47,9 @@ func (e ErrDialogResponse) Error() string {
 	return fmt.Sprintf("Invite failed with response: %s", e.Res.StartLine())
 }
 
-// Invite sends INVITE request and waits for success response or returns ErrDialogResponse in case non 2xx
-// Canceling context while waiting 2xx will send Cancel request
-// For more customizing Invite request use WriteInvite instead
+// Invite sends INVITE request and creates early dialog session.
+// You need to call WaitAnswer after for establishing dialog
+// For passing custom Invite request use WriteInvite
 func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
 	req := sip.NewRequest(sip.INVITE, recipient)
 	if body != nil {
@@ -58,18 +59,10 @@ func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []b
 	for _, h := range headers {
 		req.AppendHeader(h)
 	}
-	return dc.WriteInvite(ctx, req, InviteOptions{})
+	return dc.WriteInvite(ctx, req)
 }
 
-type InviteOptions struct {
-	OnResponse func(res *sip.Response)
-
-	// For digest authentication
-	Username string
-	Password string
-}
-
-func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request, opts InviteOptions) (*DialogClientSession, error) {
+func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
 	cli := dc.c
 
 	inviteRequest.AppendHeader(&dc.contactHDR)
@@ -80,74 +73,15 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 		return nil, err
 	}
 
-	var r *sip.Response
-	for {
-		select {
-		case r = <-tx.Responses():
-			// just pass
-		case <-ctx.Done():
-			// Send cancel
-			defer tx.Terminate()
-			if err := tx.Cancel(); err != nil {
-				return nil, errors.Join(err, ctx.Err())
-			}
-			return nil, ctx.Err()
-
-		case <-tx.Done():
-			return nil, tx.Err()
-		}
-
-		if opts.OnResponse != nil {
-			opts.OnResponse(r)
-		}
-
-		if r.IsSuccess() {
-			break
-		}
-
-		if r.IsProvisional() {
-			continue
-		}
-
-		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" {
-			h := inviteRequest.GetHeader("Authorization")
-			if h == nil {
-				tx.Terminate()
-				tx, err = digestTransactionRequest(ctx, dc.c, inviteRequest, r, digest.Options{
-					Method:   sip.INVITE.String(),
-					Username: opts.Username,
-					Password: opts.Password,
-				})
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			continue
-		}
-
-		return nil, &ErrDialogResponse{Res: r}
-	}
-
-	id, err := sip.MakeDialogIDFromResponse(r)
-	if err != nil {
-		return nil, err
-	}
-
-	d := Dialog{
-		ID:             id,
-		InviteRequest:  inviteRequest,
-		InviteResponse: r,
-		state:          sip.DialogStateEstablished,
-	}
-
 	dtx := &DialogClientSession{
-		Dialog:   d,
+		Dialog: Dialog{
+			InviteRequest: inviteRequest,
+			state:         atomic.Int32{},
+		},
 		dc:       dc,
 		inviteTx: tx,
 	}
 
-	dc.dialogs.Store(id, dtx)
 	return dtx, nil
 }
 
@@ -182,6 +116,83 @@ type DialogClientSession struct {
 	inviteTx sip.ClientTransaction
 }
 
+type AnswerOptions struct {
+	OnResponse func(res *sip.Response)
+
+	// For digest authentication
+	Username string
+	Password string
+}
+
+// WaitAnswer waits for success response or returns ErrDialogResponse in case non 2xx
+// Canceling context while waiting 2xx will send Cancel request
+// Returns ErrDialogResponse in case non 2xx response
+func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions) error {
+	client, tx, inviteRequest := s.dc.c, s.inviteTx, s.InviteRequest
+
+	var r *sip.Response
+	var err error
+	for {
+		select {
+		case r = <-tx.Responses():
+			// just pass
+		case <-ctx.Done():
+			// Send cancel
+			defer tx.Terminate()
+			if err := tx.Cancel(); err != nil {
+				return errors.Join(err, ctx.Err())
+			}
+			return ctx.Err()
+
+		case <-tx.Done():
+			return tx.Err()
+		}
+
+		if opts.OnResponse != nil {
+			opts.OnResponse(r)
+		}
+
+		if r.IsSuccess() {
+			break
+		}
+
+		if r.IsProvisional() {
+			continue
+		}
+
+		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" {
+			h := inviteRequest.GetHeader("Authorization")
+			if h == nil {
+				tx.Terminate()
+				tx, err = digestTransactionRequest(ctx, client, inviteRequest, r, digest.Options{
+					Method:   sip.INVITE.String(),
+					Username: opts.Username,
+					Password: opts.Password,
+				})
+				if err != nil {
+					return err
+				}
+			}
+
+			continue
+		}
+
+		return &ErrDialogResponse{Res: r}
+	}
+
+	id, err := sip.MakeDialogIDFromResponse(r)
+	if err != nil {
+		return err
+	}
+	s.inviteTx = tx
+	s.InviteResponse = r
+	s.ID = id
+	s.setState(sip.DialogStateEstablished)
+
+	s.dc.dialogs.Store(id, s)
+	return nil
+}
+
 // Ack sends ack. Use WriteAck for more customizing
 func (s *DialogClientSession) Ack(ctx context.Context) error {
 	ack := sip.NewAckRequest(s.InviteRequest, s.InviteResponse, nil)
@@ -192,7 +203,7 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	if err := s.dc.c.WriteRequest(ack); err != nil {
 		return err
 	}
-	s.Dialog.state = sip.DialogStateConfirmed
+	s.setState(sip.DialogStateConfirmed)
 	return nil
 }
 
@@ -219,17 +230,13 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		if res.StatusCode != 200 {
 			return ErrDialogResponse{res}
 		}
-		s.Dialog.state = sip.DialogStateConfirmed
+		s.setState(sip.DialogStateConfirmed)
 		return nil
 	case <-tx.Done():
 		return tx.Err()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (s *DialogClientSession) Done() <-chan struct{} {
-	return s.inviteTx.Done()
 }
 
 // digestTransactionRequest checks response if 401 and sends digest auth
