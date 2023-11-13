@@ -172,9 +172,8 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				if err != nil {
 					return err
 				}
+				continue
 			}
-
-			continue
 		}
 
 		return &ErrDialogResponse{Res: r}
