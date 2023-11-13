@@ -15,10 +15,23 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 	var semicolon, equal, startQuote, endQuote int = -1, -1, -1, -1
 	var name string
 	var uriStart, uriEnd int = 0, -1
-	var inBrackets bool
+	var inBrackets, inQuotesParamValue bool
 	for i, c := range addressText {
+		if inQuotesParamValue {
+			if c == '"' {
+				inQuotesParamValue = false
+			}
+
+			continue
+		}
+
 		switch c {
 		case '"':
+			if equal > 0 {
+				inQuotesParamValue = true
+				continue
+			}
+
 			if startQuote < 0 {
 				startQuote = i
 			} else {
@@ -45,23 +58,29 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 			equal = -1
 			inBrackets = false
 		case ';':
-			semicolon = i
 			// uri can be without <> in that case there all after ; are header params
 			if inBrackets {
+				semicolon = i
 				continue
 			}
 
 			if uriEnd < 0 {
 				uriEnd = i
+				semicolon = i
 				continue
 			}
 
 			if equal > 0 {
 				val := addressText[equal+1 : i]
 				headerParams.Add(name, val)
-				name, val = "", ""
-				equal = 0
+			} else if semicolon > 0 {
+				// Case when we have key name but not value. ex ;+siptag;
+				name = addressText[semicolon+1 : i]
+				headerParams.Add(name, "")
 			}
+			name = ""
+			equal = 0
+			semicolon = i
 
 		case '=':
 			name = addressText[semicolon+1 : i]

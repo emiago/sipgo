@@ -149,17 +149,36 @@ func TestParseHeaders(t *testing.T) {
 	})
 
 	t.Run("ContactHeader", func(t *testing.T) {
+
 		for header, expected := range map[string]string{
 			"Contact: sip:sipp@127.0.0.3:5060":            "Contact: <sip:sipp@127.0.0.3:5060>",
 			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":     "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
-			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": "Contact: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"",
 		} {
 			h := testParseHeader(t, parser, header)
 			assert.IsType(t, &ContactHeader{}, h)
 
 			hstr := h.String()
 			assert.Equal(t, expected, hstr)
+		}
+
+		type contactFields struct {
+			displayName string
+			address     string
+			headers     HeaderParams
+		}
+
+		for header, expected := range map[string]contactFields{
+			"Contact: <sip:2000@dkanrjsk.invalid>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:a369bd8d-f310-4a95-8328-98c7ed3d5439>\";expires=300": {
+				address: "sip:2000@dkanrjsk.invalid", headers: map[string]string{"+sip.ice": "", "reg-id": "1", "+sip.instance": "\"<urn:uuid:a369bd8d-f310-4a95-8328-98c7ed3d5439>\"", "expires": "300"}},
+			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": {
+			// 	address: "sip:test@10.5.0.1:50267;transport=TCP;ob", headers: map[string]string{"reg-id": "1", "+instance": "\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\""}},
+		} {
+			h := testParseHeader(t, parser, header).(*ContactHeader)
+
+			assert.Equal(t, expected.displayName, h.DisplayName)
+			assert.Equal(t, expected.address, h.Address.String())
+			assert.Equal(t, expected.headers, h.Params)
 		}
 	})
 
