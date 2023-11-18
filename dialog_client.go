@@ -17,6 +17,15 @@ type DialogClient struct {
 	contactHDR sip.ContactHeader
 }
 
+func (s *DialogClient) dialogsLen() int {
+	leftItems := 0
+	s.dialogs.Range(func(key, value any) bool {
+		leftItems++
+		return true
+	})
+	return leftItems
+}
+
 func (s *DialogClient) loadDialog(id string) *DialogClientSession {
 	val, ok := s.dialogs.Load(id)
 	if !ok || val == nil {
@@ -77,6 +86,8 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 		Dialog: Dialog{
 			InviteRequest: inviteRequest,
 			state:         atomic.Int32{},
+			stateCh:       make(chan sip.DialogState, 3),
+			done:          make(chan struct{}),
 		},
 		dc:       dc,
 		inviteTx: tx,
@@ -101,7 +112,8 @@ func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) erro
 	if err := tx.Respond(res); err != nil {
 		return err
 	}
-	dt.inviteTx.Terminate() // Terminates Invite transaction
+	defer dt.Close()              // Delete our dialog always
+	defer dt.inviteTx.Terminate() // Terminates Invite transaction
 
 	// select {
 	// case <-tx.Done():
@@ -114,6 +126,15 @@ type DialogClientSession struct {
 	Dialog
 	dc       *DialogClient
 	inviteTx sip.ClientTransaction
+}
+
+// Close is always good to call for cleanup or terminating dialog state
+func (s *DialogClientSession) Close() error {
+	s.dc.dialogs.Delete(s.ID)
+	s.setState(sip.DialogStateEnded)
+	// ctx, _ := context.WithTimeout(context.Background(), transaction.Timer_B)
+	// return s.Bye(ctx)
+	return nil
 }
 
 type AnswerOptions struct {
@@ -166,6 +187,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				tx.Terminate()
 				tx, err = digestTransactionRequest(ctx, client, inviteRequest, r, digest.Options{
 					Method:   sip.INVITE.String(),
+					URI:      inviteRequest.Recipient.Addr(),
 					Username: opts.Username,
 					Password: opts.Password,
 				})
@@ -187,7 +209,6 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	s.InviteResponse = r
 	s.ID = id
 	s.setState(sip.DialogStateEstablished)
-
 	s.dc.dialogs.Store(id, s)
 	return nil
 }
@@ -200,6 +221,8 @@ func (s *DialogClientSession) Ack(ctx context.Context) error {
 
 func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) error {
 	if err := s.dc.c.WriteRequest(ack); err != nil {
+		// Make sure we close our error
+		s.Close()
 		return err
 	}
 	s.setState(sip.DialogStateConfirmed)
@@ -214,7 +237,13 @@ func (s *DialogClientSession) Bye(ctx context.Context) error {
 
 func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) error {
 	dc := s.dc
-	defer dc.dialogs.Delete(s.ID) // Delete our dialog always
+	defer s.Close()
+
+	state := s.state.Load()
+	// In case dialog terminated
+	if sip.DialogState(state) == sip.DialogStateEnded {
+		return nil
+	}
 
 	tx, err := dc.c.TransactionRequest(ctx, bye)
 	if err != nil {

@@ -190,7 +190,7 @@ err = dialog.WaitAnswer(ctx, AnswerOptions{})
 // Check dialog response dialog.InviteResponse (SDP) and return ACK
 err = dialog.Ack(ctx)
 // Send BYE to terminate call
-err = sess.Bye(ctx)
+err = dialog.Bye(ctx)
 ```
 
 **UAS**:
@@ -203,10 +203,11 @@ dialogSrv := NewDialogServer(cli, uasContact)
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
     // handle error
-
     dlg.Respond(sip.StatusTrying, "Trying", nil)
     dlg.Respond(sip.StatusOK, "OK", nil)
-    <-tx.Done()
+    
+    // Instead Done also dlg.State() can be used
+    <-dlg.Done()
 })
 
 srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {

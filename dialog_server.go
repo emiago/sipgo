@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/emiago/sipgo/sip"
@@ -15,10 +16,6 @@ type DialogServer struct {
 	dialogs    sync.Map // TODO replace with typed version
 	contactHDR sip.ContactHeader
 	c          *Client
-
-	// OnSession is called just after sending Success response
-	// It will block server side execution
-	OnSession func(s *DialogServerSession)
 }
 
 func (s *DialogServer) loadDialog(id string) *DialogServerSession {
@@ -55,6 +52,9 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			InviteRequest: req,
+			state:         atomic.Int32{},
+			stateCh:       make(chan sip.DialogState, 3),
+			done:          make(chan struct{}),
 		},
 		inviteTx: tx,
 		s:        s,
@@ -104,6 +104,7 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		// }
 		return ErrDialogDoesNotExists
 	}
+	defer dt.Close()
 	defer dt.inviteTx.Terminate() // Terminates Invite transaction
 
 	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
@@ -120,9 +121,20 @@ type DialogServerSession struct {
 	s        *DialogServer
 }
 
+// Close is always good to call for cleanup or terminating dialog state
+func (s *DialogServerSession) Close() error {
+	s.s.dialogs.Delete(s.ID)
+	s.setState(sip.DialogStateEnded)
+	// ctx, _ := context.WithTimeout(context.Background(), transaction.Timer_B)
+	// return s.Bye(ctx)
+	return nil
+}
+
 // Respond should be called for Invite request, you may want to call this multiple times like
 // 100 Progress or 180 Ringing
 // 2xx for creating dialog or other code in case failure
+//
+// In case Cancel request received: ErrDialogCanceled is responded
 func (s *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
 	// Must copy Record-Route headers. Done by this command
 	res := sip.NewResponseFromRequest(s.InviteRequest, statusCode, reason, body)
@@ -140,6 +152,17 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	// Must add contact header
 	res.AppendHeader(&s.s.contactHDR)
 
+	// Do we have cancel in meantime
+	select {
+	case req := <-tx.Cancels():
+		tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
+		return ErrDialogCanceled
+	case <-tx.Done():
+		// There must be some error
+		return tx.Err()
+	default:
+	}
+
 	if !res.IsSuccess() {
 		// This will not create dialog so we will just respond
 		return tx.Respond(res)
@@ -154,26 +177,22 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	s.Dialog.InviteResponse = res
 	s.setState(sip.DialogStateEstablished)
 
-	s.s.dialogs.Store(id, s)
-
 	if err := tx.Respond(res); err != nil {
 		return err
 	}
 
-	// TODO: Should we maybe fork this
-	if s.s.OnSession != nil {
-		s.s.OnSession(s)
-	}
+	s.s.dialogs.Store(id, s)
 	return nil
 }
 
 func (s *DialogServerSession) Bye(ctx context.Context) error {
-	cli := s.s.c
-	// This is tricky
-	defer s.s.dialogs.Delete(s.ID) // Delete our dialog always
-	defer s.inviteTx.Terminate()   // Terminates INVITE in all cases
+	state := s.state.Load()
+	// In case dialog terminated
+	if sip.DialogState(state) == sip.DialogStateEnded {
+		return nil
+	}
 
-	// Reverse from and to
+	cli := s.s.c
 	req := s.Dialog.InviteRequest
 	res := s.Dialog.InviteResponse
 
@@ -181,14 +200,16 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return fmt.Errorf("Can not send bye on NON success response")
 	}
 
+	// This is tricky
+	defer s.Close()              // Delete our dialog always
+	defer s.inviteTx.Terminate() // Terminates INVITE in all cases
+
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-15
 	// However, the callee's UA MUST NOT send a BYE on a confirmed dialog
 	// until it has received an ACK for its 2xx response or until the server
 	// transaction times out.
 	for {
-		state := s.state.Load()
-
-		if state < sip.DialogStateConfirmed {
+		if sip.DialogState(state) < sip.DialogStateConfirmed {
 			select {
 			case <-s.inviteTx.Done():
 				// Wait until we timeout
@@ -239,7 +260,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	}
 	defer tx.Terminate() // Terminates current transaction
 
-	s.setState(sip.DialogStateEnded)
+	// s.setState(sip.DialogStateEnded)
 
 	// Wait 200
 	select {
