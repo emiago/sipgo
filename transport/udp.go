@@ -22,6 +22,9 @@ var (
 
 	UDPMTUSize = 1500
 
+	// UDPUseConnectedConnection will force creating UDP connected connection
+	UDPUseConnectedConnection = false
+
 	ErrUDPMTUCongestion = errors.New("size of packet larger than MTU")
 )
 
@@ -55,6 +58,9 @@ func (t *UDPTransport) Network() string {
 
 func (t *UDPTransport) Close() error {
 	t.pool.Clear()
+	for _, l := range t.listeners {
+		l.Close()
+	}
 	return nil
 }
 
@@ -103,6 +109,42 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 
 // CreateConnection will create new connection
 func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	if UDPUseConnectedConnection {
+		return t.createConnectedConnection(ctx, laddr, raddr, handler)
+	}
+	return t.createConnection(ctx, laddr, raddr, handler)
+}
+
+func (t *UDPTransport) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+	laddrStr := laddr.String()
+	lc := &net.ListenConfig{}
+	udpconn, err := lc.ListenPacket(ctx, "udp", laddrStr)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &UDPConnection{
+		PacketConn: udpconn,
+		PacketAddr: udpconn.LocalAddr().String(),
+		// 1 ref for current return , 2 ref for reader
+		refcount: 2 + IdleConnection,
+	}
+
+	addr := raddr.String()
+	t.log.Debug().Str("raddr", addr).Msg("New connection")
+
+	// Add in pool but as listen connection
+	t.pool.Add(c.PacketAddr, c)
+	// t.listeners = append(t.listeners, c)
+	go func(conn Connection, raddr string) {
+		defer t.pool.CloseAndDelete(conn, raddr)
+		defer t.log.Debug().Str("raddr", raddr).Msg("Read connection stopped")
+		t.readConnection(c, handler)
+	}(c, c.PacketAddr)
+	return c, err
+}
+
+func (t *UDPTransport) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
 	var uladdr *net.UDPAddr = nil
 	if laddr.IP != nil {
 		uladdr = &net.UDPAddr{
@@ -111,10 +153,10 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		}
 	}
 
-	uraddr := &net.UDPAddr{
-		IP:   raddr.IP,
-		Port: raddr.Port,
-	}
+	// uraddr := &net.UDPAddr{
+	// 	IP:   raddr.IP,
+	// 	Port: raddr.Port,
+	// }
 
 	// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
 	// via unicast 127.0.0.1
@@ -128,7 +170,7 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		LocalAddr: uladdr,
 	}
 
-	addr := uraddr.String()
+	addr := raddr.String()
 	udpconn, err := d.DialContext(ctx, "udp", addr)
 	if err != nil {
 		return nil, err
@@ -140,7 +182,7 @@ func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		refcount: 2 + IdleConnection,
 	}
 
-	t.log.Debug().Str("raddr", addr).Msg("New connection")
+	t.log.Debug().Str("raddr", addr).Msg("New connected connection")
 
 	// Wrap it in reference
 	t.pool.Add(addr, c)

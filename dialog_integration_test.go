@@ -2,6 +2,7 @@ package sipgo
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -10,10 +11,10 @@ import (
 )
 
 func TestIntegrationDialog(t *testing.T) {
-	// if os.Getenv("TEST_INTEGRATION") == "" {
-	// 	t.Skip("Use TEST_INTEGRATION env value to run this test")
-	// 	return
-	// }
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
 
 	ua, _ := NewUA()
 	defer ua.Close()
@@ -153,11 +154,11 @@ func TestIntegrationDialog(t *testing.T) {
 
 }
 
-func TestDialogBrokenUAC(t *testing.T) {
-	// if os.Getenv("TEST_INTEGRATION") == "" {
-	// 	t.Skip("Use TEST_INTEGRATION env value to run this test")
-	// 	return
-	// }
+func TestIntegrationDialogBrokenUAC(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
 
 	ua, _ := NewUA()
 	defer ua.Close()

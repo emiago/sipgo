@@ -51,5 +51,9 @@ type Addr struct {
 }
 
 func (a *Addr) String() string {
+	if a.IP == nil {
+		return net.JoinHostPort("", strconv.Itoa(a.Port))
+	}
+
 	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
 }
