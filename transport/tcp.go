@@ -158,10 +158,20 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 		}
 
 		// Check is keep alive
-		if len(data) <= 4 {
-			//One or 2 CRLF
+		datalen := len(data)
+		if datalen <= 4 {
+			// One or 2 CRLF
+			// https://datatracker.ietf.org/doc/html/rfc5626#section-3.5.1
 			if len(bytes.Trim(data, "\r\n")) == 0 {
 				t.log.Debug().Msg("Keep alive CRLF received")
+				if datalen == 4 {
+					// 2 CRLF is ping
+					if _, err := conn.Write(data[:2]); err != nil {
+						t.log.Error().Err(err).Msg("Failed to pong keep alive")
+						return
+					}
+				}
+
 				continue
 			}
 		}
