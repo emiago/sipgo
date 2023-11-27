@@ -1,4 +1,4 @@
-<img src="icon.png" width="300" alt="SIPGO">
+<img src="icons/icon.png" width="300" alt="SIPGO">
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/emiago/sipgo)](https://goreportcard.com/report/github.com/emiago/sipgo) 
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/emiago/sipgo/LICENCE) 
@@ -38,26 +38,25 @@ Fetch lib with:
 
 ***If you use this lib in some way, open issue for more sharing.***
 
-## E2E/integration testing
-
-If you are interested using lib for your testing services then checkout 
-[article on how easy you can make calls and other](https://github.com/emiago/sipgo/wiki/E2E-testing)
-
 ## Performance
 
 As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
-(Contributions are welcome, I would place your results here)
+## Used By
 
-## Usage
+<a href="https://www.babelforce.com">
+<img src="icons/babelforce-logo.png" width="300" alt="SIPGO">
+</a>
+
+# Usage
 
 Lib allows you to write easily sip servers, clients, stateful proxies, registrars or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
 
 
-### UAS/UAC build
+## UAS/UAC build
 
 Using server or client handle for UA you can build incoming or outgoing requests.
 
@@ -83,7 +82,7 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
 
-#### TLS transports
+### TLS transports
 ```go 
 // TLS
 conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
@@ -92,7 +91,7 @@ srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
 ```
 
 
-### Server Transaction
+## Server Transaction
 
 Server transaction is passed on handler
 
@@ -117,7 +116,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 
 ```
 
-### Server stateless response
+## Server stateless response
 
 ```go
 srv := sipgo.NewServer()
@@ -130,7 +129,7 @@ srv.OnACK(ackHandler)
 ```
 
 
-### Client Transaction
+## Client Transaction
 
 Using client handle allows easy creating and sending request. 
 Unless you customize transaction request with opts by default `client.TransactionRequest` will build all other
@@ -157,7 +156,7 @@ select {
 }
 
 ```
-### Client stateless request
+## Client stateless request
 
 ```go
 client, _ := sipgo.NewClient(ua) // Creating client handle
@@ -265,7 +264,10 @@ Content-Length:  0
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
 
 
+## E2E/integration testing
 
+If you are interested using lib for your testing services then checkout 
+[article on how easy you can make calls and other](https://github.com/emiago/sipgo/wiki/E2E-testing)
 
 
 ## Tests
