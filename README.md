@@ -17,6 +17,10 @@ Fetch lib with:
 
 **NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
+*To keep project development you can* [support it](https://ko-fi.com/emiasupport) 
+
+*Also, if you are using lib in any way, we would like to share it here.*
+
 ## Supported protocols
 
 - [x] UDP
@@ -34,9 +38,7 @@ Fetch lib with:
 ## Tools developed:
 - CLI softphone for easy testing [gophone](https://github.com/emiago/sipgo-tools#gophone)
 - Simple proxy where NAT is problem [psip](https://github.com/emiago/sipgo-tools#psip)
-- ... your tool can be here
-
-***If you use this lib in some way, open issue for more sharing.***
+- ... *your tool can be here*
 
 ## Performance
 
@@ -47,7 +49,7 @@ To find out more about performance check the latest results:
 ## Used By
 
 <a href="https://www.babelforce.com">
-<img src="icons/babelforce-logo.png" width="300" alt="SIPGO">
+<img src="icons/babelforce-logo.png" width="300" alt="babelforce">
 </a>
 
 # Usage
