@@ -34,7 +34,7 @@ type transportWS struct {
 	dialer ws.Dialer
 }
 
-func NewWSTransport(par *Parser) *transportWS {
+func newWSTransport(par *Parser) *transportWS {
 	p := &transportWS{
 		parser:    par,
 		pool:      NewConnectionPool(),

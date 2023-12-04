@@ -37,7 +37,7 @@ type transportUDP struct {
 	log zerolog.Logger
 }
 
-func NewUDPTransport(par *Parser) *transportUDP {
+func newUDPTransport(par *Parser) *transportUDP {
 	p := &transportUDP{
 		parser: par,
 		pool:   NewConnectionPool(),

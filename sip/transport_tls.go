@@ -19,9 +19,9 @@ type transportTLS struct {
 	tlsConf *tls.Config
 }
 
-// NewTLSTransport needs dialTLSConf for creating connections when dialing
-func NewTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
-	tcptrans := NewTCPTransport(par)
+// newTLSTransport needs dialTLSConf for creating connections when dialing
+func newTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
+	tcptrans := newTCPTransport(par)
 	tcptrans.transport = TransportTLS //Override transport
 	p := &transportTLS{
 		transportTCP: tcptrans,

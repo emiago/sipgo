@@ -23,7 +23,7 @@ type transportTCP struct {
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par *Parser) *transportTCP {
+func newTCPTransport(par *Parser) *transportTCP {
 	p := &transportTCP{
 		parser:    par,
 		pool:      NewConnectionPool(),

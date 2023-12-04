@@ -16,9 +16,9 @@ type transportWSS struct {
 	// rootPool *x509.CertPool
 }
 
-// NewWSSTransport needs dialTLSConf for creating connections when dialing
-func NewWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
-	tcptrans := NewWSTransport(par)
+// newWSSTransport needs dialTLSConf for creating connections when dialing
+func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
+	tcptrans := newWSTransport(par)
 	tcptrans.transport = TransportWSS
 	// Set our TLS config
 	p := &transportWSS{

@@ -55,3 +55,16 @@ func (a *Addr) String() string {
 
 	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
 }
+
+func ParseAddr(addr string) (host string, port int, err error) {
+	host, pstr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return host, port, err
+	}
+
+	// In case we are dealing with some named ports this should be called
+	// net.LookupPort(network)
+
+	port, err = strconv.Atoi(pstr)
+	return host, port, err
+}

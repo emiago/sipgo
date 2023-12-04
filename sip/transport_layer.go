@@ -62,14 +62,15 @@ func NewTransportLayer(
 
 	l.log = log.Logger.With().Str("caller", "transportlayer").Logger()
 
+	// TODO consider this transports are configurable from outside
 	// Make some default transports available.
-	l.udp = NewUDPTransport(sipparser)
-	l.tcp = NewTCPTransport(sipparser)
+	l.udp = newUDPTransport(sipparser)
+	l.tcp = newTCPTransport(sipparser)
 	// TODO. Using default dial tls, but it needs to configurable via client
-	l.tls = NewTLSTransport(sipparser, tlsConfig)
-	l.ws = NewWSTransport(sipparser)
+	l.tls = newTLSTransport(sipparser, tlsConfig)
+	l.ws = newWSTransport(sipparser)
 	// TODO. Using default dial tls, but it needs to configurable via client
-	l.wss = NewWSSTransport(sipparser, tlsConfig)
+	l.wss = newWSSTransport(sipparser, tlsConfig)
 
 	// Fill map for fast access
 	l.transports["udp"] = l.udp
