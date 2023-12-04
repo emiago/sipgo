@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 )
@@ -34,7 +33,7 @@ type ServerTx struct {
 	closeOnce sync.Once
 }
 
-func NewServerTx(key string, origin *sip.Request, conn transport.Connection, logger zerolog.Logger) *ServerTx {
+func NewServerTx(key string, origin *sip.Request, conn sip.Connection, logger zerolog.Logger) *ServerTx {
 	tx := new(ServerTx)
 	tx.key = key
 	tx.conn = conn
@@ -45,7 +44,7 @@ func NewServerTx(key string, origin *sip.Request, conn transport.Connection, log
 	tx.done = make(chan struct{})
 	tx.log = logger
 	tx.origin = origin
-	tx.reliable = transport.IsReliable(origin.Transport())
+	tx.reliable = sip.IsReliable(origin.Transport())
 	return tx
 }
 

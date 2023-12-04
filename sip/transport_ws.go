@@ -1,4 +1,4 @@
-package transport
+package sip
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 
@@ -27,7 +26,7 @@ var (
 
 // WS transport implementation
 type WSTransport struct {
-	parser    *sip.Parser
+	parser    *Parser
 	log       zerolog.Logger
 	transport string
 
@@ -35,7 +34,7 @@ type WSTransport struct {
 	dialer ws.Dialer
 }
 
-func NewWSTransport(par *sip.Parser) *WSTransport {
+func NewWSTransport(par *Parser) *WSTransport {
 	p := &WSTransport{
 		parser:    par,
 		pool:      NewConnectionPool(),
@@ -62,7 +61,7 @@ func (t *WSTransport) Close() error {
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
+func (t *WSTransport) Serve(l net.Listener, handler MessageHandler) error {
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
 
 	// Prepare handshake header writer from http.Header mapping.
@@ -78,7 +77,7 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 		},
 	}
 
-	if SIPDebug {
+	if SIPTrace {
 		u.OnHeader = func(key, value []byte) error {
 			log.Debug().Str(string(key), string(value)).Msg("non-websocket header:")
 			return nil
@@ -106,7 +105,7 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 	}
 }
 
-func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, handler sip.MessageHandler) Connection {
+func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
@@ -121,7 +120,7 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool
 }
 
 // This should performe better to avoid any interface allocation
-func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler sip.MessageHandler) {
+func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
@@ -170,7 +169,7 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler s
 }
 
 // TODO: Try to reuse this from TCP transport as func are same
-func (t *WSTransport) parseStream(par *sip.ParserStream, data []byte, src string, handler sip.MessageHandler) {
+func (t *WSTransport) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
@@ -183,7 +182,7 @@ func (t *WSTransport) parseStream(par *sip.ParserStream, data []byte, src string
 }
 
 // TODO use this when message size limit is defined
-func (t *WSTransport) parseFull(data []byte, src string, handler sip.MessageHandler) {
+func (t *WSTransport) parseFull(data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
@@ -210,7 +209,7 @@ func (t *WSTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *WSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *WSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -231,7 +230,7 @@ func (t *WSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *WSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *WSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -309,7 +308,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 			return n, err
 		}
 
-		if SIPDebug {
+		if SIPTrace {
 			log.Debug().Str("caller", c.RemoteAddr().String()).Msgf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
 		}
 
@@ -331,7 +330,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// 	continue
 		// }
 
-		if SIPDebug {
+		if SIPTrace {
 			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
 		}
 
@@ -351,7 +350,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
-	if SIPDebug {
+	if SIPTrace {
 		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
 	}
 
@@ -364,7 +363,7 @@ func (c *WSConnection) Write(b []byte) (n int, err error) {
 	return len(b), err
 }
 
-func (c *WSConnection) WriteMsg(msg sip.Message) error {
+func (c *WSConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()

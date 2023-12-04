@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 )
@@ -25,7 +24,7 @@ type ClientTx struct {
 	closeOnce sync.Once
 }
 
-func NewClientTx(key string, origin *sip.Request, conn transport.Connection, logger zerolog.Logger) *ClientTx {
+func NewClientTx(key string, origin *sip.Request, conn sip.Connection, logger zerolog.Logger) *ClientTx {
 	tx := &ClientTx{}
 	tx.key = key
 	// tx.conn = tpl
@@ -47,7 +46,7 @@ func (tx *ClientTx) Init() error {
 		return wrapTransportError(err)
 	}
 
-	reliable := transport.IsReliable(tx.origin.Transport())
+	reliable := sip.IsReliable(tx.origin.Transport())
 	if reliable {
 		tx.mu.Lock()
 		tx.timer_d_time = 0

@@ -12,7 +12,6 @@ import (
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
-	"github.com/emiago/sipgo/transport"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -107,7 +106,7 @@ func TestMain(m *testing.M) {
 	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
 		log.Logger = log.Level(lvl)
 	}
-	transport.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
+	sip.SIPTrace = os.Getenv("SIP_DEBUG") == "true"
 
 	m.Run()
 }

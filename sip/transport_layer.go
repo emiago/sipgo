@@ -1,4 +1,4 @@
-package transport
+package sip
 
 import (
 	"context"
@@ -10,22 +10,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emiago/sipgo/sip"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	ErrNetworkNotSuported = errors.New("protocol not supported")
+	ErrTransportNotSuported = errors.New("protocol not supported")
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// Layer implementation.
-type Layer struct {
+// TransportLayer implementation.
+type TransportLayer struct {
 	udp *UDPTransport
 	tcp *TCPTransport
 	tls *TLSTransport
@@ -38,7 +36,7 @@ type Layer struct {
 	listenPortsMu sync.Mutex
 	dnsResolver   *net.Resolver
 
-	handlers []sip.MessageHandler
+	handlers []MessageHandler
 
 	log zerolog.Logger
 
@@ -50,12 +48,12 @@ type Layer struct {
 // dns Resolver
 // sip parser
 // tls config - can be nil to use default tls
-func NewLayer(
+func NewTransportLayer(
 	dnsResolver *net.Resolver,
-	sipparser *sip.Parser,
+	sipparser *Parser,
 	tlsConfig *tls.Config,
-) *Layer {
-	l := &Layer{
+) *TransportLayer {
+	l := &TransportLayer{
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
@@ -84,11 +82,11 @@ func NewLayer(
 }
 
 // OnMessage is main function which will be called on any new message by transport layer
-func (l *Layer) OnMessage(h sip.MessageHandler) {
+func (l *TransportLayer) OnMessage(h MessageHandler) {
 	// if l.handler != nil {
 	// 	// Make sure appending
 	// 	next := l.handler
-	// 	l.handler = func(m sip.Message) {
+	// 	l.handler = func(m Message) {
 	// 		h(m)
 	// 		next(m)
 	// 	}
@@ -101,7 +99,7 @@ func (l *Layer) OnMessage(h sip.MessageHandler) {
 }
 
 // handleMessage is transport layer for handling messages
-func (l *Layer) handleMessage(msg sip.Message) {
+func (l *TransportLayer) handleMessage(msg Message) {
 	// We have to consider
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-18.2.1 for some message editing
 	// Proxy further to other
@@ -115,8 +113,8 @@ func (l *Layer) handleMessage(msg sip.Message) {
 }
 
 // ServeUDP will listen on udp connection
-func (l *Layer) ServeUDP(c net.PacketConn) error {
-	_, port, err := sip.ParseAddr(c.LocalAddr().String())
+func (l *TransportLayer) ServeUDP(c net.PacketConn) error {
+	_, port, err := ParseAddr(c.LocalAddr().String())
 	if err != nil {
 		return err
 	}
@@ -127,8 +125,8 @@ func (l *Layer) ServeUDP(c net.PacketConn) error {
 }
 
 // ServeTCP will listen on tcp connection
-func (l *Layer) ServeTCP(c net.Listener) error {
-	_, port, err := sip.ParseAddr(c.Addr().String())
+func (l *TransportLayer) ServeTCP(c net.Listener) error {
+	_, port, err := ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -139,8 +137,8 @@ func (l *Layer) ServeTCP(c net.Listener) error {
 }
 
 // ServeWS will listen on ws connection
-func (l *Layer) ServeWS(c net.Listener) error {
-	_, port, err := sip.ParseAddr(c.Addr().String())
+func (l *TransportLayer) ServeWS(c net.Listener) error {
+	_, port, err := ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -151,8 +149,8 @@ func (l *Layer) ServeWS(c net.Listener) error {
 }
 
 // ServeTLS will listen on tcp connection
-func (l *Layer) ServeTLS(c net.Listener) error {
-	_, port, err := sip.ParseAddr(c.Addr().String())
+func (l *TransportLayer) ServeTLS(c net.Listener) error {
+	_, port, err := ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -162,8 +160,8 @@ func (l *Layer) ServeTLS(c net.Listener) error {
 }
 
 // ServeWSS will listen on wss connection
-func (l *Layer) ServeWSS(c net.Listener) error {
-	_, port, err := sip.ParseAddr(c.Addr().String())
+func (l *TransportLayer) ServeWSS(c net.Listener) error {
+	_, port, err := ParseAddr(c.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -173,7 +171,7 @@ func (l *Layer) ServeWSS(c net.Listener) error {
 	return l.wss.Serve(c, l.handleMessage)
 }
 
-func (l *Layer) addListenPort(network string, port int) {
+func (l *TransportLayer) addListenPort(network string, port int) {
 	l.listenPortsMu.Lock()
 	defer l.listenPortsMu.Unlock()
 
@@ -185,7 +183,7 @@ func (l *Layer) addListenPort(network string, port int) {
 	}
 }
 
-func (l *Layer) GetListenPort(network string) int {
+func (l *TransportLayer) GetListenPort(network string) int {
 	ports, _ := l.listenPorts[network]
 	if len(ports) > 0 {
 		return ports[0]
@@ -193,13 +191,13 @@ func (l *Layer) GetListenPort(network string) int {
 	return 0
 }
 
-func (l *Layer) WriteMsg(msg sip.Message) error {
+func (l *TransportLayer) WriteMsg(msg Message) error {
 	network := msg.Transport()
 	addr := msg.Destination()
 	return l.WriteMsgTo(msg, addr, network)
 }
 
-func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
+func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) error {
 	/*s
 	// Client sending request, or we are sending responses
 	To consider
@@ -226,7 +224,7 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 	//    as TCP. If this causes a change in the transport protocol from the
 	//    one indicated in the top Via, the value in the top Via MUST be
 	//    changed.
-	case *sip.Request:
+	case *Request:
 		var ctx = context.Background()
 		//Every new request must be handled in seperate connection
 		conn, err = l.ClientRequestConnection(ctx, m)
@@ -237,7 +235,7 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 		// Reference counting should prevent us closing connection too early
 		defer conn.TryClose()
 
-	case *sip.Response:
+	case *Response:
 
 		conn, err = l.GetConnection(network, addr)
 		if err != nil {
@@ -274,7 +272,7 @@ func (l *Layer) WriteMsgTo(msg sip.Message, addr string, network string) error {
 //
 // In case req destination is DNS resolved, destination will be cached or in
 // other words SetDestination will be called
-func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (c Connection, err error) {
+func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
 	transport, ok := l.transports[network]
 	if !ok {
@@ -283,7 +281,7 @@ func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (
 
 	// Resolve our remote address
 	a := req.Destination()
-	host, port, err := sip.ParseAddr(a)
+	host, port, err := ParseAddr(a)
 	if err != nil {
 		return nil, fmt.Errorf("build address target for %s: %w", a, err)
 	}
@@ -334,7 +332,7 @@ func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (
 			laddrStr := laddr.String()
 
 			// TODO handle broadcast address
-			host, port, err := sip.ParseAddr(laddrStr)
+			host, port, err := ParseAddr(laddrStr)
 			if err != nil {
 				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
 			}
@@ -387,7 +385,7 @@ func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (
 		l := c.LocalAddr()
 		laddrStr := l.String()
 
-		host, port, err = sip.ParseAddr(laddrStr)
+		host, port, err = ParseAddr(laddrStr)
 		if err != nil {
 			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
 		}
@@ -400,7 +398,7 @@ func (l *Layer) ClientRequestConnection(ctx context.Context, req *sip.Request) (
 	return c, nil
 }
 
-func (l *Layer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
+func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
 	defer func(start time.Time) {
 		if dur := time.Since(start); dur > 50*time.Millisecond {
 			l.log.Warn().Dur("dur", dur).Msg("DNS resolution is slow")
@@ -435,12 +433,12 @@ func (l *Layer) resolveAddr(ctx context.Context, network string, host string, ad
 }
 
 // GetConnection gets existing or creates new connection based on addr
-func (l *Layer) GetConnection(network, addr string) (Connection, error) {
+func (l *TransportLayer) GetConnection(network, addr string) (Connection, error) {
 	network = NetworkToLower(network)
 	return l.getConnection(network, addr)
 }
 
-func (l *Layer) getConnection(network, addr string) (Connection, error) {
+func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
 	transport, ok := l.transports[network]
 	if !ok {
 		return nil, fmt.Errorf("transport %s is not supported", network)
@@ -455,7 +453,7 @@ func (l *Layer) getConnection(network, addr string) (Connection, error) {
 	return c, err
 }
 
-func (l *Layer) Close() error {
+func (l *TransportLayer) Close() error {
 	l.log.Debug().Msg("Layer is closing")
 	var werr error
 	for _, t := range l.transports {
@@ -491,6 +489,6 @@ func NetworkToLower(network string) string {
 	case "WSS":
 		return "wss"
 	default:
-		return sip.ASCIIToLower(network)
+		return ASCIIToLower(network)
 	}
 }

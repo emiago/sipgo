@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,7 +23,7 @@ func defaultUnhandledRespHandler(r *sip.Response) {
 }
 
 type Layer struct {
-	tpl           *transport.Layer
+	tpl           *sip.TransportLayer
 	reqHandler    RequestHandler
 	unRespHandler UnhandledResponseHandler
 
@@ -34,7 +33,7 @@ type Layer struct {
 	log zerolog.Logger
 }
 
-func NewLayer(tpl *transport.Layer) *Layer {
+func NewLayer(tpl *sip.TransportLayer) *Layer {
 	txl := &Layer{
 		tpl:                tpl,
 		clientTransactions: newTransactionStore(),
@@ -233,6 +232,6 @@ func (txl *Layer) Close() {
 	txl.log.Debug().Msg("transaction layer closed")
 }
 
-func (txl *Layer) Transport() sip.Transport {
+func (txl *Layer) Transport() *sip.TransportLayer {
 	return txl.tpl
 }

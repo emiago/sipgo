@@ -1,12 +1,10 @@
-package transport
+package sip
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
-
-	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog/log"
 )
@@ -22,7 +20,7 @@ type TLSTransport struct {
 }
 
 // NewTLSTransport needs dialTLSConf for creating connections when dialing
-func NewTLSTransport(par *sip.Parser, dialTLSConf *tls.Config) *TLSTransport {
+func NewTLSTransport(par *Parser, dialTLSConf *tls.Config) *TLSTransport {
 	tcptrans := NewTCPTransport(par)
 	tcptrans.transport = TransportTLS //Override transport
 	p := &TLSTransport{
@@ -40,7 +38,7 @@ func (t *TLSTransport) String() string {
 }
 
 // CreateConnection creates TLS connection for TCP transport
-func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -62,7 +60,7 @@ func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 

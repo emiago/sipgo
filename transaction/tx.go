@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 )
@@ -15,7 +14,7 @@ type commonTx struct {
 	origin *sip.Request
 	// tpl    *transport.Layer
 
-	conn     transport.Connection
+	conn     sip.Connection
 	lastResp *sip.Response
 
 	lastErr error

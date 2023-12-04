@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -161,7 +160,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		// and uses listener to buffer
 		return srv.tp.ServeWS(conn)
 	}
-	return transport.ErrNetworkNotSuported
+	return sip.ErrTransportNotSuported
 }
 
 // Serve will fire all listeners that are secured.
@@ -211,7 +210,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 		return srv.tp.ServeTLS(listener)
 	}
 
-	return transport.ErrNetworkNotSuported
+	return sip.ErrTransportNotSuported
 }
 
 // ServeUDP starts serving request on UDP type listener.
@@ -395,7 +394,7 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 
 // Transport is function to get transport layer of server
 // Can be used for modifying
-func (srv *Server) TransportLayer() *transport.Layer {
+func (srv *Server) TransportLayer() *sip.TransportLayer {
 	return srv.tp
 }
 

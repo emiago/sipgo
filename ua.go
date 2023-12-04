@@ -6,7 +6,6 @@ import (
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/transaction"
-	"github.com/emiago/sipgo/transport"
 )
 
 type UserAgent struct {
@@ -14,7 +13,7 @@ type UserAgent struct {
 	ip          net.IP
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
-	tp          *transport.Layer
+	tp          *sip.TransportLayer
 	tx          *transaction.Layer
 }
 
@@ -80,7 +79,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	}
 
 	// TODO export parser to be configurable
-	ua.tp = transport.NewLayer(ua.dnsResolver, sip.NewParser(), ua.tlsConfig)
+	ua.tp = sip.NewTransportLayer(ua.dnsResolver, sip.NewParser(), ua.tlsConfig)
 	ua.tx = transaction.NewLayer(ua.tp)
 	return ua, nil
 }
@@ -107,6 +106,6 @@ func (ua *UserAgent) Name() string {
 	return ua.name
 }
 
-func (ua *UserAgent) TransportLayer() *transport.Layer {
+func (ua *UserAgent) TransportLayer() *sip.TransportLayer {
 	return ua.tp
 }

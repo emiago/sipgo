@@ -1,4 +1,4 @@
-package transport
+package sip
 
 import (
 	"bytes"
@@ -8,8 +8,6 @@ import (
 	"io"
 	"net"
 	"sync"
-
-	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -31,7 +29,7 @@ var (
 // UDP transport implementation
 type UDPTransport struct {
 	// listener *net.UDPConn
-	parser *sip.Parser
+	parser *Parser
 
 	pool      ConnectionPool
 	listeners []*UDPConnection
@@ -39,7 +37,7 @@ type UDPTransport struct {
 	log zerolog.Logger
 }
 
-func NewUDPTransport(par *sip.Parser) *UDPTransport {
+func NewUDPTransport(par *Parser) *UDPTransport {
 	p := &UDPTransport{
 		parser: par,
 		pool:   NewConnectionPool(),
@@ -66,7 +64,7 @@ func (t *UDPTransport) Close() error {
 
 // ServeConn is direct way to provide conn on which this worker will listen
 // UDPReadWorkers are used to create more workers
-func (t *UDPTransport) Serve(conn net.PacketConn, handler sip.MessageHandler) error {
+func (t *UDPTransport) Serve(conn net.PacketConn, handler MessageHandler) error {
 
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), conn.LocalAddr().String())
 	/*
@@ -108,14 +106,14 @@ func (t *UDPTransport) GetConnection(addr string) (Connection, error) {
 }
 
 // CreateConnection will create new connection
-func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *UDPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	if UDPUseConnectedConnection {
 		return t.createConnectedConnection(ctx, laddr, raddr, handler)
 	}
 	return t.createConnection(ctx, laddr, raddr, handler)
 }
 
-func (t *UDPTransport) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *UDPTransport) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	laddrStr := laddr.String()
 	lc := &net.ListenConfig{}
 	udpconn, err := lc.ListenPacket(ctx, "udp", laddrStr)
@@ -144,7 +142,7 @@ func (t *UDPTransport) createConnection(ctx context.Context, laddr Addr, raddr A
 	return c, err
 }
 
-func (t *UDPTransport) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *UDPTransport) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	var uladdr *net.UDPAddr = nil
 	if laddr.IP != nil {
 		uladdr = &net.UDPAddr{
@@ -191,7 +189,7 @@ func (t *UDPTransport) createConnectedConnection(ctx context.Context, laddr Addr
 	return c, err
 }
 
-func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHandler) {
+func (t *UDPTransport) readConnection(conn *UDPConnection, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
 
@@ -223,7 +221,7 @@ func (t *UDPTransport) readConnection(conn *UDPConnection, handler sip.MessageHa
 	}
 }
 
-func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.MessageHandler) {
+func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	raddr := conn.Conn.RemoteAddr().String()
 	defer t.pool.CloseAndDelete(conn, raddr)
@@ -251,7 +249,7 @@ func (t *UDPTransport) readConnectedConnection(conn *UDPConnection, handler sip.
 
 // This should performe better to avoid any interface allocation
 // For now no usage, but leaving here
-func (t *UDPTransport) readUDPConn(conn *net.UDPConn, handler sip.MessageHandler) {
+func (t *UDPTransport) readUDPConn(conn *net.UDPConn, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
 
@@ -277,7 +275,7 @@ func (t *UDPTransport) readUDPConn(conn *net.UDPConn, handler sip.MessageHandler
 	}
 }
 
-func (t *UDPTransport) parseAndHandle(data []byte, src string, handler sip.MessageHandler) {
+func (t *UDPTransport) parseAndHandle(data []byte, src string, handler MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -368,7 +366,7 @@ func (c *UDPConnection) TryClose() (int, error) {
 
 func (c *UDPConnection) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
-	if SIPDebug {
+	if SIPTrace {
 		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
 	}
 	return n, err
@@ -376,7 +374,7 @@ func (c *UDPConnection) Read(b []byte) (n int, err error) {
 
 func (c *UDPConnection) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
-	if SIPDebug {
+	if SIPTrace {
 		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
 	}
 	return n, err
@@ -385,7 +383,7 @@ func (c *UDPConnection) Write(b []byte) (n int, err error) {
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
-	if SIPDebug && err == nil {
+	if SIPTrace && err == nil {
 		// addr is nil on error
 		log.Debug().Msgf("UDP read from %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
 	}
@@ -395,14 +393,14 @@ func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.PacketConn.WriteTo(b, addr)
-	if SIPDebug && err == nil {
+	if SIPTrace && err == nil {
 		// addr is nil on error
 		log.Debug().Msgf("UDP write to %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
 	}
 	return n, err
 }
 
-func (c *UDPConnection) WriteMsg(msg sip.Message) error {
+func (c *UDPConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -426,7 +424,7 @@ func (c *UDPConnection) WriteMsg(msg sip.Message) error {
 
 		// TODO lets return this better
 		dst := msg.Destination() // Destination should be already resolved by transport layer
-		host, port, err := sip.ParseAddr(dst)
+		host, port, err := ParseAddr(dst)
 		if err != nil {
 			return err
 		}

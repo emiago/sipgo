@@ -6,7 +6,6 @@ import (
 	"net"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -238,7 +237,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
 func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 	// We will try to use our listen port. Host must be set to some none NAT IP
-	port := c.tp.GetListenPort(transport.NetworkToLower(r.Transport()))
+	port := c.tp.GetListenPort(sip.NetworkToLower(r.Transport()))
 
 	rr := &sip.RecordRouteHeader{
 		Address: sip.Uri{
@@ -247,7 +246,7 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 			UriParams: sip.HeaderParams{
 				// Transport must be provided as wesll
 				// https://datatracker.ietf.org/doc/html/rfc5658
-				"transport": transport.NetworkToLower(r.Transport()),
+				"transport": sip.NetworkToLower(r.Transport()),
 				"lr":        "",
 			},
 		},

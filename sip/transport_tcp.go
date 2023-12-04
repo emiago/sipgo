@@ -1,4 +1,4 @@
-package transport
+package sip
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/emiago/sipgo/sip"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -19,13 +17,13 @@ import (
 type TCPTransport struct {
 	addr      string
 	transport string
-	parser    *sip.Parser
+	parser    *Parser
 	log       zerolog.Logger
 
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par *sip.Parser) *TCPTransport {
+func NewTCPTransport(par *Parser) *TCPTransport {
 	p := &TCPTransport{
 		parser:    par,
 		pool:      NewConnectionPool(),
@@ -51,7 +49,7 @@ func (t *TCPTransport) Close() error {
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
+func (t *TCPTransport) Serve(l net.Listener, handler MessageHandler) error {
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
 	for {
 		conn, err := l.Accept()
@@ -69,7 +67,7 @@ func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler sip.MessageHandler) (Connection, error) {
+func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// We are letting transport layer to resolve our address
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
@@ -90,7 +88,7 @@ func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler sip.MessageHandler) (Connection, error) {
+func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -117,7 +115,7 @@ func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	return c, nil
 }
 
-func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.MessageHandler) Connection {
+func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
@@ -132,7 +130,7 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.Me
 }
 
 // This should performe better to avoid any interface allocation
-func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler sip.MessageHandler) {
+func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 
 	defer t.pool.CloseAndDelete(conn, raddr)
@@ -183,9 +181,9 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 	}
 }
 
-func (t *TCPTransport) parseStream(par *sip.ParserStream, data []byte, src string, handler sip.MessageHandler) {
+func (t *TCPTransport) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msgs, err := par.ParseSIPStream(data)
-	if err == sip.ErrParseSipPartial {
+	if err == ErrParseSipPartial {
 		return
 	}
 
@@ -202,7 +200,7 @@ func (t *TCPTransport) parseStream(par *sip.ParserStream, data []byte, src strin
 }
 
 // TODO use this when message size limit is defined
-func (t *TCPTransport) parseFull(data []byte, src string, handler sip.MessageHandler) {
+func (t *TCPTransport) parseFull(data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
@@ -260,7 +258,7 @@ func (c *TCPConnection) TryClose() (int, error) {
 func (c *TCPConnection) Read(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Read(b)
-	if SIPDebug {
+	if SIPTrace {
 		log.Debug().Msgf("TCP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(b[:n]))
 	}
 	return n, err
@@ -269,13 +267,13 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 func (c *TCPConnection) Write(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Write(b)
-	if SIPDebug {
+	if SIPTrace {
 		log.Debug().Msgf("TCP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(b[:n]))
 	}
 	return n, err
 }
 
-func (c *TCPConnection) WriteMsg(msg sip.Message) error {
+func (c *TCPConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
