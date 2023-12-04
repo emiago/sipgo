@@ -1,11 +1,9 @@
-package transaction
+package sip
 
 import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/emiago/sipgo/sip"
 
 	"github.com/rs/zerolog"
 )
@@ -14,10 +12,10 @@ type FSMfunc func() FSMfunc
 
 type ServerTx struct {
 	commonTx
-	lastAck      *sip.Request
-	lastCancel   *sip.Request
-	acks         chan *sip.Request
-	cancels      chan *sip.Request
+	lastAck      *Request
+	lastCancel   *Request
+	acks         chan *Request
+	cancels      chan *Request
 	timer_g      *time.Timer
 	timer_g_time time.Duration
 	timer_h      *time.Timer
@@ -33,18 +31,18 @@ type ServerTx struct {
 	closeOnce sync.Once
 }
 
-func NewServerTx(key string, origin *sip.Request, conn sip.Connection, logger zerolog.Logger) *ServerTx {
+func NewServerTx(key string, origin *Request, conn Connection, logger zerolog.Logger) *ServerTx {
 	tx := new(ServerTx)
 	tx.key = key
 	tx.conn = conn
 
 	// about ~10 retransmits
-	tx.acks = make(chan *sip.Request)
-	tx.cancels = make(chan *sip.Request)
+	tx.acks = make(chan *Request)
+	tx.cancels = make(chan *Request)
 	tx.done = make(chan struct{})
 	tx.log = logger
 	tx.origin = origin
-	tx.reliable = sip.IsReliable(origin.Transport())
+	tx.reliable = IsReliable(origin.Transport())
 	return tx
 }
 
@@ -67,7 +65,7 @@ func (tx *ServerTx) Init() error {
 		// tx.Log().Tracef("set timer_1xx to %v", Timer_1xx)
 		tx.mu.Lock()
 		tx.timer_1xx = time.AfterFunc(Timer_1xx, func() {
-			trying := sip.NewResponseFromRequest(
+			trying := NewResponseFromRequest(
 				tx.Origin(),
 				100,
 				"Trying",
@@ -85,7 +83,7 @@ func (tx *ServerTx) Init() error {
 }
 
 // Receive is endpoint for handling received server requests.
-func (tx *ServerTx) Receive(req *sip.Request) error {
+func (tx *ServerTx) Receive(req *Request) error {
 	input, err := tx.receiveRequest(req)
 	if err != nil {
 		return err
@@ -94,7 +92,7 @@ func (tx *ServerTx) Receive(req *sip.Request) error {
 	return nil
 }
 
-func (tx *ServerTx) receiveRequest(req *sip.Request) (FsmInput, error) {
+func (tx *ServerTx) receiveRequest(req *Request) (FsmInput, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -116,7 +114,7 @@ func (tx *ServerTx) receiveRequest(req *sip.Request) (FsmInput, error) {
 	return FsmInputNone, fmt.Errorf("unexpected message error")
 }
 
-func (tx *ServerTx) Respond(res *sip.Response) error {
+func (tx *ServerTx) Respond(res *Response) error {
 	if res.IsCancel() {
 		return tx.conn.WriteMsg(res)
 	}
@@ -129,7 +127,7 @@ func (tx *ServerTx) Respond(res *sip.Response) error {
 	return nil
 }
 
-func (tx *ServerTx) receiveRespond(res *sip.Response) (FsmInput, error) {
+func (tx *ServerTx) receiveRespond(res *Response) (FsmInput, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -149,7 +147,7 @@ func (tx *ServerTx) receiveRespond(res *sip.Response) (FsmInput, error) {
 }
 
 // Acks makes channel for sending acks. Channel is created on demand
-func (tx *ServerTx) Acks() <-chan *sip.Request {
+func (tx *ServerTx) Acks() <-chan *Request {
 	return tx.acks
 }
 
@@ -165,18 +163,18 @@ func (tx *ServerTx) passAck() {
 	go tx.ackSend(r)
 }
 
-func (tx *ServerTx) ackSend(r *sip.Request) {
+func (tx *ServerTx) ackSend(r *Request) {
 	select {
 	case <-tx.done:
 	case tx.acks <- r:
 	}
 }
 
-func (tx *ServerTx) Cancels() <-chan *sip.Request {
+func (tx *ServerTx) Cancels() <-chan *Request {
 	if tx.cancels != nil {
 		return tx.cancels
 	}
-	tx.cancels = make(chan *sip.Request)
+	tx.cancels = make(chan *Request)
 	return tx.cancels
 }
 
@@ -192,7 +190,7 @@ func (tx *ServerTx) passCancel() {
 	go tx.cancelSend(r)
 }
 
-func (tx *ServerTx) cancelSend(r *sip.Request) {
+func (tx *ServerTx) cancelSend(r *Request) {
 	select {
 	case <-tx.done:
 	case tx.cancels <- r:

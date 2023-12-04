@@ -1,4 +1,4 @@
-package transaction
+package sip
 
 type FsmInput int
 type FsmState func() FsmInput

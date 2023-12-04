@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transaction"
 )
 
 type DialogServer struct {
@@ -213,7 +212,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 			select {
 			case <-s.inviteTx.Done():
 				// Wait until we timeout
-			case <-time.After(transaction.T1):
+			case <-time.After(sip.T1):
 				// Recheck state
 				continue
 			case <-ctx.Done():

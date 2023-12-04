@@ -1,29 +1,27 @@
-package transaction
+package sip
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/emiago/sipgo/sip"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
-type UnhandledResponseHandler func(req *sip.Response)
+type RequestHandler func(req *Request, tx ServerTransaction)
+type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
-func defaultRequestHandler(r *sip.Request, tx sip.ServerTransaction) {
+func defaultRequestHandler(r *Request, tx ServerTransaction) {
 	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
 }
 
-func defaultUnhandledRespHandler(r *sip.Response) {
+func defaultUnhandledRespHandler(r *Response) {
 	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip response. UnhandledResponseHandler handler not added")
 }
 
-type Layer struct {
-	tpl           *sip.TransportLayer
+type TransactionLayer struct {
+	tpl           *TransportLayer
 	reqHandler    RequestHandler
 	unRespHandler UnhandledResponseHandler
 
@@ -33,8 +31,8 @@ type Layer struct {
 	log zerolog.Logger
 }
 
-func NewLayer(tpl *sip.TransportLayer) *Layer {
-	txl := &Layer{
+func NewTransactionLayer(tpl *TransportLayer) *TransactionLayer {
+	txl := &TransactionLayer{
 		tpl:                tpl,
 		clientTransactions: newTransactionStore(),
 		serverTransactions: newTransactionStore(),
@@ -48,23 +46,23 @@ func NewLayer(tpl *sip.TransportLayer) *Layer {
 	return txl
 }
 
-func (txl *Layer) OnRequest(h RequestHandler) {
+func (txl *TransactionLayer) OnRequest(h RequestHandler) {
 	txl.reqHandler = h
 }
 
 // UnhandledResponseHandler can be used in case missing client transactions for handling response
 // ServerTransaction handle responses by state machine
-func (txl *Layer) UnhandledResponseHandler(f UnhandledResponseHandler) {
+func (txl *TransactionLayer) UnhandledResponseHandler(f UnhandledResponseHandler) {
 	txl.unRespHandler = f
 }
 
 // handleMessage is entry for handling requests and responses from transport
-func (txl *Layer) handleMessage(msg sip.Message) {
+func (txl *TransactionLayer) handleMessage(msg Message) {
 	switch msg := msg.(type) {
-	case *sip.Request:
+	case *Request:
 		// TODO Consider making goroutine here already?
 		txl.handleRequest(msg)
-	case *sip.Response:
+	case *Response:
 		// TODO Consider making goroutine here already?
 		txl.handleResponse(msg)
 	default:
@@ -73,7 +71,7 @@ func (txl *Layer) handleMessage(msg sip.Message) {
 	}
 }
 
-func (txl *Layer) handleRequest(req *sip.Request) {
+func (txl *TransactionLayer) handleRequest(req *Request) {
 	key, err := MakeServerTxKey(req)
 	if err != nil {
 		txl.log.Error().Err(err).Msg("Server tx make key failed")
@@ -114,7 +112,7 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 	txl.reqHandler(req, tx)
 }
 
-func (txl *Layer) handleResponse(res *sip.Response) {
+func (txl *TransactionLayer) handleResponse(res *Response) {
 	key, err := MakeClientTxKey(res)
 	if err != nil {
 		txl.log.Error().Err(err).Msg("Client tx make key failed")
@@ -135,7 +133,7 @@ func (txl *Layer) handleResponse(res *sip.Response) {
 	}
 }
 
-func (txl *Layer) Request(ctx context.Context, req *sip.Request) (*ClientTx, error) {
+func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*ClientTx, error) {
 	if req.IsAck() {
 		return nil, fmt.Errorf("ACK request must be sent directly through transport")
 	}
@@ -177,7 +175,7 @@ func (txl *Layer) Request(ctx context.Context, req *sip.Request) (*ClientTx, err
 	return tx, nil
 }
 
-func (txl *Layer) Respond(res *sip.Response) (*ServerTx, error) {
+func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
 	key, err := MakeServerTxKey(res)
 	if err != nil {
 		return nil, err
@@ -196,20 +194,20 @@ func (txl *Layer) Respond(res *sip.Response) (*ServerTx, error) {
 	return tx, nil
 }
 
-func (txl *Layer) clientTxTerminate(key string) {
+func (txl *TransactionLayer) clientTxTerminate(key string) {
 	if !txl.clientTransactions.drop(key) {
 		txl.log.Info().Str("key", key).Msg("Non existing client tx was removed")
 	}
 }
 
-func (txl *Layer) serverTxTerminate(key string) {
+func (txl *TransactionLayer) serverTxTerminate(key string) {
 	if !txl.serverTransactions.drop(key) {
 		txl.log.Info().Str("key", key).Msg("Non existing server tx was removed")
 	}
 }
 
 // RFC 17.1.3.
-func (txl *Layer) getClientTx(key string) (*ClientTx, bool) {
+func (txl *TransactionLayer) getClientTx(key string) (*ClientTx, bool) {
 	tx, ok := txl.clientTransactions.get(key)
 	if !ok {
 		return nil, false
@@ -218,7 +216,7 @@ func (txl *Layer) getClientTx(key string) (*ClientTx, bool) {
 }
 
 // RFC 17.2.3.
-func (txl *Layer) getServerTx(key string) (*ServerTx, bool) {
+func (txl *TransactionLayer) getServerTx(key string) (*ServerTx, bool) {
 	tx, ok := txl.serverTransactions.get(key)
 	if !ok {
 		return nil, false
@@ -226,12 +224,12 @@ func (txl *Layer) getServerTx(key string) (*ServerTx, bool) {
 	return tx.(*ServerTx), true
 }
 
-func (txl *Layer) Close() {
+func (txl *TransactionLayer) Close() {
 	txl.clientTransactions.terminateAll()
 	txl.serverTransactions.terminateAll()
 	txl.log.Debug().Msg("transaction layer closed")
 }
 
-func (txl *Layer) Transport() *sip.TransportLayer {
+func (txl *TransactionLayer) Transport() *TransportLayer {
 	return txl.tpl
 }

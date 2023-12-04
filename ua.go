@@ -14,7 +14,7 @@ type UserAgent struct {
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
 	tp          *sip.TransportLayer
-	tx          *transaction.Layer
+	tx          *sip.TransactionLayer
 }
 
 type UserAgentOption func(s *UserAgent) error

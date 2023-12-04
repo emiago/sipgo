@@ -1,18 +1,16 @@
-package transaction
+package sip
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/emiago/sipgo/sip"
-
 	"github.com/rs/zerolog"
 )
 
 type ClientTx struct {
 	commonTx
-	responses    chan *sip.Response
+	responses    chan *Response
 	timer_a_time time.Duration // Current duration of timer A.
 	timer_a      *time.Timer
 	timer_b      *time.Timer
@@ -24,13 +22,13 @@ type ClientTx struct {
 	closeOnce sync.Once
 }
 
-func NewClientTx(key string, origin *sip.Request, conn sip.Connection, logger zerolog.Logger) *ClientTx {
+func NewClientTx(key string, origin *Request, conn Connection, logger zerolog.Logger) *ClientTx {
 	tx := &ClientTx{}
 	tx.key = key
 	// tx.conn = tpl
 	tx.conn = conn
 	// buffer chan - about ~10 retransmit responses
-	tx.responses = make(chan *sip.Response)
+	tx.responses = make(chan *Response)
 	tx.done = make(chan struct{})
 	tx.log = logger
 
@@ -46,7 +44,7 @@ func (tx *ClientTx) Init() error {
 		return wrapTransportError(err)
 	}
 
-	reliable := sip.IsReliable(tx.origin.Transport())
+	reliable := IsReliable(tx.origin.Transport())
 	if reliable {
 		tx.mu.Lock()
 		tx.timer_d_time = 0
@@ -74,7 +72,7 @@ func (tx *ClientTx) Init() error {
 	tx.mu.Lock()
 	tx.timer_b = time.AfterFunc(Timer_B, func() {
 		tx.mu.Lock()
-		tx.lastErr = fmt.Errorf("Timer_B timed out. %w", ErrTimeout)
+		tx.lastErr = fmt.Errorf("Timer_B timed out. %w", ErrTransactionTimeout)
 		tx.mu.Unlock()
 		tx.spinFsm(client_input_timer_b)
 	})
@@ -82,7 +80,7 @@ func (tx *ClientTx) Init() error {
 	return nil
 }
 
-func (tx *ClientTx) Receive(res *sip.Response) error {
+func (tx *ClientTx) Receive(res *Response) error {
 	var input FsmInput
 	if res.IsCancel() {
 		input = client_input_canceled
@@ -105,7 +103,7 @@ func (tx *ClientTx) Receive(res *sip.Response) error {
 	return nil
 }
 
-func (tx *ClientTx) Responses() <-chan *sip.Response {
+func (tx *ClientTx) Responses() <-chan *Response {
 	return tx.responses
 }
 
@@ -141,7 +139,7 @@ func (tx *ClientTx) cancel() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	cancelRequest := sip.NewCancelRequest(tx.origin)
+	cancelRequest := NewCancelRequest(tx.origin)
 	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
 		var lastRespStr string
 		if lastResp != nil {
@@ -166,7 +164,7 @@ func (tx *ClientTx) ack() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	ack := sip.NewAckRequest(tx.origin, lastResp, nil)
+	ack := NewAckRequest(tx.origin, lastResp, nil)
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().

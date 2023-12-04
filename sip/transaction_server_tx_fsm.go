@@ -1,5 +1,5 @@
 // Originally forked from https://github.com/ghettovoice/gosip by @ghetovoice
-package transaction
+package sip
 
 import (
 	"time"
