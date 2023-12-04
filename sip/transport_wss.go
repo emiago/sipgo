@@ -10,19 +10,19 @@ import (
 )
 
 // TLS transport implementation
-type WSSTransport struct {
-	*WSTransport
+type transportWSS struct {
+	*transportWS
 
 	// rootPool *x509.CertPool
 }
 
 // NewWSSTransport needs dialTLSConf for creating connections when dialing
-func NewWSSTransport(par *Parser, dialTLSConf *tls.Config) *WSSTransport {
+func NewWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
 	tcptrans := NewWSTransport(par)
 	tcptrans.transport = TransportWSS
 	// Set our TLS config
-	p := &WSSTransport{
-		WSTransport: tcptrans,
+	p := &transportWSS{
+		transportWS: tcptrans,
 	}
 
 	p.dialer.TLSConfig = dialTLSConf
@@ -32,13 +32,13 @@ func NewWSSTransport(par *Parser, dialTLSConf *tls.Config) *WSSTransport {
 	return p
 }
 
-func (t *WSSTransport) String() string {
+func (t *transportWSS) String() string {
 	return "transport<WSS>"
 }
 
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
-func (t *WSSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -60,7 +60,7 @@ func (t *WSSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *WSSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
+func (t *transportWSS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 

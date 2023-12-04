@@ -25,7 +25,7 @@ var (
 )
 
 // WS transport implementation
-type WSTransport struct {
+type transportWS struct {
 	parser    *Parser
 	log       zerolog.Logger
 	transport string
@@ -34,8 +34,8 @@ type WSTransport struct {
 	dialer ws.Dialer
 }
 
-func NewWSTransport(par *Parser) *WSTransport {
-	p := &WSTransport{
+func NewWSTransport(par *Parser) *transportWS {
+	p := &transportWS{
 		parser:    par,
 		pool:      NewConnectionPool(),
 		transport: TransportWS,
@@ -47,21 +47,21 @@ func NewWSTransport(par *Parser) *WSTransport {
 	return p
 }
 
-func (t *WSTransport) String() string {
+func (t *transportWS) String() string {
 	return "transport<WS>"
 }
 
-func (t *WSTransport) Network() string {
+func (t *transportWS) Network() string {
 	return t.transport
 }
 
-func (t *WSTransport) Close() error {
+func (t *transportWS) Close() error {
 	t.pool.Clear()
 	return nil
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *WSTransport) Serve(l net.Listener, handler MessageHandler) error {
+func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
 
 	// Prepare handshake header writer from http.Header mapping.
@@ -105,7 +105,7 @@ func (t *WSTransport) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, handler MessageHandler) Connection {
+func (t *transportWS) initConnection(conn net.Conn, addr string, clientSide bool, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
@@ -120,7 +120,7 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool
 }
 
 // This should performe better to avoid any interface allocation
-func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler MessageHandler) {
+func (t *transportWS) readConnection(conn *WSConnection, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
@@ -169,7 +169,7 @@ func (t *WSTransport) readConnection(conn *WSConnection, raddr string, handler M
 }
 
 // TODO: Try to reuse this from TCP transport as func are same
-func (t *WSTransport) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *transportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
@@ -182,7 +182,7 @@ func (t *WSTransport) parseStream(par *ParserStream, data []byte, src string, ha
 }
 
 // TODO use this when message size limit is defined
-func (t *WSTransport) parseFull(data []byte, src string, handler MessageHandler) {
+func (t *transportWS) parseFull(data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
@@ -194,11 +194,11 @@ func (t *WSTransport) parseFull(data []byte, src string, handler MessageHandler)
 	handler(msg)
 }
 
-func (t *WSTransport) ResolveAddr(addr string) (net.Addr, error) {
+func (t *transportWS) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveTCPAddr("tcp", addr)
 }
 
-func (t *WSTransport) GetConnection(addr string) (Connection, error) {
+func (t *transportWS) GetConnection(addr string) (Connection, error) {
 	raddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func (t *WSTransport) GetConnection(addr string) (Connection, error) {
 	return c, nil
 }
 
-func (t *WSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -230,7 +230,7 @@ func (t *WSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *WSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
+func (t *transportWS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 

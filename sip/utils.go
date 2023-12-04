@@ -2,10 +2,7 @@ package sip
 
 import (
 	"bytes"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
-	"fmt"
 	"math/rand"
 	"net"
 	"strings"
@@ -265,28 +262,4 @@ func MessageShortString(msg Message) string {
 		return m.Short()
 	}
 	return "Unknown message type"
-}
-
-// GenerateTLSConfig creates basic tls.Config that you can pass for ServerTLS
-// It needs rootPems for client side
-func GenerateTLSConfig(certFile string, keyFile string, rootPems []byte) (*tls.Config, error) {
-	roots := x509.NewCertPool()
-	if rootPems != nil {
-		ok := roots.AppendCertsFromPEM(rootPems)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate")
-		}
-	}
-
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("fail to load cert. err=%w", err)
-	}
-
-	conf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
-	}
-
-	return conf, nil
 }

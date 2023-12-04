@@ -12,19 +12,19 @@ import (
 var ()
 
 // TLS transport implementation
-type TLSTransport struct {
-	*TCPTransport
+type transportTLS struct {
+	*transportTCP
 
 	// rootPool *x509.CertPool
 	tlsConf *tls.Config
 }
 
 // NewTLSTransport needs dialTLSConf for creating connections when dialing
-func NewTLSTransport(par *Parser, dialTLSConf *tls.Config) *TLSTransport {
+func NewTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
 	tcptrans := NewTCPTransport(par)
 	tcptrans.transport = TransportTLS //Override transport
-	p := &TLSTransport{
-		TCPTransport: tcptrans,
+	p := &transportTLS{
+		transportTCP: tcptrans,
 	}
 
 	// p.rootPool = roots
@@ -33,12 +33,12 @@ func NewTLSTransport(par *Parser, dialTLSConf *tls.Config) *TLSTransport {
 	return p
 }
 
-func (t *TLSTransport) String() string {
+func (t *transportTLS) String() string {
 	return "transport<TLS>"
 }
 
 // CreateConnection creates TLS connection for TCP transport
-func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
 	// 	return nil, err
@@ -60,7 +60,7 @@ func (t *TLSTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TLSTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
+func (t *transportTLS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 

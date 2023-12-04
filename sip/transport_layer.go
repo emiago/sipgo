@@ -24,11 +24,11 @@ func init() {
 
 // TransportLayer implementation.
 type TransportLayer struct {
-	udp *UDPTransport
-	tcp *TCPTransport
-	tls *TLSTransport
-	ws  *WSTransport
-	wss *WSSTransport
+	udp *transportUDP
+	tcp *transportTCP
+	tls *transportTLS
+	ws  *transportWS
+	wss *transportWSS
 
 	transports map[string]Transport
 

@@ -14,7 +14,7 @@ import (
 )
 
 // TCP transport implementation
-type TCPTransport struct {
+type transportTCP struct {
 	addr      string
 	transport string
 	parser    *Parser
@@ -23,8 +23,8 @@ type TCPTransport struct {
 	pool ConnectionPool
 }
 
-func NewTCPTransport(par *Parser) *TCPTransport {
-	p := &TCPTransport{
+func NewTCPTransport(par *Parser) *transportTCP {
+	p := &transportTCP{
 		parser:    par,
 		pool:      NewConnectionPool(),
 		transport: TransportTCP,
@@ -33,23 +33,23 @@ func NewTCPTransport(par *Parser) *TCPTransport {
 	return p
 }
 
-func (t *TCPTransport) String() string {
+func (t *transportTCP) String() string {
 	return "transport<TCP>"
 }
 
-func (t *TCPTransport) Network() string {
+func (t *transportTCP) Network() string {
 	// return "tcp"
 	return t.transport
 }
 
-func (t *TCPTransport) Close() error {
+func (t *transportTCP) Close() error {
 	// return t.connections.Done()
 	t.pool.Clear()
 	return nil
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *TCPTransport) Serve(l net.Listener, handler MessageHandler) error {
+func (t *transportTCP) Serve(l net.Listener, handler MessageHandler) error {
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
 	for {
 		conn, err := l.Accept()
@@ -62,12 +62,12 @@ func (t *TCPTransport) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *TCPTransport) GetConnection(addr string) (Connection, error) {
+func (t *transportTCP) GetConnection(addr string) (Connection, error) {
 	c := t.pool.Get(addr)
 	return c, nil
 }
 
-func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// We are letting transport layer to resolve our address
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
@@ -88,7 +88,7 @@ func (t *TCPTransport) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, tladdr, traddr, handler)
 }
 
-func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
+func (t *transportTCP) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
 	addr := raddr.String()
 	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
 
@@ -115,7 +115,7 @@ func (t *TCPTransport) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	return c, nil
 }
 
-func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler MessageHandler) Connection {
+func (t *transportTCP) initConnection(conn net.Conn, addr string, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
@@ -130,7 +130,7 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler Messag
 }
 
 // This should performe better to avoid any interface allocation
-func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler MessageHandler) {
+func (t *transportTCP) readConnection(conn *TCPConnection, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 
 	defer t.pool.CloseAndDelete(conn, raddr)
@@ -181,7 +181,7 @@ func (t *TCPTransport) readConnection(conn *TCPConnection, raddr string, handler
 	}
 }
 
-func (t *TCPTransport) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *transportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msgs, err := par.ParseSIPStream(data)
 	if err == ErrParseSipPartial {
 		return
@@ -200,7 +200,7 @@ func (t *TCPTransport) parseStream(par *ParserStream, data []byte, src string, h
 }
 
 // TODO use this when message size limit is defined
-func (t *TCPTransport) parseFull(data []byte, src string, handler MessageHandler) {
+func (t *transportTCP) parseFull(data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
