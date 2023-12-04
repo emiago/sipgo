@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transaction"
 )
 
 type UserAgent struct {
@@ -80,7 +79,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 
 	// TODO export parser to be configurable
 	ua.tp = sip.NewTransportLayer(ua.dnsResolver, sip.NewParser(), ua.tlsConfig)
-	ua.tx = transaction.NewLayer(ua.tp)
+	ua.tx = sip.NewTransactionLayer(ua.tp)
 	return ua, nil
 }
 

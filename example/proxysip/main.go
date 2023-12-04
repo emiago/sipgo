@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 
 	_ "net/http/pprof"
 
@@ -34,7 +33,7 @@ func main() {
 	transportType := flag.String("t", "udp", "Transport, default will be determined by request")
 	flag.Parse()
 
-	transport.UDPMTUSize = 10000
+	sip.UDPMTUSize = 10000
 	if *pprof {
 		runtime.SetBlockProfileRate(1)
 		runtime.SetMutexProfileFraction(1)
@@ -45,7 +44,7 @@ func main() {
 	debuglev := os.Getenv("LOGDEBUG")
 	if *debflag || debuglev != "" {
 		lev = zerolog.DebugLevel
-		transport.SIPDebug = true
+		sip.SIPTrace = true
 	}
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro

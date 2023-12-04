@@ -11,7 +11,6 @@ import (
 
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transaction"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -205,7 +204,7 @@ func TestUDPUAS(t *testing.T) {
 
 	// Check are all server transaction dead
 	for _, tx := range serverTxs {
-		t.Logf("Waiting tx %q termination", tx.(*transaction.ServerTx).Key())
+		t.Logf("Waiting tx %q termination", tx.(*sip.ServerTx).Key())
 		<-tx.Done()
 	}
 }
@@ -303,7 +302,7 @@ func TestTCPUAS(t *testing.T) {
 
 	// Check are all server transaction dead
 	for _, tx := range serverTxs {
-		t.Logf("Waiting tx %q termination", tx.(*transaction.ServerTx).Key())
+		t.Logf("Waiting tx %q termination", tx.(*sip.ServerTx).Key())
 		<-tx.Done()
 	}
 }
