@@ -81,7 +81,7 @@ func (tx *ClientTx) Init() error {
 }
 
 func (tx *ClientTx) Receive(res *Response) error {
-	var input FsmInput
+	var input fsmInput
 	if res.IsCancel() {
 		input = client_input_canceled
 	} else {

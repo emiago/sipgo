@@ -1,8 +1,8 @@
 package sip
 
-type FsmInput int
-type FsmState func() FsmInput
-type FsmContextState func(s FsmInput) FsmInput
+type fsmInput int
+type fsmState func() fsmInput
+type fsmContextState func(s fsmInput) fsmInput
 
 const ()
 
@@ -27,7 +27,7 @@ const (
 
 // FSM Inputs
 const (
-	FsmInputNone FsmInput = iota
+	FsmInputNone fsmInput = iota
 	// Server transaction inputs
 	server_input_request
 	server_input_ack

@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-func (tx *ClientTx) inviteStateCalling(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) inviteStateCalling(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actInviteProceeding
@@ -31,8 +31,8 @@ func (tx *ClientTx) inviteStateCalling(s FsmInput) FsmInput {
 }
 
 // Proceeding
-func (tx *ClientTx) inviteStateProcceeding(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) inviteStateProcceeding(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actPassup
@@ -56,8 +56,8 @@ func (tx *ClientTx) inviteStateProcceeding(s FsmInput) FsmInput {
 }
 
 // Completed
-func (tx *ClientTx) inviteStateCompleted(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) inviteStateCompleted(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actAck
@@ -72,8 +72,8 @@ func (tx *ClientTx) inviteStateCompleted(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ClientTx) inviteStateAccepted(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) inviteStateAccepted(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_2xx:
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassup
@@ -88,14 +88,14 @@ func (tx *ClientTx) inviteStateAccepted(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ClientTx) actTranErrNoDelete() FsmInput {
+func (tx *ClientTx) actTranErrNoDelete() fsmInput {
 	tx.actTransErr()
 	return FsmInputNone
 }
 
 // Terminated
-func (tx *ClientTx) inviteStateTerminated(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) inviteStateTerminated(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_delete:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actDelete
@@ -106,8 +106,8 @@ func (tx *ClientTx) inviteStateTerminated(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ClientTx) stateCalling(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) stateCalling(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
 		tx.fsmState, spinfn = tx.stateProceeding, tx.actPassup
@@ -128,8 +128,8 @@ func (tx *ClientTx) stateCalling(s FsmInput) FsmInput {
 }
 
 // Proceeding
-func (tx *ClientTx) stateProceeding(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) stateProceeding(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
 		tx.fsmState, spinfn = tx.stateProceeding, tx.actPassup
@@ -150,8 +150,8 @@ func (tx *ClientTx) stateProceeding(s FsmInput) FsmInput {
 }
 
 // Completed
-func (tx *ClientTx) stateCompleted(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) stateCompleted(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_delete:
 		tx.fsmState, spinfn = tx.stateTerminated, tx.actDelete
@@ -164,8 +164,8 @@ func (tx *ClientTx) stateCompleted(s FsmInput) FsmInput {
 }
 
 // Terminated
-func (tx *ClientTx) stateTerminated(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ClientTx) stateTerminated(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case client_input_delete:
 		tx.fsmState, spinfn = tx.stateTerminated, tx.actDelete
@@ -176,7 +176,7 @@ func (tx *ClientTx) stateTerminated(s FsmInput) FsmInput {
 }
 
 // Define actions
-func (tx *ClientTx) actInviteResend() FsmInput {
+func (tx *ClientTx) actInviteResend() fsmInput {
 	tx.mu.Lock()
 
 	tx.timer_a_time *= 2
@@ -189,12 +189,12 @@ func (tx *ClientTx) actInviteResend() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actInviteCanceled() FsmInput {
+func (tx *ClientTx) actInviteCanceled() fsmInput {
 	// nothing to do here for now
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actResend() FsmInput {
+func (tx *ClientTx) actResend() fsmInput {
 	// tx.Log().Debug("actResend")
 
 	tx.mu.Lock()
@@ -213,7 +213,7 @@ func (tx *ClientTx) actResend() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actPassup() FsmInput {
+func (tx *ClientTx) actPassup() fsmInput {
 	// tx.Log().Debug("actPassup")
 
 	tx.passUp()
@@ -230,7 +230,7 @@ func (tx *ClientTx) actPassup() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actInviteProceeding() FsmInput {
+func (tx *ClientTx) actInviteProceeding() fsmInput {
 	// tx.Log().Debug("actInviteProceeding")
 
 	tx.passUp()
@@ -251,7 +251,7 @@ func (tx *ClientTx) actInviteProceeding() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actInviteFinal() FsmInput {
+func (tx *ClientTx) actInviteFinal() fsmInput {
 	// tx.Log().Debug("actInviteFinal")
 
 	tx.ack()
@@ -279,7 +279,7 @@ func (tx *ClientTx) actInviteFinal() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actFinal() FsmInput {
+func (tx *ClientTx) actFinal() fsmInput {
 	// tx.Log().Debug("actFinal")
 
 	tx.passUp()
@@ -307,7 +307,7 @@ func (tx *ClientTx) actFinal() FsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actCancel() FsmInput {
+func (tx *ClientTx) actCancel() fsmInput {
 	// tx.Log().Debug("actCancel")
 
 	tx.cancel()
@@ -315,7 +315,7 @@ func (tx *ClientTx) actCancel() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actCancelTimeout() FsmInput {
+func (tx *ClientTx) actCancelTimeout() fsmInput {
 	// tx.Log().Debug("actCancel")
 
 	tx.cancel()
@@ -334,7 +334,7 @@ func (tx *ClientTx) actCancelTimeout() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actAck() FsmInput {
+func (tx *ClientTx) actAck() fsmInput {
 	// tx.Log().Debug("actAck")
 
 	tx.ack()
@@ -342,7 +342,7 @@ func (tx *ClientTx) actAck() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actTransErr() FsmInput {
+func (tx *ClientTx) actTransErr() fsmInput {
 	tx.mu.Lock()
 
 	if tx.timer_a != nil {
@@ -355,7 +355,7 @@ func (tx *ClientTx) actTransErr() FsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actTimeout() FsmInput {
+func (tx *ClientTx) actTimeout() fsmInput {
 	tx.mu.Lock()
 
 	if tx.timer_a != nil {
@@ -368,7 +368,7 @@ func (tx *ClientTx) actTimeout() FsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actPassupDelete() FsmInput {
+func (tx *ClientTx) actPassupDelete() fsmInput {
 	// tx.Log().Debug("actPassupDelete")
 
 	tx.passUp()
@@ -385,7 +385,7 @@ func (tx *ClientTx) actPassupDelete() FsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actPassupAccept() FsmInput {
+func (tx *ClientTx) actPassupAccept() fsmInput {
 	// tx.Log().Debug("actPassupAccept")
 
 	tx.passUp()
@@ -419,7 +419,7 @@ func (tx *ClientTx) actPassupAccept() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actDelete() FsmInput {
+func (tx *ClientTx) actDelete() fsmInput {
 	// tx.Log().Debug("actDelete")
 
 	tx.delete()

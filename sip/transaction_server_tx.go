@@ -92,7 +92,7 @@ func (tx *ServerTx) Receive(req *Request) error {
 	return nil
 }
 
-func (tx *ServerTx) receiveRequest(req *Request) (FsmInput, error) {
+func (tx *ServerTx) receiveRequest(req *Request) (fsmInput, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -127,7 +127,7 @@ func (tx *ServerTx) Respond(res *Response) error {
 	return nil
 }
 
-func (tx *ServerTx) receiveRespond(res *Response) (FsmInput, error) {
+func (tx *ServerTx) receiveRespond(res *Response) (fsmInput, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 

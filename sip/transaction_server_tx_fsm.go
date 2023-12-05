@@ -7,8 +7,8 @@ import (
 
 // invite state machine https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
 // TODO needs to be refactored
-func (tx *ServerTx) inviteStateProcceeding(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) inviteStateProcceeding(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_request:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actRespond
@@ -28,8 +28,8 @@ func (tx *ServerTx) inviteStateProcceeding(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) inviteStateCompleted(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) inviteStateCompleted(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_request:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actRespond
@@ -49,8 +49,8 @@ func (tx *ServerTx) inviteStateCompleted(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) inviteStateConfirmed(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) inviteStateConfirmed(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_timer_i:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actDelete
@@ -61,9 +61,9 @@ func (tx *ServerTx) inviteStateConfirmed(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) inviteStateAccepted(s FsmInput) FsmInput {
+func (tx *ServerTx) inviteStateAccepted(s fsmInput) fsmInput {
 	// https://www.rfc-editor.org/rfc/rfc6026#section-7.1
-	var spinfn FsmState
+	var spinfn fsmState
 	switch s {
 	case server_input_ack:
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAck
@@ -77,8 +77,8 @@ func (tx *ServerTx) inviteStateAccepted(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) inviteStateTerminated(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) inviteStateTerminated(s fsmInput) fsmInput {
+	var spinfn fsmState
 	// Terminated
 	switch s {
 	case server_input_delete:
@@ -90,8 +90,8 @@ func (tx *ServerTx) inviteStateTerminated(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) stateTrying(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) stateTrying(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_user_1xx:
 		tx.fsmState, spinfn = tx.stateProceeding, tx.actRespond
@@ -109,8 +109,8 @@ func (tx *ServerTx) stateTrying(s FsmInput) FsmInput {
 }
 
 // Proceeding
-func (tx *ServerTx) stateProceeding(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) stateProceeding(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_request:
 		tx.fsmState, spinfn = tx.stateProceeding, tx.actRespond
@@ -130,8 +130,8 @@ func (tx *ServerTx) stateProceeding(s FsmInput) FsmInput {
 }
 
 // Completed
-func (tx *ServerTx) stateCompleted(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) stateCompleted(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_request:
 		tx.fsmState, spinfn = tx.stateCompleted, tx.actRespond
@@ -147,8 +147,8 @@ func (tx *ServerTx) stateCompleted(s FsmInput) FsmInput {
 }
 
 // Terminated
-func (tx *ServerTx) stateTerminated(s FsmInput) FsmInput {
-	var spinfn FsmState
+func (tx *ServerTx) stateTerminated(s fsmInput) fsmInput {
+	var spinfn fsmState
 	switch s {
 	case server_input_delete:
 		tx.fsmState, spinfn = tx.stateTerminated, tx.actDelete
@@ -159,7 +159,7 @@ func (tx *ServerTx) stateTerminated(s FsmInput) FsmInput {
 	return spinfn()
 }
 
-func (tx *ServerTx) actRespond() FsmInput {
+func (tx *ServerTx) actRespond() fsmInput {
 	if err := tx.passResp(); err != nil {
 		return server_input_transport_err
 	}
@@ -167,7 +167,7 @@ func (tx *ServerTx) actRespond() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ServerTx) actRespondComplete() FsmInput {
+func (tx *ServerTx) actRespondComplete() fsmInput {
 	if err := tx.passResp(); err != nil {
 		return server_input_transport_err
 	}
@@ -206,7 +206,7 @@ func (tx *ServerTx) actRespondComplete() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ServerTx) actRespondAccept() FsmInput {
+func (tx *ServerTx) actRespondAccept() fsmInput {
 	if err := tx.passResp(); err != nil {
 		return server_input_transport_err
 	}
@@ -222,13 +222,13 @@ func (tx *ServerTx) actRespondAccept() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ServerTx) actPassupAck() FsmInput {
+func (tx *ServerTx) actPassupAck() fsmInput {
 	tx.passAck()
 	return FsmInputNone
 }
 
 // Send final response
-func (tx *ServerTx) actFinal() FsmInput {
+func (tx *ServerTx) actFinal() fsmInput {
 	if err := tx.passResp(); err != nil {
 		return server_input_transport_err
 	}
@@ -245,19 +245,19 @@ func (tx *ServerTx) actFinal() FsmInput {
 }
 
 // Inform user of transport error
-func (tx *ServerTx) actTransErr() FsmInput {
+func (tx *ServerTx) actTransErr() fsmInput {
 	tx.log.Debug().Err(tx.Err()).Msg("Transport error. Transaction will terminate")
 	return server_input_delete
 }
 
 // Inform user of timeout error
-func (tx *ServerTx) actTimeout() FsmInput {
+func (tx *ServerTx) actTimeout() fsmInput {
 	tx.log.Debug().Err(tx.Err()).Msg("Timed out. Transaction will terminate")
 	return server_input_delete
 }
 
 // Just delete the transaction.
-func (tx *ServerTx) actDelete() FsmInput {
+func (tx *ServerTx) actDelete() fsmInput {
 	// tx.Log().Debug("actDelete")
 
 	tx.delete()
@@ -266,7 +266,7 @@ func (tx *ServerTx) actDelete() FsmInput {
 }
 
 // Send response and delete the transaction.
-func (tx *ServerTx) actRespondDelete() FsmInput {
+func (tx *ServerTx) actRespondDelete() fsmInput {
 	// tx.Log().Debug("actRespondDelete")
 	tx.delete()
 	err := tx.conn.WriteMsg(tx.lastResp)
@@ -282,7 +282,7 @@ func (tx *ServerTx) actRespondDelete() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ServerTx) actConfirm() FsmInput {
+func (tx *ServerTx) actConfirm() fsmInput {
 	// tx.Log().Debug("actConfirm")
 
 	// todo bloody patch
@@ -313,7 +313,7 @@ func (tx *ServerTx) actConfirm() FsmInput {
 	return FsmInputNone
 }
 
-func (tx *ServerTx) actCancel() FsmInput {
+func (tx *ServerTx) actCancel() fsmInput {
 	tx.passCancel()
 	return FsmInputNone
 }

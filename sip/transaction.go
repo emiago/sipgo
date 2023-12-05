@@ -85,7 +85,7 @@ type commonTx struct {
 
 	//State machine control
 	fsmMu    sync.RWMutex
-	fsmState FsmContextState
+	fsmState fsmContextState
 
 	log         zerolog.Logger
 	onTerminate FnTxTerminate
@@ -125,7 +125,7 @@ func (tx *commonTx) OnTerminate(f FnTxTerminate) {
 }
 
 // Choose the right FSM init function depending on request method.
-func (tx *commonTx) spinFsm(in FsmInput) {
+func (tx *commonTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
 	for i := in; i != FsmInputNone; {
 		i = tx.fsmState(i)
