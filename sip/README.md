@@ -1,6 +1,6 @@
 # SIP stack in GO
 
-This SIP stack tries to fully complete 
+This SIP stack for RFC: 
 
 https://datatracker.ietf.org/doc/html/rfc3261
 
