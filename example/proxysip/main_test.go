@@ -195,7 +195,7 @@ func TestMain(m *testing.M) {
 	if *debug {
 		logruser.SetLevel(logrus.TraceLevel)
 		log.Logger = log.Logger.With().Logger().Level(zerolog.DebugLevel)
-		sip.SIPTrace = true
+		sip.SIPDebug = true
 	}
 
 	m.Run()
@@ -249,7 +249,7 @@ func TestInviteCallUDP(t *testing.T) {
 }
 
 func TestInviteCallTCP(t *testing.T) {
-	sip.SIPTrace = true
+	sip.SIPDebug = true
 	p := sip.NewParser()
 	serverReader, serverWriter := io.Pipe()
 	serverReader2, serverWriter2 := io.Pipe()

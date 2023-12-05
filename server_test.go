@@ -105,7 +105,7 @@ func TestMain(m *testing.M) {
 	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
 		log.Logger = log.Level(lvl)
 	}
-	sip.SIPTrace = os.Getenv("SIP_DEBUG") == "true"
+	sip.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
 
 	m.Run()
 }

@@ -77,7 +77,7 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 		},
 	}
 
-	if SIPTrace {
+	if SIPDebug {
 		u.OnHeader = func(key, value []byte) error {
 			log.Debug().Str(string(key), string(value)).Msg("non-websocket header:")
 			return nil
@@ -308,7 +308,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 			return n, err
 		}
 
-		if SIPTrace {
+		if SIPDebug {
 			log.Debug().Str("caller", c.RemoteAddr().String()).Msgf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
 		}
 
@@ -330,7 +330,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// 	continue
 		// }
 
-		if SIPTrace {
+		if SIPDebug {
 			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
 		}
 
@@ -350,7 +350,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
-	if SIPTrace {
+	if SIPDebug {
 		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
 	}
 

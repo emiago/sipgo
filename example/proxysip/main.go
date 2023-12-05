@@ -44,7 +44,7 @@ func main() {
 	debuglev := os.Getenv("LOGDEBUG")
 	if *debflag || debuglev != "" {
 		lev = zerolog.DebugLevel
-		sip.SIPTrace = true
+		sip.SIPDebug = true
 	}
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro

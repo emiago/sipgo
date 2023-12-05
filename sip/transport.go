@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	SIPTrace bool
+	SIPDebug bool
 
 	// IdleConnection will keep connections idle even after transaction terminate
 	// -1 	- single response or request will close
