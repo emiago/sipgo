@@ -206,7 +206,6 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		require.NoError(t, err)
 
 		srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-			t.Log("Invite received")
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			if err := tx.Respond(res); err != nil {
 				t.Fatal(err)
