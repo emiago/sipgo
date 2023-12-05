@@ -244,7 +244,7 @@ You can have full SIP messages dumped from transport into Debug level message.
 
 Example:
 ```go
-transport.SIPDebug = true
+sip.SIPDebug = true
 ```
 
 ```

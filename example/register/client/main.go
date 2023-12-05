@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo"
-	"github.com/emiago/sipgo/parser"
 	"github.com/emiago/sipgo/sip"
-	"github.com/emiago/sipgo/transport"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -27,7 +25,7 @@ func main() {
 	flag.Parse()
 
 	// Make SIP Debugging available
-	transport.SIPDebug = os.Getenv("SIP_DEBUG") != ""
+	sip.SIPDebug = os.Getenv("SIP_DEBUG") != ""
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{
@@ -55,7 +53,7 @@ func main() {
 
 	// Create basic REGISTER request structure
 	recipient := &sip.Uri{}
-	parser.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
+	sip.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
 		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *inter)),
