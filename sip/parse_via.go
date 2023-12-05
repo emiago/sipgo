@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// parseViaHeader parses ViaHeader
+// headerParserVia parses ViaHeader
 // Note that although Via headers may contain a comma-separated list, RFC 3261 makes it clear that
 // these should not be treated as separate logical Via headers, but as multiple values on a single
 // Via header.
-func parseViaHeader(headerName string, headerText string) (
+func headerParserVia(headerName string, headerText string) (
 	header Header, err error) {
 	// sections := strings.Split(headerText, ",")
 	h := ViaHeader{

@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 const ()
@@ -61,17 +63,7 @@ func (hs *headers) StringWrite(buffer io.StringWriter) {
 		if typeIdx > 0 {
 			buffer.WriteString("\r\n")
 		}
-		// header := hs.headers[name]
 		header.StringWrite(buffer)
-		//TODO Next() to handle array of headers
-
-		// for idx, header := range headers {
-		// 	// buffer.WriteString(header.String())
-		// 	header.StringWrite(buffer)
-		// 	// buffer.WriteString(header.String())
-		// if typeIdx < len(hs.headerOrder) || idx < len(headers) {
-
-		// }
 	}
 	buffer.WriteString("\r\n")
 }
@@ -287,6 +279,8 @@ func (hs *headers) CloneHeaders() []Header {
 	return hdrs
 }
 
+// Here are most used headers with quick reference
+
 func (hs *headers) CallID() (*CallIDHeader, bool) {
 	return hs.callid, hs.callid != nil
 }
@@ -307,6 +301,12 @@ func (hs *headers) CSeq() (*CSeqHeader, bool) {
 	return hs.cseq, hs.cseq != nil
 }
 
+// Additional headers
+
+func (hs *headers) MaxForwards() (*MaxForwardsHeader, bool) {
+	return hs.maxForwards, hs.maxForwards != nil
+}
+
 func (hs *headers) ContentLength() (*ContentLengthHeader, bool) {
 	return hs.contentLength, hs.contentLength != nil
 }
@@ -316,7 +316,26 @@ func (hs *headers) ContentType() (*ContentTypeHeader, bool) {
 }
 
 func (hs *headers) Contact() (*ContactHeader, bool) {
-	return hs.contact, hs.contact != nil
+	if hs.contact != nil {
+		return hs.contact, true
+	}
+	// return nil, false
+
+	// try lazy header parsing
+	hdr := hs.getHeader("contact")
+	if hdr == nil {
+		return nil, false
+	}
+
+	h := &ContactHeader{
+		Params: NewParams(),
+	}
+	if err := parseContactHeader(hdr.Value(), h); err != nil {
+		log.Error().Err(err).Msg("Lazy header parsing of contact failed")
+		return nil, false
+	}
+	hs.contact = h
+	return h, true
 }
 
 func (hs *headers) Route() (*RouteHeader, bool) {
@@ -325,10 +344,6 @@ func (hs *headers) Route() (*RouteHeader, bool) {
 
 func (hs *headers) RecordRoute() (*RecordRouteHeader, bool) {
 	return hs.recordRoute, hs.recordRoute != nil
-}
-
-func (hs *headers) MaxForwards() (*MaxForwardsHeader, bool) {
-	return hs.maxForwards, hs.maxForwards != nil
 }
 
 // NewHeader creates generic type of header.

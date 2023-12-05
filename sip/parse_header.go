@@ -22,24 +22,24 @@ func (e errComaDetected) Error() string {
 
 // This needs to kept minimalistic in order to avoid overhead of parsing
 var headersParsers = mapHeadersParser{
-	"to":             parseToAddressHeader,
-	"t":              parseToAddressHeader,
-	"from":           parseFromAddressHeader,
-	"f":              parseFromAddressHeader,
-	"contact":        parseContactAddressHeader,
-	"m":              parseContactAddressHeader,
-	"call-id":        parseCallId,
-	"i":              parseCallId,
-	"cseq":           parseCSeq,
-	"via":            parseViaHeader,
-	"v":              parseViaHeader,
-	"max-forwards":   parseMaxForwards,
-	"content-length": parseContentLength,
-	"l":              parseContentLength,
-	"content-type":   parseContentType,
-	"c":              parseContentType,
-	"route":          parseRouteHeader,
-	"record-route":   parseRecordRouteHeader,
+	"to":   headerParserTo,
+	"t":    headerParserTo,
+	"from": headerParserFrom,
+	"f":    headerParserFrom,
+	// "contact":        headerParserContact,
+	// "m":              headerParserContact,
+	"call-id":        headerParserCallId,
+	"i":              headerParserCallId,
+	"cseq":           headerParserCSeq,
+	"via":            headerParserVia,
+	"v":              headerParserVia,
+	"max-forwards":   headerParserMaxForwards,
+	"content-length": headerParserContentLength,
+	"l":              headerParserContentLength,
+	"content-type":   headerParserContentType,
+	"c":              headerParserContentType,
+	"route":          headerParserRoute,
+	"record-route":   headerParserRecordRoute,
 }
 
 // DefaultHeadersParser returns minimal version header parser.
@@ -99,8 +99,8 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 	}
 }
 
-// parseCallId generates CallIDHeader
-func parseCallId(headerName string, headerText string) (
+// headerParserCallId generates CallIDHeader
+func headerParserCallId(headerName string, headerText string) (
 	header Header, err error) {
 	headerText = strings.TrimSpace(headerText)
 
@@ -115,7 +115,7 @@ func parseCallId(headerName string, headerText string) (
 }
 
 // parseCallId generates MaxForwardsHeader
-func parseMaxForwards(headerName string, headerText string) (header Header, err error) {
+func headerParserMaxForwards(headerName string, headerText string) (header Header, err error) {
 	val, err := strconv.ParseUint(headerText, 10, 32)
 	if err != nil {
 		return nil, err
@@ -125,8 +125,8 @@ func parseMaxForwards(headerName string, headerText string) (header Header, err 
 	return &maxfwd, nil
 }
 
-// parseCSeq generates CSeqHeader
-func parseCSeq(headerName string, headerText string) (
+// headerParserCSeq generates CSeqHeader
+func headerParserCSeq(headerName string, headerText string) (
 	headers Header, err error) {
 	var cseq CSeqHeader
 	ind := strings.IndexAny(headerText, abnfWs)
@@ -155,8 +155,8 @@ func parseCSeq(headerName string, headerText string) (
 	return &cseq, nil
 }
 
-// parseContentLength generates ContentLengthHeader
-func parseContentLength(headerName string, headerText string) (header Header, err error) {
+// headerParserContentLength generates ContentLengthHeader
+func headerParserContentLength(headerName string, headerText string) (header Header, err error) {
 	var contentLength ContentLengthHeader
 	var value uint64
 	value, err = strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
@@ -165,7 +165,7 @@ func parseContentLength(headerName string, headerText string) (header Header, er
 }
 
 // parseContentLength generates ContentTypeHeader
-func parseContentType(headerName string, headerText string) (headers Header, err error) {
+func headerParserContentType(headerName string, headerText string) (headers Header, err error) {
 	// var contentType ContentType
 	headerText = strings.TrimSpace(headerText)
 	contentType := ContentTypeHeader(headerText)

@@ -111,11 +111,17 @@ func TestUnmarshalParams(t *testing.T) {
 
 func testParseHeader(t *testing.T, parser *Parser, header string) Header {
 	// This is fake way to get parsing done. We use fake message and read first header
+	_, h := testParseHeaderOnRequest(t, parser, header)
+	return h
+}
+
+func testParseHeaderOnRequest(t *testing.T, parser *Parser, header string) (*Request, Header) {
+	// This is fake way to get parsing done. We use fake message and read first header
 	msg := NewRequest(INVITE, nil)
 	name := strings.Split(header, ":")[0]
 	err := parser.headersParsers.parseMsgHeader(msg, header)
 	require.Nil(t, err)
-	return msg.GetHeader(name)
+	return msg, msg.GetHeader(name)
 }
 
 func TestParseHeaders(t *testing.T) {
@@ -150,16 +156,21 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("ContactHeader", func(t *testing.T) {
 
-		for header, expected := range map[string]string{
+		for header, _ := range map[string]string{
 			"Contact: sip:sipp@127.0.0.3:5060":            "Contact: <sip:sipp@127.0.0.3:5060>",
 			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":     "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
 		} {
-			h := testParseHeader(t, parser, header)
-			assert.IsType(t, &ContactHeader{}, h)
+			req, h := testParseHeaderOnRequest(t, parser, header)
 
 			hstr := h.String()
-			assert.Equal(t, expected, hstr)
+			assert.Equal(t, header, hstr)
+
+			// Try fast reference
+			hdr, _ := req.Contact()
+			assert.IsType(t, &ContactHeader{}, hdr)
+
+			// assert.Equal(t, header, hstr)
 		}
 
 		type contactFields struct {
@@ -174,7 +185,8 @@ func TestParseHeaders(t *testing.T) {
 			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": {
 			// 	address: "sip:test@10.5.0.1:50267;transport=TCP;ob", headers: map[string]string{"reg-id": "1", "+instance": "\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\""}},
 		} {
-			h := testParseHeader(t, parser, header).(*ContactHeader)
+			req, _ := testParseHeaderOnRequest(t, parser, header)
+			h, _ := req.Contact()
 
 			assert.Equal(t, expected.displayName, h.DisplayName)
 			assert.Equal(t, expected.address, h.Address.String())
@@ -218,7 +230,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseViaHeader(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserVia(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -230,7 +242,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseToAddressHeader(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserTo(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -242,7 +254,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseFromAddressHeader(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserFrom(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -254,7 +266,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseContactAddressHeader(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserContact(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -266,7 +278,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseCSeq(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserCSeq(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -278,7 +290,7 @@ func BenchmarkParserHeaders(b *testing.B) {
 		colonIdx := strings.Index(header, ":")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := parseRouteHeader(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserRoute(header[:colonIdx], header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -617,7 +629,7 @@ func BenchmarkParserAddressValue(b *testing.B) {
 	header := "To: \"Bob\" <sip:bob:pass@127.0.0.1:5060>;tag=1928301774;xxx=xxx;yyyy=yyyy"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := parseToAddressHeader("To", header[4:])
+		_, err := headerParserTo("To", header[4:])
 		if err != nil {
 			b.Fatal(err)
 		}

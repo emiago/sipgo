@@ -125,8 +125,8 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 	return
 }
 
-// parseToAddressHeader generates ToHeader
-func parseToAddressHeader(headerName string, headerText string) (header Header, err error) {
+// headerParserTo generates ToHeader
+func headerParserTo(headerName string, headerText string) (header Header, err error) {
 
 	h := &ToHeader{
 		Address: Uri{},
@@ -146,8 +146,8 @@ func parseToAddressHeader(headerName string, headerText string) (header Header, 
 	return h, err
 }
 
-// parseFromAddressHeader generates FromHeader
-func parseFromAddressHeader(headerName string, headerText string) (header Header, err error) {
+// headerParserFrom generates FromHeader
+func headerParserFrom(headerName string, headerText string) (header Header, err error) {
 
 	h := FromHeader{
 		Address: Uri{},
@@ -170,18 +170,22 @@ func parseFromAddressHeader(headerName string, headerText string) (header Header
 	return &h, nil
 }
 
-// parseContactAddressHeader generates ContactHeader
-func parseContactAddressHeader(headerName string, headerText string) (header Header, err error) {
-	inBrackets := false
-	inQuotes := false
-
+func headerParserContact(headerName string, headerText string) (header Header, err error) {
 	h := ContactHeader{
 		Params: NewParams(),
 	}
+	return &h, parseContactHeader(headerText, &h)
+}
+
+// parseContactHeader generates ContactHeader
+func parseContactHeader(headerText string, h *ContactHeader) error {
+	inBrackets := false
+	inQuotes := false
 
 	endInd := len(headerText)
 	end := endInd - 1
 
+	var err error
 	for idx, char := range headerText {
 		if char == '<' && !inQuotes {
 			inBrackets = true
@@ -206,14 +210,14 @@ func parseContactAddressHeader(headerName string, headerText string) (header Hea
 	var e error
 	h.DisplayName, e = ParseAddressValue(headerText[:endInd], &h.Address, h.Params)
 	if e != nil {
-		return nil, e
+		return e
 	}
 
-	return &h, err
+	return err
 }
 
-// parseRouteHeader generates RouteHeader
-func parseRouteHeader(headerName string, headerText string) (header Header, err error) {
+// headerParserRoute generates RouteHeader
+func headerParserRoute(headerName string, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RouteHeader{}
@@ -223,7 +227,7 @@ func parseRouteHeader(headerName string, headerText string) (header Header, err 
 }
 
 // parseRouteHeader generates RecordRouteHeader
-func parseRecordRouteHeader(headerName string, headerText string) (header Header, err error) {
+func headerParserRecordRoute(headerName string, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RecordRouteHeader{}
