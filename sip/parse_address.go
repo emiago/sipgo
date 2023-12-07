@@ -127,13 +127,20 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 
 // headerParserTo generates ToHeader
 func headerParserTo(headerName string, headerText string) (header Header, err error) {
-
 	h := &ToHeader{
 		Address: Uri{},
 		Params:  NewParams(),
 	}
+	return h, parseToHeader(headerText, h)
+}
+
+func parseToHeader(headerText string, h *ToHeader) error {
+	var err error
+
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
-	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
+	if err != nil {
+		return err
+	}
 
 	if h.Address.Wildcard {
 		// The Wildcard '*' URI is only permitted in Contact headers.
@@ -141,22 +148,27 @@ func headerParserTo(headerName string, headerText string) (header Header, err er
 			"wildcard uri not permitted in to: header: %s",
 			headerText,
 		)
-		return
+		return err
 	}
-	return h, err
+	return nil
 }
 
 // headerParserFrom generates FromHeader
 func headerParserFrom(headerName string, headerText string) (header Header, err error) {
-
-	h := FromHeader{
+	h := &FromHeader{
 		Address: Uri{},
 		Params:  NewParams(),
 	}
+	return h, parseFromHeader(headerText, h)
+}
+
+func parseFromHeader(headerText string, h *FromHeader) error {
+	var err error
+
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
 	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
 	if err != nil {
-		return
+		return err
 	}
 
 	if h.Address.Wildcard {
@@ -165,14 +177,15 @@ func headerParserFrom(headerName string, headerText string) (header Header, err 
 			"wildcard uri not permitted in to: header: %s",
 			headerText,
 		)
-		return
+		return err
 	}
-	return &h, nil
+	return nil
 }
 
 func headerParserContact(headerName string, headerText string) (header Header, err error) {
 	h := ContactHeader{
-		Params: NewParams(),
+		Address: Uri{},
+		Params:  NewParams(),
 	}
 	return &h, parseContactHeader(headerText, &h)
 }

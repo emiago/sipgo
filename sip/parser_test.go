@@ -156,7 +156,7 @@ func TestParseHeaders(t *testing.T) {
 
 	t.Run("ContactHeader", func(t *testing.T) {
 
-		for header, _ := range map[string]string{
+		for header, expected := range map[string]string{
 			"Contact: sip:sipp@127.0.0.3:5060":            "Contact: <sip:sipp@127.0.0.3:5060>",
 			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":     "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
 			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
@@ -164,13 +164,11 @@ func TestParseHeaders(t *testing.T) {
 			req, h := testParseHeaderOnRequest(t, parser, header)
 
 			hstr := h.String()
-			assert.Equal(t, header, hstr)
+			assert.Equal(t, expected, hstr)
 
 			// Try fast reference
 			hdr, _ := req.Contact()
 			assert.IsType(t, &ContactHeader{}, hdr)
-
-			// assert.Equal(t, header, hstr)
 		}
 
 		type contactFields struct {
@@ -555,6 +553,7 @@ func BenchmarkParser(b *testing.B) {
 		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
 		"Call-ID: " + callid,
 		"CSeq: 1 INVITE",
+		"Contact: <sip:alice@127.0.0.2:5060>",
 		"Content-Type: application/sdp",
 		"Content-Length: 129",
 		"",

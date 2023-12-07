@@ -21,23 +21,39 @@ func (e errComaDetected) Error() string {
 }
 
 // This needs to kept minimalistic in order to avoid overhead of parsing
+// Headers compact form
+// a	Accept-Contact	draft-ietf-sip-callerprefs	--
+// b	Referred-By	-refer-	"by"
+// c	Content-Type	RFC 3261
+// e	Content-Encoding	RFC 3261
+// f	From	RFC 3261
+// i	Call-ID	RFC 3261
+// k	Supported	RFC 3261	"know"
+// l	Content-Length	RFC 3261
+// m	Contact	RFC 3261	"moved"
+// o	Event	-event-	"occurance"
+// r	Refer-To	-refer-
+// s	Subject	RFC 3261
+// t	To	RFC 3261
+// u	Allow-Events	-events-	"understand"
+// v	Via	RFC 3261
 var headersParsers = mapHeadersParser{
-	"to":   headerParserTo,
-	"t":    headerParserTo,
-	"from": headerParserFrom,
-	"f":    headerParserFrom,
-	// "contact":        headerParserContact,
-	// "m":              headerParserContact,
-	"call-id":        headerParserCallId,
+	"c":              headerParserContentType,
+	"content-type":   headerParserContentType,
+	"f":              headerParserFrom,
+	"from":           headerParserFrom,
+	"to":             headerParserTo,
+	"t":              headerParserTo,
+	"contact":        headerParserContact,
+	"m":              headerParserContact,
 	"i":              headerParserCallId,
+	"call-id":        headerParserCallId,
 	"cseq":           headerParserCSeq,
 	"via":            headerParserVia,
 	"v":              headerParserVia,
 	"max-forwards":   headerParserMaxForwards,
 	"content-length": headerParserContentLength,
 	"l":              headerParserContentLength,
-	"content-type":   headerParserContentType,
-	"c":              headerParserContentType,
 	"route":          headerParserRoute,
 	"record-route":   headerParserRecordRoute,
 }
@@ -99,9 +115,23 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 	}
 }
 
+func parseHeaderErrorNoComma(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := err.(errComaDetected)
+	return ok
+}
+
+func headerParserGeneric(lowHeaderName string) HeaderParser {
+	return func(headerName, headerData string) (Header, error) {
+		header := NewHeader(lowHeaderName, headerData)
+		return header, nil
+	}
+}
+
 // headerParserCallId generates CallIDHeader
-func headerParserCallId(headerName string, headerText string) (
-	header Header, err error) {
+func headerParserCallId(headerName string, headerText string) (header Header, err error) {
 	headerText = strings.TrimSpace(headerText)
 
 	if len(headerText) == 0 {

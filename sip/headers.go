@@ -319,23 +319,24 @@ func (hs *headers) Contact() (*ContactHeader, bool) {
 	if hs.contact != nil {
 		return hs.contact, true
 	}
-	// return nil, false
 
 	// try lazy header parsing
-	hdr := hs.getHeader("contact")
-	if hdr == nil {
-		return nil, false
-	}
+	for _, n := range []string{"contact", "m"} {
+		hdr := hs.getHeader(n)
+		if hdr == nil {
+			continue
+		}
 
-	h := &ContactHeader{
-		Params: NewParams(),
+		h := &ContactHeader{}
+		if err := parseContactHeader(hdr.Value(), h); parseHeaderErrorNoComma(err) {
+			log.Debug().Err(err).Msg("Lazy header parsing of contact failed")
+			return nil, false
+		}
+
+		hs.contact = h
+		return h, true
 	}
-	if err := parseContactHeader(hdr.Value(), h); err != nil {
-		log.Error().Err(err).Msg("Lazy header parsing of contact failed")
-		return nil, false
-	}
-	hs.contact = h
-	return h, true
+	return nil, false
 }
 
 func (hs *headers) Route() (*RouteHeader, bool) {
