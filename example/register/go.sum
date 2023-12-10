@@ -1,5 +1,7 @@
 github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/emiago/sipgo v0.15.3-0.20231207234626-aec90a5f251e h1:3tjE965FQ/v2QHr6vcRfC9smARb7WfNbsIzrbfGnjMs=
+github.com/emiago/sipgo v0.15.3-0.20231207234626-aec90a5f251e/go.mod h1:Kq302YJaJx1kD3MEa30Y5zcQmcLcGi+3qIl1eGuzB8g=
 github.com/gobwas/httphead v0.1.0 h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU=
 github.com/gobwas/httphead v0.1.0/go.mod h1:O/RXo79gxV8G+RqlR/otEwx4Q36zl9rqC5u12GKvMCM=
 github.com/gobwas/pool v0.2.1 h1:xfeeEhW7pwmX8nuLVlqbzVc7udMDrwetjEv+TZIz1og=

@@ -1,9 +1,9 @@
-module sipgo/example/register
+module github.com/emiago/example/register
 
 go 1.19
 
 require (
-	github.com/emiago/sipgo v0.7.1
+	github.com/emiago/sipgo v0.15.3-0.20231207234626-aec90a5f251e
 	github.com/icholy/digest v0.1.22
 	github.com/rs/zerolog v1.29.0
 )
@@ -19,5 +19,3 @@ require (
 	golang.org/x/sys v0.6.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
-
-replace github.com/emiago/sipgo v0.7.1 => ../../../sipgo
