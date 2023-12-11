@@ -186,8 +186,10 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 
 	}
 
-	if _, exists := req.CSeq(); !exists {
-		// TODO consider atomic increase cseq within Dialog
+	if cseq, exists := req.CSeq(); exists {
+		// Increase cseq
+		cseq.SeqNo++
+	} else {
 		cseq := sip.CSeqHeader{
 			SeqNo:      1,
 			MethodName: req.Method,
