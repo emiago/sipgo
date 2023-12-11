@@ -352,7 +352,7 @@ func (srv *Server) OnNoRoute(handler RequestHandler) {
 // RegisteredMethods returns list of registered handlers.
 // Can be used for constructing Allow header
 func (srv *Server) RegisteredMethods() []string {
-	r := make([]string, len(srv.requestHandlers))
+	r := make([]string, 0, len(srv.requestHandlers))
 	for k, _ := range srv.requestHandlers {
 		r = append(r, k.String())
 	}
