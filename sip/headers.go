@@ -98,6 +98,33 @@ func (hs *headers) setHeaderRef(header Header) {
 	}
 }
 
+func (hs *headers) unref(header Header) {
+	switch header.(type) {
+	case *ViaHeader:
+		hs.via = nil
+	case *FromHeader:
+		hs.from = nil
+	case *ToHeader:
+		hs.to = nil
+	case *CallIDHeader:
+		hs.callid = nil
+	case *CSeqHeader:
+		hs.cseq = nil
+	case *ContactHeader:
+		hs.contact = nil
+	case *RouteHeader:
+		hs.route = nil
+	case *RecordRouteHeader:
+		hs.recordRoute = nil
+	case *ContentLengthHeader:
+		hs.contentLength = nil
+	case *ContentTypeHeader:
+		hs.contentType = nil
+	case *MaxForwardsHeader:
+		hs.maxForwards = nil
+	}
+}
+
 // AppendHeader adds header at end of header list
 func (hs *headers) AppendHeader(header Header) {
 	hs.headerOrder = append(hs.headerOrder, header)
@@ -224,6 +251,7 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 		if entry.Name() == name {
 			foundIdx = idx
 			hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
+			hs.unref(entry)
 			break
 		}
 	}
@@ -724,7 +752,7 @@ func (h *ExpiresHeader) String() string {
 
 func (h *ExpiresHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
-	buffer.WriteString(":")
+	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
