@@ -164,7 +164,7 @@ func (tx *ClientTx) ack() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	ack := NewAckRequest(tx.origin, lastResp, nil)
+	ack := newAckRequestNon2xx(tx.origin, lastResp, nil)
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().

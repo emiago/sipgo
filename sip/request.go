@@ -207,6 +207,8 @@ func (req *Request) Destination() string {
 
 // NewAckRequest creates ACK request for 2xx INVITE
 // https://tools.ietf.org/html/rfc3261#section-13.2.2.4
+// NOTE: it does not copy Via header. This is left to transport or caller to enforce
+// Deprecated: use DialogClient for building dialogs
 func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
 	Recipient := inviteRequest.Recipient
 	if contact, ok := inviteResponse.Contact(); ok {
@@ -220,12 +222,6 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 		Recipient,
 	)
 	ackRequest.SipVersion = inviteRequest.SipVersion
-	CopyHeaders("Via", inviteRequest, ackRequest)
-	if inviteResponse.IsSuccess() {
-		// update branch, 2xx ACK is separate Tx
-		viaHop, _ := ackRequest.Via()
-		viaHop.Params.Add("branch", GenerateBranch())
-	}
 
 	if len(inviteRequest.GetHeaders("Route")) > 0 {
 		CopyHeaders("Route", inviteRequest, ackRequest)
@@ -281,6 +277,18 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	return ackRequest
 }
 
+func newAckRequestNon2xx(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
+	ackRequest := NewAckRequest(inviteRequest, inviteResponse, body)
+
+	CopyHeaders("Via", inviteRequest, ackRequest)
+	if inviteResponse.IsSuccess() {
+		// update branch, 2xx ACK is separate Tx
+		viaHop, _ := ackRequest.Via()
+		viaHop.Params.Add("branch", GenerateBranch())
+	}
+	return ackRequest
+}
+
 func NewCancelRequest(requestForCancel *Request) *Request {
 	cancelReq := NewRequest(
 		CANCEL,
@@ -319,9 +327,9 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 
 // NewByeRequestUAC creates bye request from established dialog
 // https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.1
-// TODO UAS
+// NOTE: it does not copy Via header. This is left to transport or caller to enforce
+// Deprecated: use DialogClient for building dialogs
 func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
-
 	recipient := inviteRequest.Recipient
 	cont, exists := inviteResponse.Contact()
 	if exists {
@@ -334,12 +342,6 @@ func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []b
 		recipient,
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
-	CopyHeaders("Via", inviteRequest, byeRequest)
-	// if inviteResponse.IsSuccess() {
-	// update branch, 2xx ACK is separate Tx
-	viaHop, _ := byeRequest.Via()
-	viaHop.Params.Add("branch", GenerateBranch())
-	// }
 
 	if len(inviteRequest.GetHeaders("Route")) > 0 {
 		CopyHeaders("Route", inviteRequest, byeRequest)
@@ -376,7 +378,6 @@ func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []b
 	byeRequest.SetBody(body)
 	byeRequest.SetTransport(inviteRequest.Transport())
 	byeRequest.SetSource(inviteRequest.Source())
-	// byeRequest.SetDestination(inviteRequest.Destination())
 
 	return byeRequest
 }

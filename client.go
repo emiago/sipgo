@@ -102,7 +102,18 @@ func (c *Client) GetHostname() string {
 // that you have request fully built
 // This is useful when using client handle in proxy building as request are already parsed
 func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
+	if req.IsAck() {
+		return nil, fmt.Errorf("ACK request must be sent directly through transport. Use WriteRequest")
+	}
+
 	if len(options) == 0 {
+		if cseq, exists := req.CSeq(); exists {
+			// Increase cseq if this is existing transaction
+			// WriteRequest for ex ACK will not increase and this is wanted behavior
+			// This will be a problem if we allow ACK to be passed as transaction request
+			cseq.SeqNo++
+		}
+
 		clientRequestBuildReq(c, req)
 		return c.tx.Request(ctx, req)
 	}
@@ -186,10 +197,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 
 	}
 
-	if cseq, exists := req.CSeq(); exists {
-		// Increase cseq
-		cseq.SeqNo++
-	} else {
+	if _, exists := req.CSeq(); !exists {
 		cseq := sip.CSeqHeader{
 			SeqNo:      1,
 			MethodName: req.Method,
