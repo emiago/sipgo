@@ -2,6 +2,7 @@ package sipgo
 
 import (
 	"net"
+	"sort"
 	"strings"
 	"testing"
 
@@ -57,6 +58,33 @@ func TestClientRequestBuild(t *testing.T) {
 	clen, exists := req.ContentLength()
 	assert.True(t, exists)
 	assert.Equal(t, "0", clen.Value())
+}
+
+func TestClientRequestBuildWithNAT(t *testing.T) {
+	ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
+	require.Nil(t, err)
+
+	c, err := NewClient(ua, WithClientNAT())
+	require.Nil(t, err)
+
+	recipment := sip.Uri{
+		User:      "bob",
+		Host:      "10.2.2.2",
+		Port:      5060,
+		Headers:   sip.NewParams(),
+		UriParams: sip.NewParams(),
+	}
+
+	req := sip.NewRequest(sip.OPTIONS, &recipment)
+	clientRequestBuildReq(c, req)
+
+	via, exists := req.Via()
+	assert.True(t, exists)
+
+	val := via.Value()
+	params := strings.Split(val, ";")
+	sort.Slice(params, func(i, j int) bool { return params[i] < params[j] })
+	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"]+";rport", strings.Join(params, ";"))
 }
 
 func TestClientRequestBuildWithHostAndPort(t *testing.T) {

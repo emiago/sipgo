@@ -17,9 +17,10 @@ func Init() {
 
 type Client struct {
 	*UserAgent
-	host string
-	port int
-	log  zerolog.Logger
+	host  string
+	port  int
+	rport bool
+	log   zerolog.Logger
 }
 
 type ClientOption func(c *Client) error
@@ -45,6 +46,15 @@ func WithClientHostname(hostname string) ClientOption {
 func WithClientPort(port int) ClientOption {
 	return func(s *Client) error {
 		s.port = port
+		return nil
+	}
+}
+
+// WithClientNAT makes client aware that is behind NAT.
+// EXPERIMENTAL
+func WithClientNAT() ClientOption {
+	return func(s *Client) error {
+		s.rport = true
 		return nil
 	}
 }
@@ -217,6 +227,12 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	return nil
 }
 
+// ClientRequestBuild will build missing fields in request
+// This is by default but can be used to combine with other ClientRequestOptions
+func ClientRequestBuild(c *Client, r *sip.Request) error {
+	return clientRequestBuildReq(c, r)
+}
+
 // ClientRequestAddVia is option for adding via header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
@@ -230,6 +246,9 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 	}
 	// NOTE: Consider lenght of branch configurable
 	newvia.Params.Add("branch", sip.GenerateBranchN(16))
+	if c.rport {
+		newvia.Params.Add("rport", "")
+	}
 
 	if via, exists := r.Via(); exists {
 		// newvia.Params.Add("branch", via.Params["branch"])
