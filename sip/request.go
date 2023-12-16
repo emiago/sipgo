@@ -142,6 +142,8 @@ func (req *Request) Transport() string {
 	return tp
 }
 
+// Source will return host:port address
+// In case of network parsed request source will be connection remote address
 func (req *Request) Source() string {
 	if src := req.MessageData.Source(); src != "" {
 		return src
@@ -164,6 +166,7 @@ func (req *Request) Source() string {
 		port = int(DefaultPort(req.Transport()))
 	}
 
+	// https://datatracker.ietf.org/doc/html/rfc3581#section-4
 	if viaHop.Params != nil {
 		if received, ok := viaHop.Params.Get("received"); ok && received != "" {
 			host = received

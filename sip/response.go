@@ -145,7 +145,14 @@ func (res *Response) Transport() string {
 	return tp
 }
 
+// Destination will return host:port address
+// In case of building response from request, request source is set as destination
+// This will sent response over same connection if request is parsed from network
 func (res *Response) Destination() string {
+	// https://datatracker.ietf.org/doc/html/rfc3581#section-4
+	// Server behavior:
+	// The response must be sent from the same address and port that the
+	// request was received on in order to traverse symmetric NATs.
 	if dest := res.MessageData.Destination(); dest != "" {
 		return dest
 	}

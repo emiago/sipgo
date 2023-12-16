@@ -251,7 +251,8 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 	}
 
 	if via, exists := r.Via(); exists {
-		// newvia.Params.Add("branch", via.Params["branch"])
+		// https://datatracker.ietf.org/doc/html/rfc3581#section-6
+		// As proxy rport and received must be fullfiled
 		if via.Params.Has("rport") {
 			h, p, _ := net.SplitHostPort(r.Source())
 			via.Params.Add("rport", p)
