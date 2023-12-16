@@ -270,34 +270,6 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 	return removed
 }
 
-// RemoveHeaderOn before removes header with name, yields (calls func) once it gets found
-func (hs *headers) RemoveHeaderOn(name string, f func(h Header) bool) (removed bool) {
-	// name = HeaderToLower(name)
-	// delete(hs.headers, name)
-	// update order slice
-	foundIdx := -1
-	for idx, entry := range hs.headerOrder {
-		if entry.Name() == name {
-			if f(entry) {
-				foundIdx = idx
-				hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
-				break
-			}
-		}
-	}
-
-	// Update refs
-	if foundIdx > 0 {
-		for _, entry := range hs.headerOrder[foundIdx:] {
-			if entry.Name() == name {
-				hs.setHeaderRef(entry)
-				break
-			}
-		}
-	}
-	return
-}
-
 // CloneHeaders returns all cloned headers in slice.
 func (hs *headers) CloneHeaders() []Header {
 	hdrs := make([]Header, 0)
