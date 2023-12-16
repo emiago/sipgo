@@ -256,7 +256,7 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 		}
 	}
 
-	removed = foundIdx > 0
+	removed = foundIdx >= 0
 	// Update refs
 	if removed {
 		for _, entry := range hs.headerOrder[foundIdx:] {

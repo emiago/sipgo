@@ -178,7 +178,7 @@ func TestClientRequestOptions(t *testing.T) {
 	res = sip.NewResponseFromRequest(req, 400, "", nil)
 	res.RemoveHeader("Via")
 	viaprev, _ = res.Via()
-	assert.Equal(t, via.Host, viaprev.Host)
+	assert.Equal(t, tmpvia.Host, viaprev.Host)
 
 	assert.Len(t, res.GetHeaders("Via"), 1)
 }
