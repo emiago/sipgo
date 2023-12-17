@@ -167,7 +167,7 @@ func TestParseHeaders(t *testing.T) {
 			assert.Equal(t, expected, hstr)
 
 			// Try fast reference
-			hdr, _ := req.Contact()
+			hdr := req.Contact()
 			assert.IsType(t, &ContactHeader{}, hdr)
 		}
 
@@ -184,7 +184,7 @@ func TestParseHeaders(t *testing.T) {
 			// 	address: "sip:test@10.5.0.1:50267;transport=TCP;ob", headers: map[string]string{"reg-id": "1", "+instance": "\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\""}},
 		} {
 			req, _ := testParseHeaderOnRequest(t, parser, header)
-			h, _ := req.Contact()
+			h := req.Contact()
 
 			assert.Equal(t, expected.displayName, h.DisplayName)
 			assert.Equal(t, expected.address, h.Address.String())
@@ -395,10 +395,10 @@ func TestParseRequest(t *testing.T) {
 	msg, err := parser.ParseSIP([]byte(msgstr))
 	require.Nil(t, err)
 
-	from, exists := msg.From()
-	require.True(t, exists)
-	to, exists := msg.To()
-	require.True(t, exists)
+	from := msg.From()
+	require.NotNil(t, from)
+	to := msg.To()
+	require.NotNil(t, to)
 
 	contact := msg.GetHeaders("Contact")
 	require.NotNil(t, contact)
@@ -436,7 +436,7 @@ func TestParseResponse(t *testing.T) {
 	// Use some value to make sure header is there
 
 	// Make sure via ref is correct set
-	via, _ := r.Via()
+	via := r.Via()
 	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", via.Params["branch"])
 
 	// Check all vias branch
@@ -446,13 +446,13 @@ func TestParseResponse(t *testing.T) {
 	// Check no comma present
 	assert.False(t, strings.Contains(vias[1].String(), ","))
 
-	from, _ := r.From()
+	from := r.From()
 	assert.Equal(t, "sipp", from.Address.User)
 
-	to, _ := r.To()
+	to := r.To()
 	assert.Equal(t, "service", to.Address.User)
 
-	c, _ := r.Contact()
+	c := r.Contact()
 	assert.Equal(t, "", c.Address.User)
 }
 
@@ -483,8 +483,7 @@ func TestRegisterRequestFail(t *testing.T) {
 	require.Nil(t, err, err)
 	req := msg.(*Request)
 
-	c, exists := req.Contact()
-	require.True(t, exists)
+	c := req.Contact()
 	assert.Equal(t, "test", c.Address.User)
 }
 

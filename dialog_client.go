@@ -97,9 +97,9 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 }
 
 func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	callid, _ := req.CallID()
-	from, _ := req.From()
-	to, _ := req.To()
+	callid := req.CallID()
+	from := req.From()
+	to := req.To()
 
 	id := sip.MakeDialogID(callid.Value(), from.Params["tag"], to.Params["tag"])
 
@@ -282,7 +282,7 @@ func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Requ
 		return nil, fmt.Errorf("fail to build digest: %w", err)
 	}
 
-	cseq, _ := req.CSeq()
+	cseq := req.CSeq()
 	cseq.SeqNo++
 	// newReq := req.Clone()
 

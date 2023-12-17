@@ -29,34 +29,27 @@ func TestClientRequestBuild(t *testing.T) {
 	req := sip.NewRequest(sip.OPTIONS, &recipment)
 	clientRequestBuildReq(c, req)
 
-	via, exists := req.Via()
-	assert.True(t, exists)
+	via := req.Via()
 	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"], via.Value())
 
-	from, exists := req.From()
-	assert.True(t, exists)
+	from := req.From()
 	// No ports should exists, headers, uriparams should exists, except tag
 	assert.Equal(t, "\"sipgo\" <sip:sipgo@10.0.0.0>;tag="+from.Params["tag"], from.Value())
 
-	to, exists := req.To()
-	assert.True(t, exists)
+	to := req.To()
 	// No ports should exists, headers, uriparams should exists
 	assert.Equal(t, "<sip:bob@10.2.2.2>", to.Value())
 
-	callid, exists := req.CallID()
-	assert.True(t, exists)
+	callid := req.CallID()
 	assert.NotEmpty(t, callid.Value())
 
-	cseq, exists := req.CSeq()
-	assert.True(t, exists)
+	cseq := req.CSeq()
 	assert.Equal(t, "1 OPTIONS", cseq.Value())
 
-	maxfwd, exists := req.MaxForwards()
-	assert.True(t, exists)
+	maxfwd := req.MaxForwards()
 	assert.Equal(t, "70", maxfwd.Value())
 
-	clen, exists := req.ContentLength()
-	assert.True(t, exists)
+	clen := req.ContentLength()
 	assert.Equal(t, "0", clen.Value())
 }
 
@@ -78,9 +71,7 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 	req := sip.NewRequest(sip.OPTIONS, &recipment)
 	clientRequestBuildReq(c, req)
 
-	via, exists := req.Via()
-	assert.True(t, exists)
-
+	via := req.Via()
 	val := via.Value()
 	params := strings.Split(val, ";")
 	sort.Slice(params, func(i, j int) bool { return params[i] < params[j] })
@@ -106,17 +97,14 @@ func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 	req := sip.NewRequest(sip.OPTIONS, &recipment)
 	clientRequestBuildReq(c, req)
 
-	via, exists := req.Via()
-	assert.True(t, exists)
+	via := req.Via()
 	assert.Equal(t, "SIP/2.0/UDP sip.myserver.com:5066;branch="+via.Params["branch"], via.Value())
 
-	from, exists := req.From()
-	assert.True(t, exists)
+	from := req.From()
 	// No ports should exists
 	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com>;tag="+from.Params["tag"], from.Value())
 
-	to, exists := req.To()
-	assert.True(t, exists)
+	to := req.To()
 	// No port should exists or special values
 	assert.Equal(t, "<sip:bob@10.2.2.2>", to.Value())
 }
@@ -142,13 +130,13 @@ func TestClientRequestOptions(t *testing.T) {
 
 	// Proxy receives this request
 	req := createSimpleRequest(sip.INVITE, sender, recipment, "UDP")
-	oldvia, _ := req.Via()
+	oldvia := req.Via()
 	assert.Equal(t, "Via: SIP/2.0/UDP 10.1.1.1:5060;branch="+oldvia.Params["branch"], oldvia.String())
 
 	// Proxy will add via header with client host
 	err = ClientRequestAddVia(c, req)
 	require.Nil(t, err)
-	via, _ := req.Via()
+	via := req.Via()
 	tmpvia := *via // Save this for later usage
 	assert.Equal(t, "Via: SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"], via.String())
 	assert.NotEqual(t, via.Params["branch"], oldvia.Params["branch"])
@@ -156,7 +144,7 @@ func TestClientRequestOptions(t *testing.T) {
 	// Add Record Route
 	err = ClientRequestAddRecordRoute(c, req)
 	require.Nil(t, err)
-	rr, _ := req.RecordRoute()
+	rr := req.RecordRoute()
 
 	if strings.Contains(";lr;transport=udp", rr.String()) {
 		assert.Equal(t, "Record-Route: <sip:10.0.0.0;lr;transport=udp>", rr.String())
@@ -168,16 +156,16 @@ func TestClientRequestOptions(t *testing.T) {
 	// When proxy gets response, he will remove via
 	res := sip.NewResponseFromRequest(req, 400, "", nil)
 	res.RemoveHeader("Via")
-	viaprev, _ := res.Via()
+	viaprev := res.Via()
 	assert.Equal(t, oldvia, viaprev)
 
 	// Lets make via multivalue
 	req = createSimpleRequest(sip.INVITE, sender, recipment, "UDP")
-	via, _ = req.Via()
+	via = req.Via()
 	req.AppendHeader(&tmpvia)
 	res = sip.NewResponseFromRequest(req, 400, "", nil)
 	res.RemoveHeader("Via")
-	viaprev, _ = res.Via()
+	viaprev = res.Via()
 	assert.Equal(t, tmpvia.Host, viaprev.Host)
 
 	assert.Len(t, res.GetHeaders("Via"), 1)

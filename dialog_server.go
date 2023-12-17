@@ -43,8 +43,8 @@ func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer
 // ReadInvite should read from your OnInvite handler for which it creates dialog context
 // You need to use DialogServerSession for all further responses
 func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
-	_, exists := req.Contact()
-	if !exists {
+	cont := req.Contact()
+	if cont == nil {
 		return nil, ErrDialogInviteNoContact
 	}
 
@@ -223,13 +223,13 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		break
 	}
 
-	cont, _ := req.Contact()
+	cont := req.Contact()
 	bye := sip.NewRequest(sip.BYE, &cont.Address)
 
 	// Reverse from and to
-	from, _ := res.From()
-	to, _ := res.To()
-	callid, _ := res.CallID()
+	from := res.From()
+	to := res.To()
+	callid := res.CallID()
 
 	newFrom := &sip.FromHeader{
 		DisplayName: to.DisplayName,
@@ -247,7 +247,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	bye.AppendHeader(newTo)
 	bye.AppendHeader(callid)
 
-	callidHDR, _ := bye.CallID()
+	callidHDR := bye.CallID()
 	byeID := sip.MakeDialogID(callidHDR.Value(), newFrom.Params["tag"], newTo.Params["tag"])
 	if s.ID != byeID {
 		return fmt.Errorf("Non matching ID %q %q", s.ID, byeID)

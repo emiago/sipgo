@@ -107,14 +107,14 @@ func (req *Request) Transport() string {
 	}
 
 	var tp string
-	if viaHop, ok := req.Via(); ok && viaHop.Transport != "" {
+	if viaHop := req.Via(); viaHop != nil && viaHop.Transport != "" {
 		tp = viaHop.Transport
 	} else {
 		tp = DefaultProtocol
 	}
 
 	uri := req.Recipient
-	if hdr, exists := req.Route(); exists {
+	if hdr := req.Route(); hdr != nil {
 		uri = &hdr.Address
 	}
 
@@ -149,8 +149,8 @@ func (req *Request) Source() string {
 		return src
 	}
 
-	viaHop, ok := req.Via()
-	if !ok {
+	viaHop := req.Via()
+	if viaHop == nil {
 		return ""
 	}
 
@@ -187,7 +187,7 @@ func (req *Request) Destination() string {
 	}
 
 	var uri *Uri
-	if hdr, exists := req.Route(); exists {
+	if hdr := req.Route(); hdr != nil {
 		uri = &hdr.Address
 
 	}
@@ -214,7 +214,7 @@ func (req *Request) Destination() string {
 // Deprecated: use DialogClient for building dialogs
 func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
 	Recipient := inviteRequest.Recipient
-	if contact, ok := inviteResponse.Contact(); ok {
+	if contact := inviteResponse.Contact(); contact != nil {
 		// For ws and wss (like clients in browser), don't use Contact
 		if strings.Index(strings.ToLower(Recipient.String()), "transport=ws") == -1 {
 			Recipient = &contact.Address
@@ -238,23 +238,23 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 
 	maxForwardsHeader := MaxForwardsHeader(70)
 	ackRequest.AppendHeader(&maxForwardsHeader)
-	if h, _ := inviteRequest.From(); h != nil {
+	if h := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteResponse.To(); h != nil {
+	if h := inviteResponse.To(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteRequest.CallID(); h != nil {
+	if h := inviteRequest.CallID(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteRequest.CSeq(); h != nil {
+	if h := inviteRequest.CSeq(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
 	}
 
-	cseq, _ := ackRequest.CSeq()
+	cseq := ackRequest.CSeq()
 	cseq.MethodName = ACK
 
 	/*
@@ -268,7 +268,7 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	    duration of the dialog.
 	*/
 
-	if h, _ := inviteRequest.Contact(); h != nil {
+	if h := inviteRequest.Contact(); h != nil {
 		ackRequest.AppendHeader(h.headerClone())
 	}
 
@@ -286,7 +286,7 @@ func newAckRequestNon2xx(inviteRequest *Request, inviteResponse *Response, body 
 	CopyHeaders("Via", inviteRequest, ackRequest)
 	if inviteResponse.IsSuccess() {
 		// update branch, 2xx ACK is separate Tx
-		viaHop, _ := ackRequest.Via()
+		viaHop := ackRequest.Via()
 		viaHop.Params.Add("branch", GenerateBranch())
 	}
 	return ackRequest
@@ -299,25 +299,25 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	)
 	cancelReq.SipVersion = requestForCancel.SipVersion
 
-	viaHop, _ := requestForCancel.Via()
+	viaHop := requestForCancel.Via()
 	cancelReq.AppendHeader(viaHop.Clone())
 	CopyHeaders("Route", requestForCancel, cancelReq)
 	maxForwardsHeader := MaxForwardsHeader(70)
 	cancelReq.AppendHeader(&maxForwardsHeader)
 
-	if h, _ := requestForCancel.From(); h != nil {
+	if h := requestForCancel.From(); h != nil {
 		cancelReq.AppendHeader(h.headerClone())
 	}
-	if h, _ := requestForCancel.To(); h != nil {
+	if h := requestForCancel.To(); h != nil {
 		cancelReq.AppendHeader(h.headerClone())
 	}
-	if h, _ := requestForCancel.CallID(); h != nil {
+	if h := requestForCancel.CallID(); h != nil {
 		cancelReq.AppendHeader(h.headerClone())
 	}
-	if h, _ := requestForCancel.CSeq(); h != nil {
+	if h := requestForCancel.CSeq(); h != nil {
 		cancelReq.AppendHeader(h.headerClone())
 	}
-	cseq, _ := cancelReq.CSeq()
+	cseq := cancelReq.CSeq()
 	cseq.MethodName = CANCEL
 
 	// cancelReq.SetBody([]byte{})
@@ -334,8 +334,8 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 // Deprecated: use DialogClient for building dialogs
 func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
 	recipient := inviteRequest.Recipient
-	cont, exists := inviteResponse.Contact()
-	if exists {
+	cont := inviteResponse.Contact()
+	if cont != nil {
 		// BYE is subsequent request
 		recipient = &cont.Address
 	}
@@ -358,23 +358,23 @@ func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []b
 
 	maxForwardsHeader := MaxForwardsHeader(70)
 	byeRequest.AppendHeader(&maxForwardsHeader)
-	if h, _ := inviteRequest.From(); h != nil {
+	if h := inviteRequest.From(); h != nil {
 		byeRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteResponse.To(); h != nil {
+	if h := inviteResponse.To(); h != nil {
 		byeRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteRequest.CallID(); h != nil {
+	if h := inviteRequest.CallID(); h != nil {
 		byeRequest.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := inviteRequest.CSeq(); h != nil {
+	if h := inviteRequest.CSeq(); h != nil {
 		byeRequest.AppendHeader(h.headerClone())
 	}
 
-	cseq, _ := byeRequest.CSeq()
+	cseq := byeRequest.CSeq()
 	cseq.SeqNo = cseq.SeqNo + 1
 	cseq.MethodName = BYE
 

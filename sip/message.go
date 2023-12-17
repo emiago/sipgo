@@ -99,15 +99,15 @@ type Message interface {
 	// AppendHeader appends header to message.
 	AppendHeader(header Header)
 	// CallID returns 'Call-ID' header.
-	CallID() (*CallIDHeader, bool)
+	CallID() *CallIDHeader
 	// Via returns the top 'Via' header field.
-	Via() (*ViaHeader, bool)
+	Via() *ViaHeader
 	// From returns 'From' header field.
-	From() (*FromHeader, bool)
+	From() *FromHeader
 	// To returns 'To' header field.
-	To() (*ToHeader, bool)
+	To() *ToHeader
 	// CSeq returns 'CSeq' header field.
-	CSeq() (*CSeqHeader, bool)
+	CSeq() *CSeqHeader
 	// Body returns message body.
 	Body() []byte
 	// SetBody sets message body.
@@ -148,8 +148,8 @@ func (msg *MessageData) SetBody(body []byte) {
 		length = ContentLengthHeader(len(body))
 	}
 
-	hdr, exists := msg.ContentLength()
-	if exists {
+	hdr := msg.ContentLength()
+	if hdr != nil {
 		if length == *hdr {
 			//Skip appending if value is same
 			return

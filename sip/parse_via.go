@@ -6,29 +6,35 @@ import (
 	"strings"
 )
 
-// headerParserVia parses ViaHeader
-// Note that although Via headers may contain a comma-separated list, RFC 3261 makes it clear that
-// these should not be treated as separate logical Via headers, but as multiple values on a single
-// Via header.
 func headerParserVia(headerName string, headerText string) (
 	header Header, err error) {
 	// sections := strings.Split(headerText, ",")
 	h := ViaHeader{
 		Params: HeaderParams{},
 	}
+	return &h, parseViaHeader(headerText, &h)
+}
+
+// parseViaHeader parses ViaHeader
+// Note that although Via headers may contain a comma-separated list, RFC 3261 makes it clear that
+// these should not be treated as separate logical Via headers, but as multiple values on a single
+// Via header.
+func parseViaHeader(headerText string, h *ViaHeader) error {
+	h.Params = NewParams()
+
 	state := viaStateProtocol
 	str := headerText
 	var ind, nextInd int
-
+	var err error
 	for state != nil {
-		state, nextInd, err = state(&h, str[ind:])
+		state, nextInd, err = state(h, str[ind:])
 		if err != nil {
 
 			// Fix the offset
 			if _, ok := err.(errComaDetected); ok {
 				err = errComaDetected(ind + nextInd)
 			}
-			return &h, err
+			return err
 		}
 		// If we alocated next hop this means we hit coma
 		// if hop.Next != nil {
@@ -36,7 +42,7 @@ func headerParserVia(headerName string, headerText string) (
 		// }
 		ind += nextInd
 	}
-	return &h, nil
+	return nil
 }
 
 type viaFSM func(h *ViaHeader, s string) (viaFSM, int, error)

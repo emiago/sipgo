@@ -307,8 +307,8 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	//   Before a request is sent, the client transport MUST insert a value of
 	//   the "sent-by" field into the Via header field.  This field contains
 	//   an IP address or host name, and port.
-	viaHop, exists := req.Via()
-	if !exists {
+	viaHop := req.Via()
+	if viaHop == nil {
 		// NOTE: We are enforcing that client creates this header
 		return nil, fmt.Errorf("missing Via Header")
 	}

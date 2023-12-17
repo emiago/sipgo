@@ -281,70 +281,123 @@ func (hs *headers) CloneHeaders() []Header {
 
 // Here are most used headers with quick reference
 
-func (hs *headers) CallID() (*CallIDHeader, bool) {
-	return hs.callid, hs.callid != nil
+// CallID returns CallID parsed header or nil if not exists
+func (hs *headers) CallID() *CallIDHeader {
+	if hs.callid == nil {
+		var h CallIDHeader
+		if parseHeaderLazy(hs, parseCallIdHeader, []string{"call-id", "i"}, &h) {
+			hs.callid = &h
+		}
+	}
+	return hs.callid
 }
 
-func (hs *headers) Via() (*ViaHeader, bool) {
-	return hs.via, hs.via != nil
+// Via returns Via parsed header or nil if not exists
+func (hs *headers) Via() *ViaHeader {
+	if hs.via == nil {
+		h := &ViaHeader{}
+		if parseHeaderLazy(hs, parseViaHeader, []string{"via", "v"}, h) {
+			hs.via = h
+		}
+	}
+	return hs.via
 }
 
-func (hs *headers) From() (*FromHeader, bool) {
-	return hs.from, hs.from != nil
+// From returns From parsed header or nil if not exists
+func (hs *headers) From() *FromHeader {
+	if hs.from == nil {
+		h := &FromHeader{}
+		if parseHeaderLazy(hs, parseFromHeader, []string{"from", "f"}, h) {
+			hs.from = h
+		}
+	}
+	return hs.from
 }
 
-func (hs *headers) To() (*ToHeader, bool) {
-	return hs.to, hs.to != nil
+// To returns To parsed header or nil if not exists
+func (hs *headers) To() *ToHeader {
+	if hs.to == nil {
+		h := &ToHeader{}
+		if parseHeaderLazy(hs, parseToHeader, []string{"to", "t"}, h) {
+			hs.to = h
+		}
+	}
+	return hs.to
 }
 
-func (hs *headers) CSeq() (*CSeqHeader, bool) {
-	return hs.cseq, hs.cseq != nil
+func (hs *headers) CSeq() *CSeqHeader {
+	if hs.cseq == nil {
+		h := &CSeqHeader{}
+		if parseHeaderLazy(hs, parseCSeqHeader, []string{"cseq"}, h) {
+			hs.cseq = h
+		}
+	}
+	return hs.cseq
 }
 
 // Additional headers
-
-func (hs *headers) MaxForwards() (*MaxForwardsHeader, bool) {
-	return hs.maxForwards, hs.maxForwards != nil
+func (hs *headers) MaxForwards() *MaxForwardsHeader {
+	if hs.maxForwards == nil {
+		var h MaxForwardsHeader
+		if parseHeaderLazy(hs, parseMaxForwardsHeader, []string{"max-forwards"}, &h) {
+			hs.maxForwards = &h
+		}
+	}
+	return hs.maxForwards
 }
 
-func (hs *headers) ContentLength() (*ContentLengthHeader, bool) {
-	return hs.contentLength, hs.contentLength != nil
-}
-
-func (hs *headers) ContentType() (*ContentTypeHeader, bool) {
-	return hs.contentType, hs.contentType != nil
-}
-
-func (hs *headers) Contact() (*ContactHeader, bool) {
-	if hs.contact != nil {
-		return hs.contact, true
+func (hs *headers) ContentLength() *ContentLengthHeader {
+	if hs.contentLength == nil {
+		var h ContentLengthHeader
+		if parseHeaderLazy(hs, parseContentLengthHeader, []string{"content-length", "l"}, &h) {
+			hs.contentLength = &h
+		}
 	}
 
-	// try lazy header parsing
-	for _, n := range []string{"contact", "m"} {
-		hdr := hs.getHeader(n)
-		if hdr == nil {
-			continue
-		}
+	return hs.contentLength
+}
 
+// ContentType returns Content-Type parsed header or nil if not exists
+func (hs *headers) ContentType() *ContentTypeHeader {
+	if hs.contentType == nil {
+		var h ContentTypeHeader
+		if parseHeaderLazy(hs, parseContentTypeHeader, []string{"content-type", "c"}, &h) {
+			hs.contentType = &h
+		}
+	}
+
+	return hs.contentType
+}
+
+func (hs *headers) Contact() *ContactHeader {
+	if hs.contact == nil {
 		h := &ContactHeader{}
-		if err := parseContactHeader(hdr.Value(), h); parseHeaderErrorNoComma(err) {
-			log.Debug().Err(err).Msg("Lazy header parsing of contact failed")
-			return nil, false
+		if parseHeaderLazy(hs, parseContactHeader, []string{"contact", "m"}, h) {
+			hs.contact = h
 		}
-
-		hs.contact = h
-		return h, true
 	}
-	return nil, false
+
+	return hs.contact
 }
 
-func (hs *headers) Route() (*RouteHeader, bool) {
-	return hs.route, hs.route != nil
+func (hs *headers) Route() *RouteHeader {
+	if hs.route == nil {
+		h := &RouteHeader{}
+		if parseHeaderLazy(hs, parseRouteHeader, []string{"route"}, h) {
+			hs.route = h
+		}
+	}
+	return hs.route
 }
 
-func (hs *headers) RecordRoute() (*RecordRouteHeader, bool) {
-	return hs.recordRoute, hs.recordRoute != nil
+func (hs *headers) RecordRoute() *RecordRouteHeader {
+	if hs.recordRoute == nil {
+		h := &RecordRouteHeader{}
+		if parseHeaderLazy(hs, parseRecordRouteHeader, []string{"record-route"}, h) {
+			hs.recordRoute = h
+		}
+	}
+	return hs.recordRoute
 }
 
 // NewHeader creates generic type of header.
@@ -856,9 +909,10 @@ func (h *ContentTypeHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+// func (h **ContentTypeHeader) Name() string { return "Content-Type" }
 func (h *ContentTypeHeader) Name() string { return "Content-Type" }
 
-func (h ContentTypeHeader) Value() string { return string(h) }
+func (h *ContentTypeHeader) Value() string { return string(*h) }
 
 func (h *ContentTypeHeader) headerClone() Header { return h }
 
@@ -975,4 +1029,25 @@ func CopyHeaders(name string, from, to Message) {
 	for _, h := range from.GetHeaders(name) {
 		to.AppendHeader(h.headerClone())
 	}
+}
+
+type headerPointerReceiver[T any] interface {
+	Header
+	*T
+}
+
+func parseHeaderLazy[T any, HP headerPointerReceiver[T]](hs *headers, f func(headerText string, h HP) error, headerNames []string, h HP) bool {
+	for _, n := range headerNames {
+		hdr := hs.getHeader(n)
+		if hdr == nil {
+			continue
+		}
+
+		if err := f(hdr.Value(), h); err != nil {
+			log.Debug().Err(err).Msgf("Lazy header parsing of %s failed", hdr.Name())
+			return false
+		}
+		return true
+	}
+	return false
 }

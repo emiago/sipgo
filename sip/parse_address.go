@@ -127,16 +127,14 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 
 // headerParserTo generates ToHeader
 func headerParserTo(headerName string, headerText string) (header Header, err error) {
-	h := &ToHeader{
-		Address: Uri{},
-		Params:  NewParams(),
-	}
+	h := &ToHeader{}
 	return h, parseToHeader(headerText, h)
 }
 
 func parseToHeader(headerText string, h *ToHeader) error {
 	var err error
 
+	h.Params = NewParams()
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
 	if err != nil {
 		return err
@@ -155,16 +153,14 @@ func parseToHeader(headerText string, h *ToHeader) error {
 
 // headerParserFrom generates FromHeader
 func headerParserFrom(headerName string, headerText string) (header Header, err error) {
-	h := &FromHeader{
-		Address: Uri{},
-		Params:  NewParams(),
-	}
+	h := &FromHeader{}
 	return h, parseFromHeader(headerText, h)
 }
 
 func parseFromHeader(headerText string, h *FromHeader) error {
 	var err error
 
+	h.Params = NewParams()
 	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
 	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
 	if err != nil {
@@ -183,10 +179,7 @@ func parseFromHeader(headerText string, h *FromHeader) error {
 }
 
 func headerParserContact(headerName string, headerText string) (header Header, err error) {
-	h := ContactHeader{
-		Address: Uri{},
-		Params:  NewParams(),
-	}
+	h := ContactHeader{}
 	return &h, parseContactHeader(headerText, &h)
 }
 
@@ -221,6 +214,7 @@ func parseContactHeader(headerText string, h *ContactHeader) error {
 	}
 
 	var e error
+	h.Params = NewParams()
 	h.DisplayName, e = ParseAddressValue(headerText[:endInd], &h.Address, h.Params)
 	if e != nil {
 		return e
@@ -229,14 +223,16 @@ func parseContactHeader(headerText string, h *ContactHeader) error {
 	return err
 }
 
-// headerParserRoute generates RouteHeader
 func headerParserRoute(headerName string, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RouteHeader{}
-	parseRouteAddress(headerText, &h.Address)
+	return &h, parseRouteHeader(headerText, &h)
+}
 
-	return &h, nil
+// parseRouteHeader parser RouteHeader
+func parseRouteHeader(headerText string, h *RouteHeader) error {
+	return parseRouteAddress(headerText, &h.Address)
 }
 
 // parseRouteHeader generates RecordRouteHeader
@@ -244,8 +240,11 @@ func headerParserRecordRoute(headerName string, headerText string) (header Heade
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RecordRouteHeader{}
-	parseRouteAddress(headerText, &h.Address)
-	return &h, nil
+	return &h, parseRecordRouteHeader(headerText, &h)
+}
+
+func parseRecordRouteHeader(headerText string, h *RecordRouteHeader) error {
+	return parseRouteAddress(headerText, &h.Address)
 }
 
 func parseRouteAddress(headerText string, address *Uri) (err error) {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrependHeader(t *testing.T) {
@@ -48,6 +49,28 @@ func BenchmarkHeadersPrepend(b *testing.B) {
 		}
 		hs.headerOrder = newOrder
 	})
+}
+
+func TestLazyParsing(t *testing.T) {
+	headers := new(headers)
+
+	headers.AppendHeader(NewHeader("Contact", "<sip:alice@example.com>"))
+	h := headers.Contact()
+	require.NotNil(t, h)
+	require.Equal(t, "<sip:alice@example.com>", h.Value())
+}
+
+func BenchmarkLazyParsing(b *testing.B) {
+	headers := new(headers)
+	headers.AppendHeader(NewHeader("Contact", "<sip:alice@example.com>"))
+
+	for i := 0; i < b.N; i++ {
+		c := headers.Contact()
+		if c == nil {
+			b.Fatal("contact is nil")
+		}
+		headers.contact = nil
+	}
 }
 
 func TestMaxForwardIncDec(t *testing.T) {

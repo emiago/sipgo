@@ -117,7 +117,7 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 	}
 
 	if len(options) == 0 {
-		if cseq, exists := req.CSeq(); exists {
+		if cseq := req.CSeq(); cseq != nil {
 			// Increase cseq if this is existing transaction
 			// WriteRequest for ex ACK will not increase and this is wanted behavior
 			// This will be a problem if we allow ACK to be passed as transaction request
@@ -161,13 +161,13 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
 	// and Via;
 
-	if _, exists := req.Via(); !exists {
+	if v := req.Via(); v == nil {
 		// Multi VIA value must be manually added
 		ClientRequestAddVia(c, req)
 	}
 
 	// From and To headers should not contain Port numbers, headers, uri params
-	if _, exists := req.From(); !exists {
+	if v := req.From(); v == nil {
 		from := sip.FromHeader{
 			DisplayName: c.name,
 			Address: sip.Uri{
@@ -182,7 +182,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		req.AppendHeader(&from)
 	}
 
-	if _, exists := req.To(); !exists {
+	if v := req.To(); v == nil {
 		to := sip.ToHeader{
 			Address: sip.Uri{
 				Encrypted: req.Recipient.Encrypted,
@@ -196,7 +196,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		req.AppendHeader(&to)
 	}
 
-	if _, exists := req.CallID(); !exists {
+	if v := req.CallID(); v == nil {
 		uuid, err := uuid.NewRandom()
 		if err != nil {
 			return err
@@ -207,7 +207,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 
 	}
 
-	if _, exists := req.CSeq(); !exists {
+	if v := req.CSeq(); v == nil {
 		cseq := sip.CSeqHeader{
 			SeqNo:      1,
 			MethodName: req.Method,
@@ -215,7 +215,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		req.AppendHeader(&cseq)
 	}
 
-	if _, exists := req.MaxForwards(); !exists {
+	if v := req.MaxForwards(); v == nil {
 		maxfwd := sip.MaxForwardsHeader(70)
 		req.AppendHeader(&maxfwd)
 	}
@@ -250,7 +250,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 		newvia.Params.Add("rport", "")
 	}
 
-	if via, exists := r.Via(); exists {
+	if via := r.Via(); via != nil {
 		// https://datatracker.ietf.org/doc/html/rfc3581#section-6
 		// As proxy rport and received must be fullfiled
 		if via.Params.Has("rport") {
@@ -290,8 +290,8 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 // ClientRequestDecreaseMaxForward should be used when forwarding request. It decreases max forward
 // in case of 0 it returnes error
 func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
-	maxfwd, exists := r.MaxForwards()
-	if !exists {
+	maxfwd := r.MaxForwards()
+	if maxfwd == nil {
 		// TODO, should we return error here
 		return nil
 	}

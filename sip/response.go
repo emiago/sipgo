@@ -117,14 +117,14 @@ func (res *Response) IsGlobalError() bool {
 }
 
 func (res *Response) IsAck() bool {
-	if cseq, ok := res.CSeq(); ok {
+	if cseq := res.CSeq(); cseq != nil {
 		return cseq.MethodName == ACK
 	}
 	return false
 }
 
 func (res *Response) IsCancel() bool {
-	if cseq, ok := res.CSeq(); ok {
+	if cseq := res.CSeq(); cseq != nil {
 		return cseq.MethodName == CANCEL
 	}
 	return false
@@ -136,7 +136,7 @@ func (res *Response) Transport() string {
 	}
 
 	var tp string
-	if viaHop, ok := res.Via(); ok && viaHop.Transport != "" {
+	if viaHop := res.Via(); viaHop != nil && viaHop.Transport != "" {
 		tp = viaHop.Transport
 	} else {
 		tp = DefaultProtocol
@@ -157,8 +157,8 @@ func (res *Response) Destination() string {
 		return dest
 	}
 
-	viaHop, ok := res.Via()
-	if !ok {
+	viaHop := res.Via()
+	if viaHop == nil {
 		return ""
 	}
 
@@ -202,19 +202,19 @@ func NewResponseFromRequest(
 	res.SipVersion = req.SipVersion
 	CopyHeaders("Record-Route", req, res)
 	CopyHeaders("Via", req, res)
-	if h, _ := req.From(); h != nil {
+	if h := req.From(); h != nil {
 		res.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := req.To(); h != nil {
+	if h := req.To(); h != nil {
 		res.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := req.CallID(); h != nil {
+	if h := req.CallID(); h != nil {
 		res.AppendHeader(h.headerClone())
 	}
 
-	if h, _ := req.CSeq(); h != nil {
+	if h := req.CSeq(); h != nil {
 		res.AppendHeader(h.headerClone())
 	}
 

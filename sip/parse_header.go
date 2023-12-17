@@ -130,74 +130,84 @@ func headerParserGeneric(lowHeaderName string) HeaderParser {
 	}
 }
 
-// headerParserCallId generates CallIDHeader
 func headerParserCallId(headerName string, headerText string) (header Header, err error) {
+	var callId CallIDHeader
+	return &callId, parseCallIdHeader(headerText, &callId)
+}
+
+// parseCallIdHeader parses Call-ID header
+func parseCallIdHeader(headerText string, callId *CallIDHeader) error {
 	headerText = strings.TrimSpace(headerText)
-
 	if len(headerText) == 0 {
-		err = fmt.Errorf("empty Call-ID body")
-		return
+		return fmt.Errorf("empty Call-ID body")
 	}
 
-	var callId = CallIDHeader(headerText)
-
-	return &callId, nil
+	*callId = CallIDHeader(headerText)
+	return nil
 }
 
-// parseCallId generates MaxForwardsHeader
 func headerParserMaxForwards(headerName string, headerText string) (header Header, err error) {
-	val, err := strconv.ParseUint(headerText, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	maxfwd := MaxForwardsHeader(val)
-	return &maxfwd, nil
+	var maxfwd MaxForwardsHeader
+	return &maxfwd, parseMaxForwardsHeader(headerText, &maxfwd)
 }
 
-// headerParserCSeq generates CSeqHeader
-func headerParserCSeq(headerName string, headerText string) (
-	headers Header, err error) {
+// parseMaxForwardsHeader parses MaxForward header
+func parseMaxForwardsHeader(headerText string, maxfwd *MaxForwardsHeader) error {
+	val, err := strconv.ParseUint(headerText, 10, 32)
+	*maxfwd = MaxForwardsHeader(val)
+	return err
+}
+
+func headerParserCSeq(headerName string, headerText string) (headers Header, err error) {
 	var cseq CSeqHeader
+	return &cseq, parseCSeqHeader(headerText, &cseq)
+}
+
+// parseCSeqHeader parses CSeq header
+func parseCSeqHeader(headerText string, cseq *CSeqHeader) error {
 	ind := strings.IndexAny(headerText, abnfWs)
 	if ind < 1 || len(headerText)-ind < 2 {
-		err = fmt.Errorf(
-			"CSeq field should have precisely one whitespace section: '%s'",
-			headerText,
-		)
-		return
+		return fmt.Errorf("CSeq field should have precisely one whitespace section: '%s'", headerText)
 	}
 
-	var seqno uint64
-	seqno, err = strconv.ParseUint(headerText[:ind], 10, 32)
+	seqno, err := strconv.ParseUint(headerText[:ind], 10, 32)
 	if err != nil {
-		return
+		return err
 	}
 
 	if seqno > maxCseq {
-		err = fmt.Errorf("invalid CSeq %d: exceeds maximum permitted value "+
-			"2**31 - 1", seqno)
-		return
+		return fmt.Errorf("invalid CSeq %d: exceeds maximum permitted value "+"2**31 - 1", seqno)
 	}
 
 	cseq.SeqNo = uint32(seqno)
 	cseq.MethodName = RequestMethod(headerText[ind+1:])
-	return &cseq, nil
+	return nil
 }
 
-// headerParserContentLength generates ContentLengthHeader
 func headerParserContentLength(headerName string, headerText string) (header Header, err error) {
 	var contentLength ContentLengthHeader
-	var value uint64
-	value, err = strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
-	contentLength = ContentLengthHeader(value)
-	return &contentLength, err
+	return &contentLength, parseContentLengthHeader(headerText, &contentLength)
 }
 
-// parseContentLength generates ContentTypeHeader
+// parseContentLengthHeader parses ContentLength header
+func parseContentLengthHeader(headerText string, contentLength *ContentLengthHeader) error {
+	value, err := strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
+	*contentLength = ContentLengthHeader(value)
+	return err
+}
+
+// headerParserContentType parses ContentType header
 func headerParserContentType(headerName string, headerText string) (headers Header, err error) {
-	// var contentType ContentType
+	var contentType ContentTypeHeader
+	return &contentType, parseContentTypeHeader(headerText, &contentType)
+}
+
+func parseContentTypeHeader(headerText string, contentType *ContentTypeHeader) error {
 	headerText = strings.TrimSpace(headerText)
-	contentType := ContentTypeHeader(headerText)
-	return &contentType, nil
+	if len(headerText) == 0 {
+		return fmt.Errorf("empty Content-Type body")
+	}
+
+	*contentType = ContentTypeHeader(headerText)
+	return nil
 }

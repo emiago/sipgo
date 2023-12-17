@@ -94,13 +94,13 @@ func MakeDialogIDFromMessage(msg Message) (string, error) {
 }
 
 func getDialogIDFromMessage(msg Message, callId, innerId, externalId *string) error {
-	callID, ok := msg.CallID()
-	if !ok {
+	callID := msg.CallID()
+	if callID == nil {
 		return fmt.Errorf("missing Call-ID header")
 	}
 
-	to, ok := msg.To()
-	if !ok {
+	to := msg.To()
+	if to == nil {
 		return fmt.Errorf("missing To header")
 	}
 
@@ -109,8 +109,8 @@ func getDialogIDFromMessage(msg Message, callId, innerId, externalId *string) er
 		return fmt.Errorf("missing tag param in To header")
 	}
 
-	from, ok := msg.From()
-	if !ok {
+	from := msg.From()
+	if from == nil {
 		return fmt.Errorf("missing From header")
 	}
 
