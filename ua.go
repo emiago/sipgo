@@ -12,6 +12,7 @@ type UserAgent struct {
 	ip          net.IP
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
+	parser      *sip.Parser
 	tp          *sip.TransportLayer
 	tx          *sip.TransactionLayer
 }
@@ -52,6 +53,13 @@ func WithUserAgenTLSConfig(c *tls.Config) UserAgentOption {
 	}
 }
 
+func WithUserAgentParser(p *sip.Parser) UserAgentOption {
+	return func(s *UserAgent) error {
+		s.parser = p
+		return nil
+	}
+}
+
 // NewUA creates User Agent
 // User Agent will create transport and transaction layer
 // Check options for customizing user agent
@@ -59,6 +67,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	ua := &UserAgent{
 		name:        "sipgo",
 		dnsResolver: net.DefaultResolver,
+		parser:      sip.NewParser(),
 	}
 
 	for _, o := range options {
@@ -77,8 +86,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 		}
 	}
 
-	// TODO export parser to be configurable
-	ua.tp = sip.NewTransportLayer(ua.dnsResolver, sip.NewParser(), ua.tlsConfig)
+	ua.tp = sip.NewTransportLayer(ua.dnsResolver, ua.parser, ua.tlsConfig)
 	ua.tx = sip.NewTransactionLayer(ua.tp)
 	return ua, nil
 }
