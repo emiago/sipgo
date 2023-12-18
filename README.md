@@ -176,7 +176,7 @@ client.WriteRequest(req)
 contactHDR := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 }
-dialogCli := NewDialogClient(cli, contactHDR)
+dialogCli := sipgo.NewDialogClient(cli, contactHDR)
 
 // Attach Bye handling for dialog
 srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -199,7 +199,7 @@ err = dialog.Bye(ctx)
 uasContact := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 }
-dialogSrv := NewDialogServer(cli, uasContact)
+dialogSrv := sipgo.NewDialogServer(cli, uasContact)
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
@@ -283,7 +283,7 @@ go test ./...
 
 ## Credits
 
-This project was based on [gosip](https://github.com/ghettovoice/gosip) by project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
+This project was influenced by [gosip](https://github.com/ghettovoice/gosip), project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
 This unfortunately required many design changes, therefore this libraries are not compatible.
 
 ## Support

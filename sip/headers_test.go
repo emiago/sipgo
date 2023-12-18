@@ -54,10 +54,20 @@ func BenchmarkHeadersPrepend(b *testing.B) {
 func TestLazyParsing(t *testing.T) {
 	headers := new(headers)
 
-	headers.AppendHeader(NewHeader("Contact", "<sip:alice@example.com>"))
-	h := headers.Contact()
-	require.NotNil(t, h)
-	require.Equal(t, "<sip:alice@example.com>", h.Value())
+	t.Run("Contact", func(t *testing.T) {
+		headers.AppendHeader(NewHeader("Contact", "<sip:alice@example.com>"))
+		h := headers.Contact()
+		require.NotNil(t, h)
+		require.Equal(t, "<sip:alice@example.com>", h.Value())
+	})
+
+	t.Run("Via", func(t *testing.T) {
+		headers.AppendHeader(NewHeader("Via", "SIP/2.0/UDP 10.1.1.1:5060;branch=z9hG4bKabcdef"))
+		h := headers.Via()
+		require.NotNil(t, h)
+		require.Equal(t, "SIP/2.0/UDP 10.1.1.1:5060;branch=z9hG4bKabcdef", h.Value())
+	})
+
 }
 
 func BenchmarkLazyParsing(b *testing.B) {

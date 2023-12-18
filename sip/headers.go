@@ -235,9 +235,6 @@ func (hs *headers) getHeader(nameLower string) Header {
 		}
 	}
 
-	// if header, ok := hs.headers[nameLower]; ok {
-	// 	return header
-	// }
 	return nil
 }
 
@@ -325,6 +322,7 @@ func (hs *headers) To() *ToHeader {
 	return hs.to
 }
 
+// CSeq returns CSEQ parsed header or nil if not exists
 func (hs *headers) CSeq() *CSeqHeader {
 	if hs.cseq == nil {
 		h := &CSeqHeader{}
@@ -335,7 +333,7 @@ func (hs *headers) CSeq() *CSeqHeader {
 	return hs.cseq
 }
 
-// Additional headers
+// MaxForwards returns Max-Forwards parsed header or nil if not exists
 func (hs *headers) MaxForwards() *MaxForwardsHeader {
 	if hs.maxForwards == nil {
 		var h MaxForwardsHeader
@@ -346,6 +344,7 @@ func (hs *headers) MaxForwards() *MaxForwardsHeader {
 	return hs.maxForwards
 }
 
+// ContentLength returns Content-Length parsed header or nil if not exists
 func (hs *headers) ContentLength() *ContentLengthHeader {
 	if hs.contentLength == nil {
 		var h ContentLengthHeader
@@ -369,6 +368,7 @@ func (hs *headers) ContentType() *ContentTypeHeader {
 	return hs.contentType
 }
 
+// Contact returns Contact parsed header or nil if not exists
 func (hs *headers) Contact() *ContactHeader {
 	if hs.contact == nil {
 		h := &ContactHeader{}
@@ -380,6 +380,7 @@ func (hs *headers) Contact() *ContactHeader {
 	return hs.contact
 }
 
+// Route returns Route parsed header or nil if not exists
 func (hs *headers) Route() *RouteHeader {
 	if hs.route == nil {
 		h := &RouteHeader{}
@@ -390,6 +391,7 @@ func (hs *headers) Route() *RouteHeader {
 	return hs.route
 }
 
+// RecordRoute returns Record-Route parsed header or nil if not exists
 func (hs *headers) RecordRoute() *RecordRouteHeader {
 	if hs.recordRoute == nil {
 		h := &RecordRouteHeader{}
@@ -400,8 +402,7 @@ func (hs *headers) RecordRoute() *RecordRouteHeader {
 	return hs.recordRoute
 }
 
-// NewHeader creates generic type of header.
-// Use it for unknown type of header
+// NewHeader creates generic type of header
 func NewHeader(name, value string) Header {
 	return &genericHeader{
 		HeaderName: name,
