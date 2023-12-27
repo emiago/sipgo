@@ -36,8 +36,8 @@ Fetch lib with:
 - RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)  
 
 ## Tools developed:
-- CLI softphone for easy testing [gophone](https://github.com/emiago/sipgo-tools#gophone)
-- Simple proxy where NAT is problem [psip](https://github.com/emiago/sipgo-tools#psip)
+- CLI softphone for easy testing [gophone](https://github.com/emiago/gophone)
+- Simple proxy where NAT is problem [psip](https://github.com/emiago/psip)
 - ... *your tool can be here*
 
 ## Performance
