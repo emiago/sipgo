@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"context"
 	"net"
 	"sort"
 	"strings"
@@ -169,4 +170,20 @@ func TestClientRequestOptions(t *testing.T) {
 	assert.Equal(t, tmpvia.Host, viaprev.Host)
 
 	assert.Len(t, res.GetHeaders("Via"), 1)
+}
+
+func TestClientVia(t *testing.T) {
+	ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
+	require.Nil(t, err)
+
+	c, err := NewClient(ua)
+	require.Nil(t, err)
+
+	tp := ua.tp
+
+	req := sip.NewRequest(sip.OPTIONS, &sip.Uri{User: "test", Host: "example.com", Port: 5060})
+	err = clientRequestBuildReq(c, req)
+	require.NoError(t, err)
+
+	tp.ClientRequestConnection(context.TODO(), req)
 }

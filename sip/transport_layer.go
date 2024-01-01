@@ -327,24 +327,25 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		c, _ := transport.GetConnection(addr)
 		if c != nil {
 			// Update Via sent by
-			// TODO avoid this parsing
-			laddr := c.LocalAddr()
-			network := laddr.Network()
-			laddrStr := laddr.String()
+			la := c.LocalAddr()
+			network := la.Network()
+			laStr := la.String()
 
 			// TODO handle broadcast address
-			host, port, err := ParseAddr(laddrStr)
+			// TODO avoid this parsing
+			host, port, err := ParseAddr(laStr)
 			if err != nil {
-				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
+				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laStr, err)
 			}
 
-			// In case client forced some host (like external IP) we do not want to overwrite
-			// Currently we always have this set as resolved IP
+			// https://datatracker.ietf.org/doc/html/rfc3261#section-18
+			// Before a request is sent, the client transport MUST insert a value of
+			// the "sent-by" field into the Via header field.  This field contains
+			// an IP address or host name, and port.  The usage of an FQDN is
+			// RECOMMENDED.
 			if viaHop.Host == "" {
 				viaHop.Host = host
-
 			}
-
 			viaHop.Port = port
 			return c, nil
 		}
@@ -383,15 +384,20 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		fallthrough
 	case viaHop.Port == 0: // We still may need to rewrite sent-by port
 		// TODO avoid this parsing
-		l := c.LocalAddr()
-		laddrStr := l.String()
+		la := c.LocalAddr()
+		laStr := la.String()
 
-		host, port, err = ParseAddr(laddrStr)
+		host, port, err = ParseAddr(laStr)
 		if err != nil {
-			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laddrStr, err)
+			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laStr, err)
 		}
 
-		if viaHop.Host != "" {
+		// https://datatracker.ietf.org/doc/html/rfc3261#section-18
+		// Before a request is sent, the client transport MUST insert a value of
+		// the "sent-by" field into the Via header field.  This field contains
+		// an IP address or host name, and port.  The usage of an FQDN is
+		// RECOMMENDED.
+		if viaHop.Host == "" {
 			viaHop.Host = host
 		}
 		viaHop.Port = port

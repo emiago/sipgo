@@ -236,6 +236,11 @@ func ClientRequestBuild(c *Client, r *sip.Request) error {
 // ClientRequestAddVia is option for adding via header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
+	// TODO
+	// A client that sends a request to a multicast address MUST add the
+	// "maddr" parameter to its Via header field value containing the
+	// destination multicast address
+
 	newvia := &sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
