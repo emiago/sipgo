@@ -150,6 +150,7 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 
 	// Must add contact header
 	res.AppendHeader(&s.s.contactHDR)
+	s.Dialog.InviteResponse = res
 
 	// Do we have cancel in meantime
 	select {
@@ -173,7 +174,6 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	s.Dialog.ID = id
-	s.Dialog.InviteResponse = res
 	s.setState(sip.DialogStateEstablished)
 
 	if err := tx.Respond(res); err != nil {
