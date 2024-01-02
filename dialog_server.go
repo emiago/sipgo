@@ -208,6 +208,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	// until it has received an ACK for its 2xx response or until the server
 	// transaction times out.
 	for {
+		state = s.state.Load()
 		if sip.DialogState(state) < sip.DialogStateConfirmed {
 			select {
 			case <-s.inviteTx.Done():
