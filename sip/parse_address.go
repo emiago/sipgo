@@ -56,6 +56,7 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 			// uri can be without <> in that case there all after ; are header params
 			uriEnd = i
 			equal = -1
+			semicolon = -1
 			inBrackets = false
 		case ';':
 			// uri can be without <> in that case there all after ; are header params
