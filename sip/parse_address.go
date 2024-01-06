@@ -6,124 +6,153 @@ import (
 	"strings"
 )
 
+type nameAddress struct {
+	displayName  string
+	uri          *Uri
+	headerParams HeaderParams
+}
+
+type addressFSM func(dispName *nameAddress, s string) (addressFSM, string, error)
+
 // ParseAddressValue parses an address - such as from a From, To, or
 // Contact header. It returns:
 // See RFC 3261 section 20.10 for details on parsing an address.
-// Note that this method will not accept a comma-separated list of addresses.
 func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) (displayName string, err error) {
-	// headerParams = NewParams()
-	var semicolon, equal, startQuote, endQuote int = -1, -1, -1, -1
-	var name string
-	var uriStart, uriEnd int = 0, -1
-	var inBrackets, inQuotesParamValue bool
-	for i, c := range addressText {
-		if inQuotesParamValue {
-			if c == '"' {
-				inQuotesParamValue = false
-			}
+	if len(addressText) == 0 {
+		return "", errors.New("Empty Address")
+	}
 
-			continue
+	// adds alloc but easier to maintain
+	a := nameAddress{
+		uri:          uri,
+		headerParams: headerParams,
+	}
+
+	parseNameAddress(addressText, &a)
+	displayName = a.displayName
+	return
+}
+
+// parseNameAddress
+// name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
+// addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
+// TODO Consider exporting this
+func parseNameAddress(addressText string, a *nameAddress) (err error) {
+	state := addressStateDisplayName
+	str := addressText
+	for state != nil {
+		state, str, err = state(a, str)
+		if err != nil {
+			return
 		}
+	}
+	return nil
+}
 
-		switch c {
-		case '"':
-			if equal > 0 {
-				inQuotesParamValue = true
-				continue
-			}
-
+func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, error) {
+	var startQuote, endQuote int = -1, -1
+	for i, c := range s {
+		if c == '"' {
 			if startQuote < 0 {
 				startQuote = i
 			} else {
 				endQuote = i
 			}
-		case '<':
-			if uriStart > 0 {
-				// This must be additional options parsing
-				continue
-			}
+			continue
+		}
 
-			// display-name   =  *(token LWS)/ quoted-string
+		// https://datatracker.ietf.org/doc/html/rfc3261#section-20.10
+		// When the header field value contains a display name, the URI
+		// including all URI parameters is enclosed in "<" and ">".  If no "<"
+		// and ">" are present, all parameters after the URI are header
+		// parameters, not URI parameters.
+		if c == '<' {
 			if endQuote > 0 {
-				displayName = addressText[startQuote+1 : endQuote]
-				startQuote, endQuote = -1, -1
+				a.displayName = s[startQuote+1 : endQuote]
 			} else {
-				displayName = strings.TrimSpace(addressText[:i])
+				a.displayName = strings.TrimSpace(s[:i])
 			}
-			uriStart = i + 1
-			inBrackets = true
-		case '>':
+			return addressStateUriBracket, s[i+1:], nil
+		}
+
+		if c == ';' {
+			// detect early
 			// uri can be without <> in that case there all after ; are header params
-			uriEnd = i
-			equal = -1
-			semicolon = -1
-			inBrackets = false
-		case ';':
-			// uri can be without <> in that case there all after ; are header params
-			if inBrackets {
-				semicolon = i
-				continue
-			}
-
-			if uriEnd < 0 {
-				uriEnd = i
-				semicolon = i
-				continue
-			}
-
-			if equal > 0 {
-				val := addressText[equal+1 : i]
-				headerParams.Add(name, val)
-			} else if semicolon > 0 {
-				// Case when we have key name but not value. ex ;+siptag;
-				name = addressText[semicolon+1 : i]
-				headerParams.Add(name, "")
-			}
-			name = ""
-			equal = 0
-			semicolon = i
-
-		case '=':
-			name = addressText[semicolon+1 : i]
-			equal = i
-		case '*':
-			if startQuote > 0 || uriStart > 0 {
-				continue
-			}
-			uri = &Uri{
-				Wildcard: true,
-			}
-			return
+			return addressStateUri, s[i+1:], nil
 		}
 	}
 
-	if uriEnd < 0 {
-		uriEnd = len(addressText)
+	// No DisplayName found
+	return addressStateUri, s, nil
+}
+
+func addressStateUriBracket(a *nameAddress, s string) (addressFSM, string, error) {
+	if len(s) == 0 {
+		return nil, s, errors.New("No URI present")
 	}
 
-	if uriStart > uriEnd {
-		return "", errors.New("Malormed URI")
+	for i, c := range s {
+		if c == '>' {
+			err := ParseUri(s[:i], a.uri)
+			return addressStateHeaderParams, s[i+1:], err
+		}
+	}
+	return nil, s, nil
+}
+
+func addressStateUri(a *nameAddress, s string) (addressFSM, string, error) {
+	if len(s) == 0 {
+		return nil, s, errors.New("No URI present")
 	}
 
-	err = ParseUri(addressText[uriStart:uriEnd], uri)
-	if err != nil {
-		return
+	for i, c := range s {
+		if c == ';' {
+			err := ParseUri(s[:i], a.uri)
+			return addressStateHeaderParams, s[i+1:], err
+		}
 	}
 
-	if equal > 0 {
-		val := addressText[equal+1:]
-		headerParams.Add(name, val)
-		name, val = "", ""
-	}
-	// params := strings.Split(addressText, ";")
-	// if len(params) > 1 {
-	// 	for _, section := range params[1:] {
-	// 		arr := strings.Split(section, "=")
-	// 		headerParams.Add(arr[0], arr[1])
-	// 	}
-	// }
+	// No header params detected
+	err := ParseUri(s, a.uri)
+	return nil, s, err
+}
 
-	return
+func addressStateHeaderParams(a *nameAddress, s string) (addressFSM, string, error) {
+
+	addParam := func(equal int, s string) {
+
+		if equal > 0 {
+			name := s[:equal]
+			val := s[equal+1:]
+			a.headerParams.Add(name, val)
+			return
+		}
+
+		if len(s) == 0 {
+			// could be just ;
+			return
+		}
+
+		// Case when we have key name but not value. ex ;+siptag;
+		name := s[:]
+		a.headerParams.Add(name, "")
+	}
+
+	equal := -1
+	for i, c := range s {
+		if c == '=' {
+			equal = i
+			continue
+		}
+
+		if c == ';' {
+			addParam(equal, s[:i])
+			return addressStateHeaderParams, s[i+1:], nil
+		}
+	}
+
+	addParam(equal, s)
+	return nil, s, nil
 }
 
 // headerParserTo generates ToHeader

@@ -157,9 +157,10 @@ func TestParseHeaders(t *testing.T) {
 	t.Run("ContactHeader", func(t *testing.T) {
 
 		for header, expected := range map[string]string{
-			"Contact: sip:sipp@127.0.0.3:5060":            "Contact: <sip:sipp@127.0.0.3:5060>",
-			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":     "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
-			"Contact: <sip:127.0.0.2:5060;transport=UDP>": "Contact: <sip:127.0.0.2:5060;transport=UDP>",
+			"Contact: sip:sipp@127.0.0.3:5060":                    "Contact: <sip:sipp@127.0.0.3:5060>",
+			"Contact: SIPP <sip:sipp@127.0.0.3:5060>":             "Contact: \"SIPP\" <sip:sipp@127.0.0.3:5060>",
+			"Contact: <sip:127.0.0.2:5060;transport=UDP>":         "Contact: <sip:127.0.0.2:5060;transport=UDP>",
+			"Contact: <sip:127.0.0.2:5060;transport=UDP>;zone=us": "Contact: <sip:127.0.0.2:5060;transport=UDP>;zone=us",
 		} {
 			req, h := testParseHeaderOnRequest(t, parser, header)
 

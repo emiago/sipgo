@@ -185,6 +185,7 @@ func (l *TransportLayer) addListenPort(network string, port int) {
 }
 
 func (l *TransportLayer) GetListenPort(network string) int {
+	network = NetworkToLower(network)
 	ports, _ := l.listenPorts[network]
 	if len(ports) > 0 {
 		return ports[0]
