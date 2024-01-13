@@ -9,6 +9,7 @@ import (
 
 type UserAgent struct {
 	name        string
+	hostname    string
 	ip          net.IP
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
@@ -28,12 +29,11 @@ func WithUserAgent(ua string) UserAgentOption {
 	}
 }
 
-// WithUserAgentIP sets local IP that will be used in building request
-// If not used IP will be resolved
-// Deprecated: Use on client WithClientHostname WithClientPort
-func WithUserAgentIP(ip net.IP) UserAgentOption {
+// WithUserAgentHostname represents FQDN of user that can be presented in From header
+func WithUserAgentHostname(hostname string) UserAgentOption {
 	return func(s *UserAgent) error {
-		return s.setIP(ip)
+		s.hostname = hostname
+		return nil
 	}
 }
 
@@ -65,7 +65,8 @@ func WithUserAgentParser(p *sip.Parser) UserAgentOption {
 // Check options for customizing user agent
 func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	ua := &UserAgent{
-		name:        "sipgo",
+		name: "sipgo",
+		// hostname:    "localhost",
 		dnsResolver: net.DefaultResolver,
 		parser:      sip.NewParser(),
 	}

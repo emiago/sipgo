@@ -33,8 +33,10 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 	}
 }
 
-// WithClientHost allows setting default route host
-// default it will be used user agent IP
+// WithClientHost allows setting default route host or IP on Via
+// in case of IP it will enforce transport layer to create/reuse connection with this IP
+// default: user agent IP
+// NOTE: From header hostname is WithUserAgentHostname option on UA or modify request manually
 func WithClientHostname(hostname string) ClientOption {
 	return func(s *Client) error {
 		s.host = hostname
@@ -43,6 +45,8 @@ func WithClientHostname(hostname string) ClientOption {
 }
 
 // WithClientPort allows setting default route port
+// it will enforce transport layer to create connection with this port
+// default: ephemeral port
 func WithClientPort(port int) ClientOption {
 	return func(s *Client) error {
 		s.port = port
@@ -51,7 +55,6 @@ func WithClientPort(port int) ClientOption {
 }
 
 // WithClientNAT makes client aware that is behind NAT.
-// EXPERIMENTAL
 func WithClientNAT() ClientOption {
 	return func(s *Client) error {
 		s.rport = true
@@ -169,15 +172,21 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// From and To headers should not contain Port numbers, headers, uri params
 	if v := req.From(); v == nil {
 		from := sip.FromHeader{
-			DisplayName: c.name,
+			DisplayName: c.UserAgent.name,
 			Address: sip.Uri{
-				User:      c.name,
-				Host:      c.host,
+				User:      c.UserAgent.name,
+				Host:      c.UserAgent.hostname,
 				UriParams: sip.NewParams(),
 				Headers:   sip.NewParams(),
 			},
 			Params: sip.NewParams(),
 		}
+
+		if from.Address.Host == "" {
+			// In case we have no UA hostname set use whatever is our routing host
+			from.Address.Host = c.host
+		}
+
 		from.Params.Add("tag", sip.GenerateTagN(16))
 		req.AppendHeader(&from)
 	}
