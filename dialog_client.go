@@ -128,11 +128,12 @@ type DialogClientSession struct {
 	inviteTx sip.ClientTransaction
 }
 
-// Close is always good to call for cleanup or terminating dialog state
+// Close must be always called in order to cleanup some internal resources
+// Consider that this will not send BYE or CANCEL or change dialog state
 func (s *DialogClientSession) Close() error {
 	s.dc.dialogs.Delete(s.ID)
-	s.setState(sip.DialogStateEnded)
-	// ctx, _ := context.WithTimeout(context.Background(), transaction.Timer_B)
+	// s.setState(sip.DialogStateEnded)
+	// ctx, _ := context.WithTimeout(context.Background(), sip.Timer_B)
 	// return s.Bye(ctx)
 	return nil
 }
@@ -222,7 +223,7 @@ func (s *DialogClientSession) Ack(ctx context.Context) error {
 func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) error {
 	if err := s.dc.c.WriteRequest(ack); err != nil {
 		// Make sure we close our error
-		s.Close()
+		// s.Close()
 		return err
 	}
 	s.setState(sip.DialogStateConfirmed)
@@ -243,6 +244,11 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	// In case dialog terminated
 	if sip.DialogState(state) == sip.DialogStateEnded {
 		return nil
+	}
+
+	// In case dialog was not updated
+	if sip.DialogState(state) != sip.DialogStateConfirmed {
+		return fmt.Errorf("Dialog not confirmed. ACK not send?")
 	}
 
 	tx, err := dc.c.TransactionRequest(ctx, bye)
