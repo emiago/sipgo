@@ -11,26 +11,55 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const (
-	T1        = 500 * time.Millisecond
-	T2        = 4 * time.Second
-	T4        = 5 * time.Second
-	Timer_A   = T1
-	Timer_B   = 64 * T1
-	Timer_D   = 32 * time.Second
-	Timer_E   = T1
-	Timer_F   = 64 * T1
-	Timer_G   = T1
-	Timer_H   = 64 * T1
-	Timer_I   = T4
-	Timer_J   = 64 * T1
-	Timer_K   = T4
+var (
+	// SIP timers are exposed for manipulation but best approach is using SetTimers
+	// where all timers get populated based on
+	// T1: Round-trip time (RTT) estimate
+	// T2: Maximum retransmission interval for non-INVITE requests and INVITE responses
+	// T4: Maximum duration that a message can remain in the network1
+	T1, T2, T4,
+	Timer_A,
+	Timer_B,
+	Timer_D,
+	Timer_E,
+	Timer_F,
+	Timer_G,
+	Timer_H,
+	Timer_I,
+	Timer_J,
+	Timer_K,
+	Timer_L,
+	Timer_M time.Duration
+
 	Timer_1xx = 200 * time.Millisecond
-	Timer_L   = 64 * T1
-	Timer_M   = 64 * T1
 
 	TxSeperator = "__"
 )
+
+func init() {
+	t1 := 500 * time.Millisecond
+	t2 := 4 * time.Second
+	t4 := 5 * time.Second
+	SetTimers(t1, t2, t4)
+}
+
+func SetTimers(t1, t2, t4 time.Duration) {
+	T1 = t1
+	T2 = t2
+	T4 = t4
+	Timer_A = T1
+	Timer_B = 64 * T1
+	Timer_D = 32 * time.Second
+	Timer_E = T1
+	Timer_F = 64 * T1
+	Timer_G = T1
+	Timer_H = 64 * T1
+	Timer_I = T4
+	Timer_J = 64 * T1
+	Timer_K = T4
+	Timer_L = 64 * T1
+	Timer_M = 64 * T1
+}
 
 var (
 	// Transaction Layer Errors can be detected and handled with different response on caller side

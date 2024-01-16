@@ -1,6 +1,8 @@
 package sip
 
-import "testing"
+import (
+	"testing"
+)
 
 func BenchmarkGenerateBranch(b *testing.B) {
 	b.ResetTimer()
