@@ -277,6 +277,8 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
 			err = sess.Ack(ctx)
 			require.Error(t, err)
+
+			sess.Close()
 			require.Empty(t, dialogCli.dialogsLen())
 		})
 

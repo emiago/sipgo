@@ -111,6 +111,8 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		return err
 	}
 
+	dt.setState(sip.DialogStateEnded)
+
 	return nil
 }
 
@@ -123,7 +125,7 @@ type DialogServerSession struct {
 // Close is always good to call for cleanup or terminating dialog state
 func (s *DialogServerSession) Close() error {
 	s.s.dialogs.Delete(s.ID)
-	s.setState(sip.DialogStateEnded)
+	// s.setState(sip.DialogStateEnded)
 	// ctx, _ := context.WithTimeout(context.Background(), transaction.Timer_B)
 	// return s.Bye(ctx)
 	return nil
@@ -268,6 +270,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		if res.StatusCode != 200 {
 			return ErrDialogResponse{res}
 		}
+		s.setState(sip.DialogStateEnded)
 		return nil
 	case <-tx.Done():
 		return tx.Err()
