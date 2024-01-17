@@ -182,6 +182,23 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			continue
 		}
 
+		if (r.StatusCode == sip.StatusProxyAuthRequired) && opts.Password != "" {
+			h := r.GetHeader("Proxy-Authorization")
+			if h == nil {
+				tx.Terminate()
+				tx, err = digestProxyAuthRequest(ctx, client, inviteRequest, r, digest.Options{
+					Method:   sip.INVITE.String(),
+					URI:      inviteRequest.Recipient.Addr(),
+					Username: opts.Username,
+					Password: opts.Password,
+				})
+				if err != nil {
+					return err
+				}
+				continue
+			}
+		}
+
 		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" {
 			h := inviteRequest.GetHeader("Authorization")
 			if h == nil {
@@ -271,6 +288,29 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	authHeader := res.GetHeader("Proxy-Authenticate")
+	chal, err := digest.ParseChallenge(authHeader.Value())
+	if err != nil {
+		return nil, fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
+	}
+
+	// Reply with digest
+	cred, err := digest.Digest(chal, opts)
+	if err != nil {
+		return nil, fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	cseq := req.CSeq()
+	cseq.SeqNo++
+
+	req.AppendHeader(sip.NewHeader("Proxy-Authorization", cred.String()))
+
+	req.RemoveHeader("Via")
+	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	return tx, err
 }
 
 // digestTransactionRequest checks response if 401 and sends digest auth
