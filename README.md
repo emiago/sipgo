@@ -92,6 +92,59 @@ srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
 ```
 
+## Dialog handling
+
+`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions
+
+**UAC**:
+```go
+contactHDR := sip.ContactHeader{
+    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
+}
+dialogCli := sipgo.NewDialogClient(cli, contactHDR)
+
+// Attach Bye handling for dialog
+srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+    err := dialogCli.ReadBye(req, tx)
+    //handle error
+})
+
+// Create dialog session
+dialog, err := dialogCli.Invite(ctx, recipientURI, nil)
+defer dialog.Close() // Cleans up from dialog pool
+// Wait for answer
+err = dialog.WaitAnswer(ctx, AnswerOptions{})
+// Check dialog response dialog.InviteResponse (SDP) and return ACK
+err = dialog.Ack(ctx)
+// Send BYE to terminate call
+err = dialog.Bye(ctx)
+```
+
+**UAS**:
+```go
+uasContact := sip.ContactHeader{
+    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+}
+dialogSrv := sipgo.NewDialogServer(cli, uasContact)
+
+srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+    dlg, err := dialogSrv.ReadInvite(req, tx)
+    // handle error
+    dlg.Respond(sip.StatusTrying, "Trying", nil)
+    dlg.Respond(sip.StatusOK, "OK", nil)
+    
+    // Instead Done also dlg.State() can be used for granular state checking
+    <-dlg.Done()
+})
+
+srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
+    dialogSrv.ReadAck(req, tx)
+})
+
+srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+    dialogSrv.ReadBye(req, tx)
+})
+```
 
 ## Server Transaction
 
@@ -167,58 +220,7 @@ req := sip.NewRequest(method, &recipment)
 client.WriteRequest(req)
 ```
 
-## Dialog handling (NEW)
 
-`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions
-
-**UAC**:
-```go
-contactHDR := sip.ContactHeader{
-    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
-}
-dialogCli := sipgo.NewDialogClient(cli, contactHDR)
-
-// Attach Bye handling for dialog
-srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
-    err := dialogCli.ReadBye(req, tx)
-    //handle error
-})
-
-// Create dialog session
-dialog, err := dialogCli.Invite(ctx, recipientURI, nil)
-// Wait for answer
-err = dialog.WaitAnswer(ctx, AnswerOptions{})
-// Check dialog response dialog.InviteResponse (SDP) and return ACK
-err = dialog.Ack(ctx)
-// Send BYE to terminate call
-err = dialog.Bye(ctx)
-```
-
-**UAS**:
-```go
-uasContact := sip.ContactHeader{
-    Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
-}
-dialogSrv := sipgo.NewDialogServer(cli, uasContact)
-
-srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-    dlg, err := dialogSrv.ReadInvite(req, tx)
-    // handle error
-    dlg.Respond(sip.StatusTrying, "Trying", nil)
-    dlg.Respond(sip.StatusOK, "OK", nil)
-    
-    // Instead Done also dlg.State() can be used
-    <-dlg.Done()
-})
-
-srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
-    dialogSrv.ReadAck(req, tx)
-})
-
-srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
-    dialogSrv.ReadBye(req, tx)
-})
-```
 
 ## Stateful Proxy build
 
