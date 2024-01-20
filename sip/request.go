@@ -215,10 +215,7 @@ func (req *Request) Destination() string {
 func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
 	Recipient := inviteRequest.Recipient
 	if contact := inviteResponse.Contact(); contact != nil {
-		// For ws and wss (like clients in browser), don't use Contact
-		if strings.Index(strings.ToLower(Recipient.String()), "transport=ws") == -1 {
-			Recipient = &contact.Address
-		}
+		Recipient = &contact.Address
 	}
 	ackRequest := NewRequest(
 		ACK,
