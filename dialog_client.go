@@ -108,6 +108,8 @@ func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) erro
 		return ErrDialogDoesNotExists
 	}
 
+	dt.setState(sip.DialogStateEnded)
+
 	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 	if err := tx.Respond(res); err != nil {
 		return err
