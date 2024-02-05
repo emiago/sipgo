@@ -230,7 +230,6 @@ func (tx *ClientTx) delete() {
 		tx.mu.Lock()
 
 		close(tx.done)
-		close(tx.responses)
 		tx.mu.Unlock()
 
 		// Maybe there is better way
