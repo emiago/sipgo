@@ -13,11 +13,11 @@ type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
 func defaultRequestHandler(r *Request, tx ServerTransaction) {
-	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
+	log.Info().Str("caller", "transactionLayer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
 }
 
 func defaultUnhandledRespHandler(r *Response) {
-	log.Info().Str("caller", "transaction.Layer").Str("msg", r.Short()).Msg("Unhandled sip response. UnhandledResponseHandler handler not added")
+	log.Info().Str("caller", "transactionLayer").Str("msg", r.Short()).Msg("Unhandled sip response. UnhandledResponseHandler handler not added")
 }
 
 type TransactionLayer struct {
@@ -40,7 +40,7 @@ func NewTransactionLayer(tpl *TransportLayer) *TransactionLayer {
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
 	}
-	txl.log = log.Logger.With().Str("caller", "transaction.Layer").Logger()
+	txl.log = log.Logger.With().Str("caller", "transactionLayer").Logger()
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 	return txl

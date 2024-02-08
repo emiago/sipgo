@@ -78,7 +78,7 @@ func (tx *ServerTx) Init() error {
 		})
 		tx.mu.Unlock()
 	}
-
+	tx.log.Debug().Str("tx", tx.Key()).Msg("Server transaction initialized")
 	return nil
 }
 

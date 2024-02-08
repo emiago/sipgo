@@ -77,6 +77,7 @@ func (tx *ClientTx) Init() error {
 		tx.spinFsm(client_input_timer_b)
 	})
 	tx.mu.Unlock()
+	tx.log.Debug().Str("tx", tx.Key()).Msg("Client transaction initialized")
 	return nil
 }
 
