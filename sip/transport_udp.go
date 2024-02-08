@@ -132,13 +132,19 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	t.log.Debug().Str("raddr", addr).Msg("New connection")
 
 	// Add in pool but as listen connection
+	// Reason is that UDP connection can be reused.
+	// Notice this can only be reused if VIA header is set explicitly like WithClientAddr()
 	t.pool.Add(c.PacketAddr, c)
+
+	// We need to also have mapping remote add to this connection
+	t.pool.Add(addr, c)
 	// t.listeners = append(t.listeners, c)
-	go func(conn Connection, raddr string) {
+	go func(conn Connection, raddr string, listenAddr string) {
+		defer t.pool.CloseAndDelete(conn, listenAddr)
 		defer t.pool.CloseAndDelete(conn, raddr)
 		defer t.log.Debug().Str("raddr", raddr).Msg("Read connection stopped")
 		t.readConnection(c, handler)
-	}(c, c.PacketAddr)
+	}(c, c.PacketAddr, addr)
 	return c, err
 }
 
