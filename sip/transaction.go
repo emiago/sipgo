@@ -149,6 +149,12 @@ func (tx *commonTx) OnTerminate(f FnTxTerminate) {
 	tx.onTerminate = f
 }
 
+func (tx *commonTx) currentFsmState() fsmContextState {
+	tx.fsmMu.Lock()
+	defer tx.fsmMu.Unlock()
+	return tx.fsmState
+}
+
 // Choose the right FSM init function depending on request method.
 func (tx *commonTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
