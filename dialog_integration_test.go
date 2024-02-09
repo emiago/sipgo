@@ -79,7 +79,6 @@ func TestIntegrationDialog(t *testing.T) {
 	)
 	// Wait server to be ready
 	<-srvReady
-
 	// Client
 	{
 		ua, _ := NewUA()
@@ -107,7 +106,7 @@ func TestIntegrationDialog(t *testing.T) {
 		go srv.ListenAndServe(ctx, "udp", contactHDR.Address.HostPort())
 		// Wait server to be ready
 		<-srvReady
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond) // just to avoid race with listeners on UDP
 
 		t.Run("UAS hangup", func(t *testing.T) {
 			// INVITE

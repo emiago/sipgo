@@ -64,11 +64,11 @@ func (txl *TransactionLayer) handleMessage(msg Message) {
 
 	switch msg := msg.(type) {
 	case *Request:
-		// go txl.handleRequest(msg)
-		txl.handleRequest(msg)
+		go txl.handleRequest(msg)
+		// txl.handleRequest(msg)
 	case *Response:
-		// go txl.handleResponse(msg)
-		txl.handleResponse(msg)
+		go txl.handleResponse(msg)
+		// txl.handleResponse(msg)
 	default:
 		txl.log.Error().Msg("unsupported message, skip it")
 	}
