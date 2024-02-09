@@ -262,7 +262,6 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 					tx.Terminate()
 				}
 
-				// t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
 			})
 			t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
 
