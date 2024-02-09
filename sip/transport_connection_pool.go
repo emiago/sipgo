@@ -8,8 +8,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TODO Connection pool with keeping active connections longer
-
 type Connection interface {
 	// LocalAddr used for connection
 	LocalAddr() net.Addr

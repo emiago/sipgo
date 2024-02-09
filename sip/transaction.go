@@ -14,14 +14,19 @@ import (
 var (
 	// SIP timers are exposed for manipulation but best approach is using SetTimers
 	// where all timers get populated based on
-	// T1: Round-trip time (RTT) estimate
+	// T1: Round-trip time (RTT) estimate, Default 500ms
+	T1,
 	// T2: Maximum retransmission interval for non-INVITE requests and INVITE responses
+	T2,
 	// T4: Maximum duration that a message can remain in the network1
-	T1, T2, T4,
+	T4,
+	// Timer_A controls sender request retransmissions for unreliable transports like UDP. It is incriesed 2x for every failure.
 	Timer_A,
+	// Timer_B (64 * T1) is the maximum amount of time that a sender will wait for an INVITE message to be acknowledged
 	Timer_B,
 	Timer_D,
 	Timer_E,
+	// Timer F is the maximum amount of time that a sender will wait for a non INVITE message to be acknowledged
 	Timer_F,
 	Timer_G,
 	Timer_H,
@@ -125,12 +130,7 @@ func (tx *commonTx) String() string {
 		return "<nil>"
 	}
 
-	// fields := tx.Log().Fields().WithFields(log.Fields{
-	// 	"key": tx.key,
-	// })
 	return tx.key
-
-	// return fmt.Sprintf("%s<%s>", tx.Log().Prefix(), fields)
 }
 
 func (tx *commonTx) Origin() *Request {
@@ -140,10 +140,6 @@ func (tx *commonTx) Origin() *Request {
 func (tx *commonTx) Key() string {
 	return tx.key
 }
-
-// func (tx *commonTx) Transport() Transport {
-// 	return tx.tpl
-// }
 
 func (tx *commonTx) Done() <-chan struct{} {
 	return tx.done

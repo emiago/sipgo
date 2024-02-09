@@ -139,13 +139,15 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	// We need to also have mapping remote add to this connection
 	t.pool.Add(addr, c)
 	// t.listeners = append(t.listeners, c)
-	go func(conn Connection, raddr string, listenAddr string) {
-		defer t.pool.CloseAndDelete(conn, listenAddr)
-		defer t.pool.CloseAndDelete(conn, raddr)
-		defer t.log.Debug().Str("raddr", raddr).Msg("Read connection stopped")
-		t.readConnection(c, handler)
-	}(c, c.PacketAddr, addr)
+	go t.readUDPConnection(c, addr, c.PacketAddr, handler)
 	return c, err
+}
+
+func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, listenAddr string, handler MessageHandler) {
+	defer t.pool.CloseAndDelete(conn, listenAddr)
+	defer t.pool.CloseAndDelete(conn, raddr)
+	defer t.log.Debug().Str("raddr", raddr).Msg("Read connection stopped")
+	t.readConnection(conn, handler)
 }
 
 func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {

@@ -83,6 +83,8 @@ func NewTransportLayer(
 }
 
 // OnMessage is main function which will be called on any new message by transport layer
+// Consider there is no concurency and you need to make sure that you do not block too long
+// This is intentional as higher concurency can slow things
 func (l *TransportLayer) OnMessage(h MessageHandler) {
 	// if l.handler != nil {
 	// 	// Make sure appending

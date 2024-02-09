@@ -58,16 +58,19 @@ func (txl *TransactionLayer) UnhandledResponseHandler(f UnhandledResponseHandler
 
 // handleMessage is entry for handling requests and responses from transport
 func (txl *TransactionLayer) handleMessage(msg Message) {
+	// Having concurency here we increased throghput but also solving deadlock
+	// Current client transactions are blocking on passUp and this may block when calling tx.Receive
+	// forking here can remove this
+
 	switch msg := msg.(type) {
 	case *Request:
-		// TODO Consider making goroutine here already?
+		// go txl.handleRequest(msg)
 		txl.handleRequest(msg)
 	case *Response:
-		// TODO Consider making goroutine here already?
+		// go txl.handleResponse(msg)
 		txl.handleResponse(msg)
 	default:
 		txl.log.Error().Msg("unsupported message, skip it")
-		// todo pass up error?
 	}
 }
 

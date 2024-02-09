@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -87,9 +86,7 @@ func httpServer(address string) {
 func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	// Prepare all variables we need for our service
 	host, port, _ := sip.ParseAddr(ip)
-	ua, err := sipgo.NewUA(
-		sipgo.WithUserAgentIP(net.ParseIP(host)),
-	)
+	ua, err := sipgo.NewUA()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup user agent")
 	}
@@ -108,7 +105,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 	registry := NewRegistry()
 	var getDestination = func(req *sip.Request) string {
-		tohead, _ := req.To()
+		tohead := req.To()
 		dst := registry.Get(tohead.Address.User)
 
 		if dst == "" {
@@ -200,8 +197,8 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 
 	var registerHandler = func(req *sip.Request, tx sip.ServerTransaction) {
 		// https://www.rfc-editor.org/rfc/rfc3261#section-10.3
-		cont, exists := req.Contact()
-		if !exists {
+		cont := req.Contact()
+		if cont == nil {
 			reply(tx, req, 404, "Missing address of record")
 			return
 		}

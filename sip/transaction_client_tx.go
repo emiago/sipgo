@@ -55,7 +55,6 @@ func (tx *ClientTx) Init() error {
 		// If a reliable transport is being used, the client transaction SHOULD NOT
 		// start timer A (Timer A controls request retransmissions).
 		// Timer A - retransmission
-		// tx.log.Tracef("timer_a set to %v", Timer_A)
 
 		tx.mu.Lock()
 		tx.timer_a_time = Timer_A
@@ -218,11 +217,34 @@ func (tx *ClientTx) passUp() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	if lastResp != nil {
-		select {
-		case <-tx.done:
-		case tx.responses <- lastResp:
-		}
+	if lastResp == nil {
+		return
+	}
+
+	select {
+	case <-tx.done:
+	case tx.responses <- lastResp:
+	}
+}
+
+func (tx *ClientTx) passUpRetransmission() {
+	// RFC 6026 handling retransmissions
+	tx.mu.RLock()
+	lastResp := tx.lastResp
+	tx.mu.RUnlock()
+
+	if lastResp == nil {
+		return
+	}
+
+	// Client probably left or not interested, so therefore we must not block here
+	// For proxies they should handle this retransmission
+	select {
+	case <-tx.done:
+	case tx.responses <- lastResp:
+		// TODO is T1 best here option? This can take Timer_M as 64*T1
+	case <-time.After(T1):
+		tx.log.Debug().Msg("skipped response. Retransimission")
 	}
 }
 
@@ -234,7 +256,9 @@ func (tx *ClientTx) delete() {
 		tx.mu.Unlock()
 
 		// Maybe there is better way
-		tx.onTerminate(tx.key)
+		if tx.onTerminate != nil {
+			tx.onTerminate(tx.key)
+		}
 
 		if _, err := tx.conn.TryClose(); err != nil {
 			tx.log.Info().Err(err).Msg("Closing connection returned error")

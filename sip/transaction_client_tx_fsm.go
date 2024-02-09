@@ -73,11 +73,26 @@ func (tx *ClientTx) inviteStateCompleted(s fsmInput) fsmInput {
 }
 
 func (tx *ClientTx) inviteStateAccepted(s fsmInput) fsmInput {
+	// https://datatracker.ietf.org/doc/html/rfc6026#section-7.2
+	// Updated by RFC 6026
+	// It modifies state transitions in the INVITE server state
+	// machine to absorb retransmissions of the INVITE request after
+	// encountering an unrecoverable transport error when sending a
+	// response.  It also forbids forwarding stray responses to INVITE
+	// requests (not just 2xx responses), which RFC 3261 requires.
+
 	var spinfn fsmState
 	switch s {
 	case client_input_2xx:
-		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassup
+		// 	If a 2xx response is
+		//  received while the client INVITE state machine is in the "Calling" or
+		//  "Proceeding" states, it MUST transition to the "Accepted" state, pass
+		//  the 2xx response to the TU, and set Timer M to 64*T1
+		tx.log.Debug().Msg("retransimission 2xx detected")
+		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupRetransmission
+
 	case client_input_transport_err:
+		tx.log.Warn().Msg("client transport error detected. Waiting for retransmission")
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actTranErrNoDelete
 	case client_input_timer_m:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actDelete
@@ -86,11 +101,6 @@ func (tx *ClientTx) inviteStateAccepted(s fsmInput) fsmInput {
 		return FsmInputNone
 	}
 	return spinfn()
-}
-
-func (tx *ClientTx) actTranErrNoDelete() fsmInput {
-	tx.actTransErr()
-	return FsmInputNone
 }
 
 // Terminated
@@ -213,23 +223,6 @@ func (tx *ClientTx) actResend() fsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actPassup() fsmInput {
-	// tx.Log().Debug("actPassup")
-
-	tx.passUp()
-
-	tx.mu.Lock()
-
-	if tx.timer_a != nil {
-		tx.timer_a.Stop()
-		tx.timer_a = nil
-	}
-
-	tx.mu.Unlock()
-
-	return FsmInputNone
-}
-
 func (tx *ClientTx) actInviteProceeding() fsmInput {
 	// tx.Log().Debug("actInviteProceeding")
 
@@ -343,55 +336,41 @@ func (tx *ClientTx) actAck() fsmInput {
 }
 
 func (tx *ClientTx) actTransErr() fsmInput {
-	tx.mu.Lock()
-
-	if tx.timer_a != nil {
-		tx.timer_a.Stop()
-		tx.timer_a = nil
-	}
-
-	tx.mu.Unlock()
-
+	tx.stopTimerA()
 	return client_input_delete
+}
+
+func (tx *ClientTx) actTranErrNoDelete() fsmInput {
+	tx.actTransErr()
+	return FsmInputNone
 }
 
 func (tx *ClientTx) actTimeout() fsmInput {
-	tx.mu.Lock()
-
-	if tx.timer_a != nil {
-		tx.timer_a.Stop()
-		tx.timer_a = nil
-	}
-
-	tx.mu.Unlock()
-
+	tx.stopTimerA()
 	return client_input_delete
 }
 
-func (tx *ClientTx) actPassupDelete() fsmInput {
-	// tx.Log().Debug("actPassupDelete")
-
+func (tx *ClientTx) actPassup() fsmInput {
 	tx.passUp()
+	tx.stopTimerA()
+	return FsmInputNone
+}
 
-	tx.mu.Lock()
+func (tx *ClientTx) actPassupRetransmission() fsmInput {
+	tx.passUpRetransmission()
+	return FsmInputNone
+}
 
-	if tx.timer_a != nil {
-		tx.timer_a.Stop()
-		tx.timer_a = nil
-	}
-
-	tx.mu.Unlock()
-
+func (tx *ClientTx) actPassupDelete() fsmInput {
+	tx.passUp()
+	tx.stopTimerA()
 	return client_input_delete
 }
 
 func (tx *ClientTx) actPassupAccept() fsmInput {
-	// tx.Log().Debug("actPassupAccept")
-
 	tx.passUp()
 
 	tx.mu.Lock()
-
 	if tx.timer_a != nil {
 		tx.timer_a.Stop()
 		tx.timer_a = nil
@@ -401,16 +380,12 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 		tx.timer_b = nil
 	}
 
-	// tx.Log().Tracef("timer_m set to %v", Timer_M)
-
 	tx.timer_m = time.AfterFunc(Timer_M, func() {
 		select {
 		case <-tx.done:
 			return
 		default:
 		}
-
-		// tx.Log().Trace("timer_m fired")
 
 		tx.spinFsm(client_input_timer_m)
 	})
@@ -420,9 +395,15 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 }
 
 func (tx *ClientTx) actDelete() fsmInput {
-	// tx.Log().Debug("actDelete")
-
 	tx.delete()
-
 	return FsmInputNone
+}
+
+func (tx *ClientTx) stopTimerA() {
+	tx.mu.Lock()
+	if tx.timer_a != nil {
+		tx.timer_a.Stop()
+		tx.timer_a = nil
+	}
+	tx.mu.Unlock()
 }

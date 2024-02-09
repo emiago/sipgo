@@ -3,8 +3,11 @@ package sip
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -262,4 +265,13 @@ func MessageShortString(msg Message) string {
 		return m.Short()
 	}
 	return "Unknown message type"
+}
+
+func compareFunctions(fsm1 any, fsm2 any) error {
+	funcName1 := runtime.FuncForPC(reflect.ValueOf(fsm1).Pointer()).Name()
+	funcName2 := runtime.FuncForPC(reflect.ValueOf(fsm2).Pointer()).Name()
+	if funcName1 != funcName2 {
+		return fmt.Errorf("Functions are not equal f1=%q, f2=%q", funcName1, funcName2)
+	}
+	return nil
 }

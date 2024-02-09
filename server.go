@@ -240,6 +240,9 @@ func (srv *Server) ServeWSS(l net.Listener) error {
 
 // onRequest gets request from Transaction layer
 func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
+	// Transaction layer is the one who controls concurency execution of every request
+	// so in this case we should avoid adding more concurency
+	// srv.handleRequest(req, tx)
 	go srv.handleRequest(req, tx)
 }
 
