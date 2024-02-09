@@ -80,29 +80,6 @@ func (tx *ClientTx) Init() error {
 	return nil
 }
 
-func (tx *ClientTx) Receive(res *Response) error {
-	var input fsmInput
-	if res.IsCancel() {
-		input = client_input_canceled
-	} else {
-		tx.mu.Lock()
-		tx.lastResp = res
-		tx.mu.Unlock()
-
-		switch {
-		case res.IsProvisional():
-			input = client_input_1xx
-		case res.IsSuccess():
-			input = client_input_2xx
-		default:
-			input = client_input_300_plus
-		}
-	}
-
-	tx.spinFsm(input)
-	return nil
-}
-
 func (tx *ClientTx) Responses() <-chan *Response {
 	return tx.responses
 }
@@ -128,6 +105,31 @@ func (tx *ClientTx) Err() error {
 	err := tx.lastErr
 	tx.mu.RUnlock()
 	return err
+}
+
+// receive will process response in safe way and change transaction state
+// NOTE: it could block and passing response to client
+func (tx *ClientTx) receive(res *Response) error {
+	var input fsmInput
+	if res.IsCancel() {
+		input = client_input_canceled
+	} else {
+		tx.mu.Lock()
+		tx.lastResp = res
+		tx.mu.Unlock()
+
+		switch {
+		case res.IsProvisional():
+			input = client_input_1xx
+		case res.IsSuccess():
+			input = client_input_2xx
+		default:
+			input = client_input_300_plus
+		}
+	}
+
+	tx.spinFsm(input)
+	return nil
 }
 
 func (tx *ClientTx) cancel() {

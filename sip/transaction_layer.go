@@ -130,7 +130,7 @@ func (txl *TransactionLayer) handleResponse(res *Response) {
 		return
 	}
 
-	if err := tx.Receive(res); err != nil {
+	if err := tx.receive(res); err != nil {
 		txl.log.Error().Err(err).Msg("Client tx failed to receive response")
 		return
 	}
