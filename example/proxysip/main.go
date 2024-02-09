@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/arl/statsviz"
 	"github.com/emiago/sipgo/sip"
 
 	_ "net/http/pprof"
@@ -78,6 +79,7 @@ func httpServer(address string) {
 		w.WriteHeader(200)
 		w.Write(data)
 	})
+	statsviz.Register(http.DefaultServeMux)
 
 	log.Info().Msgf("Http server started address=%s", address)
 	http.ListenAndServe(address, nil)

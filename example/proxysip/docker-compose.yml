@@ -3,10 +3,10 @@ version: "2.4"
 services:
   proxy:
     image: golang:latest
-    command: go run ./example/proxysip -ip=10.5.0.20:5060 -dst 10.5.0.30:5060
+    command: go run . -ip=10.5.0.20:5060 -dst 10.5.0.30:5060
     # stdin_open: true
     # command: bash
-    working_dir: /usr/src/sipgo
+    working_dir: /usr/src/sipgo/example/proxysip
     volumes:
       - ../../../sipgo:/usr/src/sipgo
 
@@ -25,6 +25,8 @@ services:
       # - GODEBUG=madvdontneed=0
       # - GODEBUG=madvdontneed=1,gctrace=1
       # - GOGC=70
+    ports:
+      - 8080:8080
 
   uas:
     image: ctaloi/sipp
