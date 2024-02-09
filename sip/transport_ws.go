@@ -111,7 +111,7 @@ func (t *transportWS) initConnection(conn net.Conn, addr string, clientSide bool
 	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
 	c := &WSConnection{
 		Conn:       conn,
-		refcount:   1,
+		refcount:   1 + IdleConnection,
 		clientSide: clientSide,
 	}
 	t.pool.Add(addr, c)
@@ -125,6 +125,7 @@ func (t *transportWS) readConnection(conn *WSConnection, raddr string, handler M
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
+	defer t.log.Debug().Str("raddr", raddr).Msg("Websocket read connection stopped")
 
 	// Create stream parser context
 	par := t.parser.NewSIPStream()
@@ -271,7 +272,7 @@ func (c *WSConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS doing hard close")
+	log.Debug().Str("ip", c.RemoteAddr().String()).Msg("WS doing hard close")
 	return c.Conn.Close()
 }
 
@@ -280,16 +281,16 @@ func (c *WSConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS reference decrement")
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS reference decrement")
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS ref went negative")
+		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS ref went negative")
 		return 0, nil
 	}
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", c.refcount).Msg("WS closing")
+	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS closing")
 	return ref, c.Conn.Close()
 }
 
@@ -312,8 +313,25 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 			log.Debug().Str("caller", c.RemoteAddr().String()).Msgf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
 		}
 
-		if header.OpCode == ws.OpClose {
-			return n, net.ErrClosed
+		if header.OpCode.IsControl() {
+			if header.OpCode == ws.OpClose {
+				return n, net.ErrClosed
+			}
+			continue
+		}
+		// if header.OpCode.IsReserved() {
+		// 	continue
+		// }
+
+		// if !header.OpCode.IsData() {
+		// 	continue
+		// }
+
+		if header.OpCode&ws.OpText == 0 {
+			if err := reader.Discard(); err != nil {
+				return 0, err
+			}
+			continue
 		}
 
 		data := make([]byte, header.Length)
@@ -330,14 +348,14 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// 	continue
 		// }
 
-		if SIPDebug {
-			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
-		}
-
 		if header.Masked {
 			ws.Cipher(data, header.Mask, 0)
 		}
+
 		// header.Masked = false
+		if SIPDebug {
+			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
+		}
 
 		n += copy(b[n:], data)
 

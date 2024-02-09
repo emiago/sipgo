@@ -240,28 +240,47 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 
 	for _, tc := range testCases {
 		t.Run(tc.transport, func(t *testing.B) {
-			// Build UAC
-			ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
-			client, err := NewClient(ua)
-			require.NoError(t, err)
-
 			proto := "sip"
 			if tc.encrypted {
 				proto = "sips"
 			}
-
 			t.ResetTimer()
-			for i := 0; i < t.N; i++ {
-				req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
-				tx, err := client.TransactionRequest(ctx, req)
+
+			t.RunParallel(func(p *testing.PB) {
+				// Build UAC
+				ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
+				client, err := NewClient(ua)
 				require.NoError(t, err)
+				for p.Next() {
+					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+					tx, err := client.TransactionRequest(ctx, req)
+					require.NoError(t, err)
 
-				res := <-tx.Responses()
-				assert.Equal(t, sip.StatusCode(200), res.StatusCode)
+					res := <-tx.Responses()
+					assert.Equal(t, sip.StatusCode(200), res.StatusCode)
 
-				tx.Terminate()
-			}
-			t.ReportMetric(float64(t.N)/t.Elapsed().Seconds(), "req/s")
+					tx.Terminate()
+				}
+
+				// t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
+			})
+			t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
+
+			// ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
+			// 		client, err := NewClient(ua)
+			// 		require.NoError(t, err)
+
+			// for i := 0; i < t.N; i++ {
+			// 	req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+			// 	tx, err := client.TransactionRequest(ctx, req)
+			// 	require.NoError(t, err)
+
+			// 	res := <-tx.Responses()
+			// 	assert.Equal(t, sip.StatusCode(200), res.StatusCode)
+
+			// 	tx.Terminate()
+			// }
+			// t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
 		})
 	}
 }
