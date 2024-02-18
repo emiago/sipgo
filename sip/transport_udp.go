@@ -75,9 +75,9 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 	t.listeners = append(t.listeners, c)
 
 	for i := 0; i < UDPReadWorkers-1; i++ {
-		go t.readConnection(c, handler)
+		go t.readConnection(c, c.PacketAddr, handler)
 	}
-	t.readConnection(c, handler)
+	t.readConnection(c, c.PacketAddr, handler)
 
 	return nil
 }
@@ -92,12 +92,13 @@ func (t *transportUDP) GetConnection(addr string) (Connection, error) {
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
 	for _, l := range t.listeners {
+		// This avoids going into pool in case of server
 		if l.PacketAddr == addr {
 			return l, nil
 		}
 	}
 
-	// Pool must be checked as it can be Client mode only and connection is created
+	// Pool consists either of every new packet From addr or client created connection
 	if conn := t.pool.Get(addr); conn != nil {
 		return conn, nil
 	}
@@ -144,10 +145,8 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 }
 
 func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, listenAddr string, handler MessageHandler) {
-	defer t.pool.CloseAndDelete(conn, listenAddr)
-	defer t.pool.CloseAndDelete(conn, raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("Read connection stopped")
-	t.readConnection(conn, handler)
+	defer t.pool.Delete(conn, listenAddr) // should be closed in previous defer
+	t.readConnection(conn, raddr, handler)
 }
 
 func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
@@ -197,9 +196,10 @@ func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr
 	return c, err
 }
 
-func (t *transportUDP) readConnection(conn *UDPConnection, handler MessageHandler) {
+func (t *transportUDP) readConnection(conn *UDPConnection, addr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
-	defer conn.Close()
+	defer t.pool.CloseAndDelete(conn, addr)
+	defer t.log.Debug().Str("addr", addr).Msg("Read connection stopped")
 
 	var lastRaddr string
 	for {
@@ -220,7 +220,8 @@ func (t *transportUDP) readConnection(conn *UDPConnection, handler MessageHandle
 		rastr := raddr.String()
 		if lastRaddr != rastr {
 			// In most cases we are in single connection mode so no need to keep adding in pool
-			// TODO this will never be cleaned
+			// In case of server and multiple UDP listeners, this makes sure right one is used
+			// NOTE: this will never be cleaned
 			t.pool.Add(rastr, conn)
 		}
 
@@ -307,7 +308,7 @@ func (t *transportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 }
 
 type UDPConnection struct {
-	// mutual exclusive for now
+	// mutual exclusive for now to avoid interface for Read
 	// TODO Refactor
 	PacketConn net.PacketConn
 	PacketAddr string // For faster matching
@@ -318,6 +319,15 @@ type UDPConnection struct {
 	refcount int
 }
 
+func (c *UDPConnection) close() error {
+	if c.Conn != nil {
+		log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", 0).Msg("UDP doing hard close")
+		return c.Conn.Close()
+	}
+	log.Debug().Str("ip", c.LocalAddr().String()).Int("ref", 0).Msg("UDP listener doing hard close")
+	return c.PacketConn.Close()
+}
+
 func (c *UDPConnection) LocalAddr() net.Addr {
 	if c.Conn != nil {
 		return c.Conn.LocalAddr()
@@ -325,12 +335,14 @@ func (c *UDPConnection) LocalAddr() net.Addr {
 	return c.PacketConn.LocalAddr()
 }
 
-func (c *UDPConnection) Ref(i int) int {
-	// For now all udp connections must be reused
-	if c.Conn == nil {
-		return 0
+func (c *UDPConnection) RemoteAddr() net.Addr {
+	if c.Conn != nil {
+		return c.Conn.RemoteAddr()
 	}
+	return c.PacketConn.LocalAddr()
+}
 
+func (c *UDPConnection) Ref(i int) int {
 	c.mu.Lock()
 	c.refcount += i
 	ref := c.refcount
@@ -339,39 +351,28 @@ func (c *UDPConnection) Ref(i int) int {
 }
 
 func (c *UDPConnection) Close() error {
-	// TODO closing packet connection is problem
-	// but maybe referece could help?
-	if c.Conn == nil {
-		return nil
-	}
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", 0).Msg("UDP doing hard close")
-	return c.Conn.Close()
+	return c.close()
 }
 
 func (c *UDPConnection) TryClose() (int, error) {
-	if c.Conn == nil {
-		return 0, nil
-	}
-
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("src", c.Conn.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP reference decrement")
+	log.Debug().Str("src", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("UDP reference decrement")
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		log.Warn().Str("src", c.Conn.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP ref went negative")
+		log.Warn().Str("src", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("UDP ref went negative")
 		return 0, nil
 	}
 
-	log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", ref).Msg("UDP closing")
-	return 0, c.Conn.Close()
+	return 0, c.close()
 }
 
 func (c *UDPConnection) Read(b []byte) (n int, err error) {

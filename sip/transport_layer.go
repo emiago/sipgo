@@ -374,7 +374,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		l.log.Debug().Str("addr", addr).Str("raddr", raddr.String()).Msg("Active connection not found")
 	}
 
-	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Msg("Via header used for creating connection")
+	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Str("network", network).Msg("Via header used for creating connection")
 
 	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 	if err != nil {

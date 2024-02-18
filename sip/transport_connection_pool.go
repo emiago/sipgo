@@ -87,6 +87,12 @@ func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
 	delete(p.m, addr)
 }
 
+func (p *ConnectionPool) Delete(c Connection, addr string) {
+	p.Lock()
+	defer p.Unlock()
+	delete(p.m, addr)
+}
+
 // Clear will clear all connection from pool and close them
 func (p *ConnectionPool) Clear() {
 	p.Lock()
