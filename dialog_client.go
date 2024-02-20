@@ -105,7 +105,7 @@ func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) erro
 
 	dt := dc.loadDialog(id)
 	if dt == nil {
-		return ErrDialogDoesNotExists
+		return fmt.Errorf("callid=%q: %w", callid.Value(), ErrDialogDoesNotExists)
 	}
 
 	dt.setState(sip.DialogStateEnded)

@@ -44,8 +44,10 @@ func WithClientHostname(hostname string) ClientOption {
 	}
 }
 
-// WithClientPort allows setting default route port
-// it will enforce transport layer to create connection with this port
+// WithClientPort allows setting default route Via port
+// it will enforce transport layer to create connection with this port if does NOT exist
+// transport layer will choose existing connection by default unless
+// TransportLayer.ConnectionReuse is set to false
 // default: ephemeral port
 func WithClientPort(port int) ClientOption {
 	return func(s *Client) error {

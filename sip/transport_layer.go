@@ -97,7 +97,6 @@ func (l *TransportLayer) OnMessage(h MessageHandler) {
 	// }
 
 	// l.handler = h
-
 	l.handlers = append(l.handlers, h)
 }
 
