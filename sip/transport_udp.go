@@ -14,10 +14,6 @@ import (
 )
 
 var (
-	// UDPReadWorkers defines how many listeners will work
-	// Best performance is achieved with low value, to remove high concurency
-	UDPReadWorkers int = 1
-
 	UDPMTUSize = 1500
 
 	// UDPUseConnectedConnection will force creating UDP connected connection
@@ -70,15 +66,15 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 	/*
 		Multiple readers makes problem, which can delay writing response
 	*/
-	c := &UDPConnection{PacketConn: conn, PacketAddr: conn.LocalAddr().String()}
+	c := &UDPConnection{
+		PacketConn: conn,
+		PacketAddr: conn.LocalAddr().String(),
+		Listener:   true,
+	}
 
 	t.listeners = append(t.listeners, c)
 
-	for i := 0; i < UDPReadWorkers-1; i++ {
-		go t.readConnection(c, c.PacketAddr, handler)
-	}
 	t.readConnection(c, c.PacketAddr, handler)
-
 	return nil
 }
 
@@ -94,6 +90,7 @@ func (t *transportUDP) GetConnection(addr string) (Connection, error) {
 	for _, l := range t.listeners {
 		// This avoids going into pool in case of server
 		if l.PacketAddr == addr {
+			// l.Ref(1)
 			return l, nil
 		}
 	}
@@ -206,10 +203,10 @@ func (t *transportUDP) readConnection(conn *UDPConnection, addr string, handler 
 		num, raddr, err := conn.ReadFrom(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				t.log.Debug().Err(err).Msg("Read connection closed")
+				t.log.Debug().Str("addr", addr).Err(err).Msg("Read connection closed")
 				return
 			}
-			t.log.Error().Err(err).Msg("Read connection error")
+			t.log.Error().Str("addr", addr).Err(err).Msg("Read connection error")
 			return
 		}
 
@@ -312,6 +309,7 @@ type UDPConnection struct {
 	// TODO Refactor
 	PacketConn net.PacketConn
 	PacketAddr string // For faster matching
+	Listener   bool
 
 	Conn net.Conn
 
@@ -320,9 +318,19 @@ type UDPConnection struct {
 }
 
 func (c *UDPConnection) close() error {
+	c.mu.Lock()
+	c.refcount = 0
+	c.mu.Unlock()
+
 	if c.Conn != nil {
 		log.Debug().Str("ip", c.LocalAddr().String()).Str("dst", c.Conn.RemoteAddr().String()).Int("ref", 0).Msg("UDP doing hard close")
 		return c.Conn.Close()
+	}
+
+	if c.Listener {
+		// In case this UDP created as listener from Serve. Avoid double closing.
+		// Closing is done by read connection and it will return already error
+		return nil
 	}
 	log.Debug().Str("ip", c.LocalAddr().String()).Int("ref", 0).Msg("UDP listener doing hard close")
 	return c.PacketConn.Close()
@@ -351,9 +359,6 @@ func (c *UDPConnection) Ref(i int) int {
 }
 
 func (c *UDPConnection) Close() error {
-	c.mu.Lock()
-	c.refcount = 0
-	c.mu.Unlock()
 	return c.close()
 }
 
@@ -362,6 +367,12 @@ func (c *UDPConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
+
+	if c.Listener {
+		// Listeners must be closed manually or by forcing error
+		return ref, nil
+	}
+
 	log.Debug().Str("src", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("UDP reference decrement")
 	if ref > 0 {
 		return ref, nil
@@ -372,7 +383,7 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return 0, nil
 	}
 
-	return 0, c.close()
+	return ref, c.close()
 }
 
 func (c *UDPConnection) Read(b []byte) (n int, err error) {
