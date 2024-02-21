@@ -125,6 +125,7 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 			// WriteRequest for ex ACK will not increase and this is wanted behavior
 			// This will be a problem if we allow ACK to be passed as transaction request
 			cseq.SeqNo++
+			cseq.MethodName = req.Method
 		}
 
 		clientRequestBuildReq(c, req)
