@@ -250,6 +250,23 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	bye.AppendHeader(newTo)
 	bye.AppendHeader(callid)
 
+	recordRoute := req.RecordRoute()
+	if recordRoute != nil {
+		if recordRoute.Address.UriParams.Has("lr") {
+			bye.AppendHeader(&sip.RouteHeader{Address: recordRoute.Address})
+		} else {
+			/* TODO
+			   If the route set is not empty, and its first URI does not contain the
+			   lr parameter, the UAC MUST place the first URI from the route set
+			   into the Request-URI, stripping any parameters that are not allowed
+			   in a Request-URI.  The UAC MUST add a Route header field containing
+			   the remainder of the route set values in order, including all
+			   parameters.  The UAC MUST then place the remote target URI into the
+			   Route header field as the last value.
+			*/
+		}
+	}
+
 	callidHDR := bye.CallID()
 	byeID := sip.MakeDialogID(callidHDR.Value(), newFrom.Params["tag"], newTo.Params["tag"])
 	if s.ID != byeID {
