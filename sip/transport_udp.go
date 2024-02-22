@@ -27,10 +27,8 @@ type transportUDP struct {
 	// listener *net.UDPConn
 	parser *Parser
 
-	pool      ConnectionPool
-	listeners []*UDPConnection
-
-	log zerolog.Logger
+	pool ConnectionPool
+	log  zerolog.Logger
 }
 
 func newUDPTransport(par *Parser) *transportUDP {
@@ -52,14 +50,11 @@ func (t *transportUDP) Network() string {
 
 func (t *transportUDP) Close() error {
 	t.pool.Clear()
-	for _, l := range t.listeners {
-		l.Close()
-	}
+	// Closing listeners is caller thing.
 	return nil
 }
 
 // ServeConn is direct way to provide conn on which this worker will listen
-// UDPReadWorkers are used to create more workers
 func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error {
 
 	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), conn.LocalAddr().String())
@@ -71,10 +66,7 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 		PacketAddr: conn.LocalAddr().String(),
 		Listener:   true,
 	}
-
-	t.listeners = append(t.listeners, c)
-
-	t.readConnection(c, c.PacketAddr, handler)
+	t.readListenerConnection(c, c.PacketAddr, handler)
 	return nil
 }
 
@@ -87,14 +79,6 @@ func (t *transportUDP) GetConnection(addr string) (Connection, error) {
 	// Single udp connection as listener can only be used as long IP of a packet in same network
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
-	for _, l := range t.listeners {
-		// This avoids going into pool in case of server
-		if l.PacketAddr == addr {
-			// l.Ref(1)
-			return l, nil
-		}
-	}
-
 	// Pool consists either of every new packet From addr or client created connection
 	if conn := t.pool.Get(addr); conn != nil {
 		return conn, nil
@@ -142,8 +126,8 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 }
 
 func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, listenAddr string, handler MessageHandler) {
-	defer t.pool.Delete(conn, listenAddr) // should be closed in previous defer
-	t.readConnection(conn, raddr, handler)
+	defer t.pool.Delete(raddr) // should be closed in previous defer
+	t.readListenerConnection(conn, listenAddr, handler)
 }
 
 func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
@@ -193,12 +177,19 @@ func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr
 	return c, err
 }
 
-func (t *transportUDP) readConnection(conn *UDPConnection, addr string, handler MessageHandler) {
+func (t *transportUDP) readListenerConnection(conn *UDPConnection, addr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	defer t.pool.CloseAndDelete(conn, addr)
-	defer t.log.Debug().Str("addr", addr).Msg("Read connection stopped")
+	defer t.log.Debug().Str("addr", addr).Msg("Read listener connection stopped")
 
 	var lastRaddr string
+	// NOTE: consider to refactor, but for cleanup
+	// We are reusing UDP listener as dial connection
+	acceptedAddr := make([]string, 0, 1000)
+	defer func() {
+		t.pool.DeleteMultiple(acceptedAddr)
+	}()
+
 	for {
 		num, raddr, err := conn.ReadFrom(buf)
 		if err != nil {
@@ -218,8 +209,8 @@ func (t *transportUDP) readConnection(conn *UDPConnection, addr string, handler 
 		if lastRaddr != rastr {
 			// In most cases we are in single connection mode so no need to keep adding in pool
 			// In case of server and multiple UDP listeners, this makes sure right one is used
-			// NOTE: this will never be cleaned
 			t.pool.Add(rastr, conn)
+			acceptedAddr = append(acceptedAddr, rastr)
 		}
 
 		t.parseAndHandle(data, rastr, handler)

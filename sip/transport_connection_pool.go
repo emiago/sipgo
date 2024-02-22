@@ -56,6 +56,24 @@ func (p *ConnectionPool) Add(a string, c Connection) {
 	p.Unlock()
 }
 
+func (p *ConnectionPool) AddIfNotExists(a string, c Connection) {
+	// TODO how about multi connection support for same remote address
+	// We can then check ref count
+
+	p.Lock()
+	_, exists := p.m[a]
+	if !exists {
+		p.Unlock()
+		return
+	}
+	p.m[a] = c
+	p.Unlock()
+
+	if c.Ref(0) < 1 {
+		c.Ref(1) // Make 1 reference count by default
+	}
+}
+
 // Getting connection pool increases reference
 // Make sure you TryClose after finish
 func (p *ConnectionPool) Get(a string) (c Connection) {
@@ -87,10 +105,18 @@ func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
 	delete(p.m, addr)
 }
 
-func (p *ConnectionPool) Delete(c Connection, addr string) {
+func (p *ConnectionPool) Delete(addr string) {
 	p.Lock()
 	defer p.Unlock()
 	delete(p.m, addr)
+}
+
+func (p *ConnectionPool) DeleteMultiple(addrs []string) {
+	p.Lock()
+	defer p.Unlock()
+	for _, a := range addrs {
+		delete(p.m, a)
+	}
 }
 
 // Clear will clear all connection from pool and close them
