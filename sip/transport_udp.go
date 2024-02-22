@@ -66,6 +66,8 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 		PacketAddr: conn.LocalAddr().String(),
 		Listener:   true,
 	}
+
+	t.pool.Add(c.PacketAddr, c)
 	t.readListenerConnection(c, c.PacketAddr, handler)
 	return nil
 }

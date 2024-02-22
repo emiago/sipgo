@@ -245,6 +245,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 				proto = "sips"
 			}
 			t.ResetTimer()
+			t.ReportAllocs()
 
 			t.RunParallel(func(p *testing.PB) {
 				// Build UAC
