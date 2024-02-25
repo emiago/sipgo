@@ -21,6 +21,9 @@ type Client struct {
 	port  int
 	rport bool
 	log   zerolog.Logger
+
+	// requestHandlers map of all registered request handlers
+	requestHandlers map[sip.RequestMethod]RequestHandler
 }
 
 type ClientOption func(c *Client) error
@@ -82,9 +85,10 @@ func WithClientAddr(addr string) ClientOption {
 // NewClient creates client handle for user agent
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
-		UserAgent: ua,
-		host:      ua.GetIP().String(),
-		log:       log.Logger.With().Str("caller", "Client").Logger(),
+		UserAgent:       ua,
+		host:            ua.GetIP().String(),
+		log:             log.Logger.With().Str("caller", "Client").Logger(),
+		requestHandlers: make(map[sip.RequestMethod]RequestHandler),
 	}
 
 	for _, o := range options {
@@ -92,6 +96,8 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 			return nil, err
 		}
 	}
+
+	c.tx.OnRequest(c.onRequest)
 
 	return c, nil
 }
@@ -157,6 +163,35 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 		}
 	}
 	return c.tp.WriteMsg(req)
+}
+
+// onRequest gets request from Transaction layer
+func (c *Client) onRequest(req *sip.Request, tx sip.ServerTransaction) {
+	// Transaction layer is the one who controls concurency execution of every request
+	// so in this case we should avoid adding more concurency
+	handler, ok := c.requestHandlers[req.Method]
+	if handler == nil || !ok {
+		handler = c.defaultUnhandledHandler
+	}
+	handler(req, tx)
+	if tx != nil {
+		// Must be called to prevent any transaction leaks
+		tx.Terminate()
+	}
+}
+
+func (c *Client) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransaction) {
+	c.log.Warn().Msg("SIP request handler not found")
+
+	// Send response directly and let transaction terminate
+	if err := c.tp.WriteMsg(sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)); err != nil {
+		c.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
+	}
+}
+
+// OnBye registers Bye request handler
+func (c *Client) OnBye(handler RequestHandler) {
+	c.requestHandlers[sip.BYE] = handler
 }
 
 type ClientRequestOption func(c *Client, req *sip.Request) error
