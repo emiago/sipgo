@@ -101,7 +101,16 @@ func (uri *Uri) IsEncrypted() bool {
 	return uri.Encrypted
 }
 
-// Addr is uri address form. sip:user@host:port
+// Endpoint is uri user identifier. user@host[:port]
+func (uri *Uri) Endpoint() string {
+	addr := uri.User + "@" + uri.Host
+	if uri.Port > 0 {
+		addr += ":" + strconv.Itoa(uri.Port)
+	}
+	return addr
+}
+
+// Addr is uri part without headers and params. sip[s]:user@host[:port]
 func (uri *Uri) Addr() string {
 	addr := uri.User + "@" + uri.Host
 	if uri.Port > 0 {

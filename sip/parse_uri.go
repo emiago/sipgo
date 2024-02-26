@@ -34,7 +34,7 @@ func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 		uri.Encrypted = true
 		return uriStateUser, s[5:], nil
 	} else {
-		return uriStateHost, s, nil
+		return uriStateUser, s, nil
 	}
 }
 

@@ -38,7 +38,7 @@ func TestParseUri(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		err = ParseUri(testCase, &uri)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "alice", uri.User)
 		assert.Equal(t, "atlanta.com", uri.Host)
 		assert.False(t, uri.Encrypted)
@@ -51,16 +51,33 @@ func TestParseUri(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		err = ParseUri(testCase, &uri)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "alice", uri.User)
 		assert.Equal(t, "atlanta.com", uri.Host)
 		assert.True(t, uri.Encrypted)
 	}
 
 	uri = Uri{}
+	str = "sip:alice@localhost:5060"
+	err = ParseUri(str, &uri)
+	require.NoError(t, err)
+	assert.Equal(t, "alice", uri.User)
+	assert.Equal(t, "localhost", uri.Host)
+	assert.Equal(t, 5060, uri.Port)
+	assert.Equal(t, "localhost:5060", uri.HostPort())
+	assert.Equal(t, "alice@localhost:5060", uri.Endpoint())
+
+	// No scheme we currently allow
+	uri = Uri{}
+	str = "alice@localhost:5060"
+	err = ParseUri(str, &uri)
+	require.NoError(t, err)
+	assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+
+	uri = Uri{}
 	str = "sips:alice@atlanta.com?subject=project%20x&priority=urgent"
 	err = ParseUri(str, &uri)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "alice", uri.User)
 	assert.Equal(t, "atlanta.com", uri.Host)
@@ -72,7 +89,7 @@ func TestParseUri(t *testing.T) {
 	uri = Uri{}
 	str = "sip:bob:secret@atlanta.com:9999;rport;transport=tcp;method=REGISTER?to=sip:bob%40biloxi.com"
 	err = ParseUri(str, &uri)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "bob", uri.User)
 	assert.Equal(t, "secret", uri.Password)
@@ -92,7 +109,7 @@ func TestParseUri(t *testing.T) {
 	uri = Uri{}
 	str = "127.0.0.2:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
 	err = ParseUri(str, &uri)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rport, _ := uri.UriParams.Get("rport")
 	branch, _ := uri.UriParams.Get("branch")

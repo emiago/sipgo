@@ -168,14 +168,21 @@ client.WriteRequest(req)
 
 ## Dialog handling
 
-`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions
+`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions. 
+They are seperated based on your **request context**, but they act more like `peer`.
+They both need `client` **handle** to be able send request and `server` **handle** to accept request.
+
 
 **UAC**:
 ```go
+ua, _ := sipgo.NewUA() // Build user agent
+srv, _ := sipgo.NewServer(ua) // Creating server handle
+client, _ := sipgo.NewClient(ua) // Creating client handle
+
 contactHDR := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 }
-dialogCli := sipgo.NewDialogClient(cli, contactHDR)
+dialogCli := sipgo.NewDialogClient(client, contactHDR)
 
 // Attach Bye handling for dialog
 srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -196,10 +203,14 @@ err = dialog.Bye(ctx)
 
 **UAS**:
 ```go
+ua, _ := sipgo.NewUA() // Build user agent
+srv, _ := sipgo.NewServer(ua) // Creating server handle
+client, _ := sipgo.NewClient(ua) // Creating client handle
+
 uasContact := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 }
-dialogSrv := sipgo.NewDialogServer(cli, uasContact)
+dialogSrv := sipgo.NewDialogServer(client, uasContact)
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
@@ -223,9 +234,13 @@ srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
 ## Stateful Proxy build
 
 Proxy is combination client and server handle that creates server/client transaction. They need to share
-same ua same like uac/uas build.
+same **ua** same like uac/uas build.
+
 Forwarding request is done via client handle:
 ```go
+ua, _ := sipgo.NewUA() // Build user agent
+srv, _ := sipgo.NewServer(ua) // Creating server handle
+client, _ := sipgo.NewClient(ua) // Creating client handle
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     ctx := context.Background()
