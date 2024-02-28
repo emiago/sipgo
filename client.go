@@ -7,6 +7,7 @@ import (
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
+	"github.com/icholy/digest"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -140,6 +141,31 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 	}
 	return c.tx.Request(ctx, req)
+}
+
+type DigestAuth struct {
+	Username string
+	Password string
+}
+
+// DoDigestAuth will apply digest authentication if initial request is chalenged by 401 or 407.
+// It returns new transaction that is created for this request
+func (c *Client) DoDigestAuth(ctx context.Context, req *sip.Request, res *sip.Response, auth DigestAuth) (sip.ClientTransaction, error) {
+	if res.StatusCode == sip.StatusProxyAuthRequired {
+		return digestProxyAuthRequest(ctx, c, req, res, digest.Options{
+			Method:   req.Method.String(),
+			URI:      req.Recipient.Addr(),
+			Username: auth.Username,
+			Password: auth.Password,
+		})
+	}
+
+	return digestTransactionRequest(ctx, c, req, res, digest.Options{
+		Method:   req.Method.String(),
+		URI:      req.Recipient.Addr(),
+		Username: auth.Username,
+		Password: auth.Password,
+	})
 }
 
 // WriteRequest sends request directly to transport layer
