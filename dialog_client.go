@@ -308,6 +308,7 @@ func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Reques
 	cseq := req.CSeq()
 	cseq.SeqNo++
 
+	req.RemoveHeader("Proxy-Authorization")
 	req.AppendHeader(sip.NewHeader("Proxy-Authorization", cred.String()))
 
 	req.RemoveHeader("Via")
@@ -334,6 +335,7 @@ func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Requ
 	cseq.SeqNo++
 	// newReq := req.Clone()
 
+	req.RemoveHeader("Authorization")
 	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 	// defer req.RemoveHeader("Authorization")
 
