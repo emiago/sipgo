@@ -19,6 +19,14 @@ type Request struct {
 // No headers are added. AppendHeader should be called to add Headers.
 // r.SetBody can be called to set proper ContentLength header
 func NewRequest(method RequestMethod, recipient Uri) *Request {
+	if recipient.UriParams != nil {
+		// mostly this are empty
+		recipient.UriParams = recipient.UriParams.clone()
+	}
+	if recipient.Headers != nil {
+		recipient.Headers = recipient.Headers.clone()
+	}
+
 	req := &Request{}
 	req.SipVersion = "SIP/2.0"
 	// req.headers = newHeaders()
