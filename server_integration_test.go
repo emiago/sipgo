@@ -8,8 +8,10 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/stretchr/testify/assert"
@@ -238,6 +240,27 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		t.Log("Server ready")
 	}
 
+	var maxInvitesPerSec chan struct{}
+	if v := os.Getenv("MAX_REQUESTS"); v != "" {
+		t.Logf("Limiting number of requests: %s req/s", v)
+		maxInvites, _ := strconv.Atoi(v)
+		maxInvitesPerSec = make(chan struct{}, maxInvites)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Second):
+					for i := 0; i < maxInvites; i++ {
+						<-maxInvitesPerSec
+					}
+				}
+			}
+		}()
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.transport, func(t *testing.B) {
 			proto := "sip"
@@ -252,7 +275,12 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 				ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
 				client, err := NewClient(ua)
 				require.NoError(t, err)
+
 				for p.Next() {
+					// If we are running in limit mode
+					if maxInvitesPerSec != nil {
+						maxInvitesPerSec <- struct{}{}
+					}
 					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
 					tx, err := client.TransactionRequest(ctx, req)
 					require.NoError(t, err)
