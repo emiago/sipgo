@@ -227,7 +227,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	}
 
 	cont := req.Contact()
-	bye := sip.NewRequest(sip.BYE, &cont.Address)
+	bye := sip.NewRequest(sip.BYE, cont.Address)
 
 	// Reverse from and to
 	from := res.From()

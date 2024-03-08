@@ -30,7 +30,7 @@ func TestClientRequestBuild(t *testing.T) {
 		UriParams: sip.HeaderParams{"foo": "bar"},
 	}
 
-	req := sip.NewRequest(sip.OPTIONS, &recipment)
+	req := sip.NewRequest(sip.OPTIONS, recipment)
 	clientRequestBuildReq(c, req)
 
 	via := req.Via()
@@ -76,7 +76,7 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 		UriParams: sip.NewParams(),
 	}
 
-	req := sip.NewRequest(sip.OPTIONS, &recipment)
+	req := sip.NewRequest(sip.OPTIONS, recipment)
 	clientRequestBuildReq(c, req)
 
 	via := req.Via()
@@ -103,7 +103,7 @@ func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 		Port: 5060,
 	}
 
-	req := sip.NewRequest(sip.OPTIONS, &recipment)
+	req := sip.NewRequest(sip.OPTIONS, recipment)
 	clientRequestBuildReq(c, req)
 
 	via := req.Via()

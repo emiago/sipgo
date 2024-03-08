@@ -111,7 +111,7 @@ func TestIntegrationDialog(t *testing.T) {
 		t.Run("UAS hangup", func(t *testing.T) {
 			// INVITE
 			t.Log("UAC: INVITE")
-			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
@@ -129,7 +129,7 @@ func TestIntegrationDialog(t *testing.T) {
 		t.Run("UAC hangup", func(t *testing.T) {
 			// INVITE
 			t.Log("UAC: INVITE")
-			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
@@ -242,7 +242,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			})
 			// INVITE
 			t.Log("UAC: INVITE")
-			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
@@ -263,7 +263,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		t.Run("UAS ACK Error", func(t *testing.T) {
 			// INVITE
 			t.Log("UAC: INVITE")
-			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address.Clone(), nil)
+			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})

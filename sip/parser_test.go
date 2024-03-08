@@ -134,7 +134,7 @@ func testParseHeader(t *testing.T, parser *Parser, header string) Header {
 
 func testParseHeaderOnRequest(t *testing.T, parser *Parser, header string) (*Request, Header) {
 	// This is fake way to get parsing done. We use fake message and read first header
-	msg := NewRequest(INVITE, nil)
+	msg := NewRequest(INVITE, Uri{})
 	name := strings.Split(header, ":")[0]
 	err := parser.headersParsers.parseMsgHeader(msg, header)
 	require.Nil(t, err)

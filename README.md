@@ -21,6 +21,9 @@ Fetch lib with:
 
 *Also, if you are using lib in any way, we would like to share it here.*
 
+
+For open discussion you can join on [slack sipgo](https://app.slack.com/client/T06FPMTT46Q/C06FPMTV70U)
+
 ## Supported protocols
 
 - [x] UDP

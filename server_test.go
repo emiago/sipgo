@@ -26,7 +26,7 @@ func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
 }
 
 func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip.Uri, transport string) *sip.Request {
-	req := sip.NewRequest(method, &recipment)
+	req := sip.NewRequest(method, recipment)
 	params := sip.NewParams()
 	params["branch"] = sip.GenerateBranch()
 	req.AppendHeader(&sip.ViaHeader{

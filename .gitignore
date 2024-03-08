@@ -7,3 +7,4 @@ certs
 /example/goproxy
 /example/astscale
 /go.work
+/LONG_BENCHES.md

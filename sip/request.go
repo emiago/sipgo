@@ -11,14 +11,14 @@ import (
 type Request struct {
 	MessageData
 	Method    RequestMethod
-	Recipient *Uri
+	Recipient Uri
 }
 
 // NewRequest creates base for building sip Request
-// sipVersion must be SIP/2.0
+// A Request-Line contains a method name, a Request-URI, and the SIP/2.0 as version
 // No headers are added. AppendHeader should be called to add Headers.
 // r.SetBody can be called to set proper ContentLength header
-func NewRequest(method RequestMethod, recipient *Uri) *Request {
+func NewRequest(method RequestMethod, recipient Uri) *Request {
 	req := &Request{}
 	req.SipVersion = "SIP/2.0"
 	// req.headers = newHeaders()
@@ -115,22 +115,20 @@ func (req *Request) Transport() string {
 
 	uri := req.Recipient
 	if hdr := req.Route(); hdr != nil {
-		uri = &hdr.Address
+		uri = hdr.Address
 	}
 
-	if uri != nil {
-		if uri.UriParams != nil {
-			if val, ok := uri.UriParams.Get("transport"); ok && val != "" {
-				tp = strings.ToUpper(val)
-			}
+	if uri.UriParams != nil {
+		if val, ok := uri.UriParams.Get("transport"); ok && val != "" {
+			tp = strings.ToUpper(val)
 		}
+	}
 
-		if uri.IsEncrypted() {
-			if tp == "TCP" {
-				tp = "TLS"
-			} else if tp == "WS" {
-				tp = "WSS"
-			}
+	if uri.IsEncrypted() {
+		if tp == "TCP" {
+			tp = "TLS"
+		} else if tp == "WS" {
+			tp = "WSS"
 		}
 	}
 
@@ -189,14 +187,9 @@ func (req *Request) Destination() string {
 	var uri *Uri
 	if hdr := req.Route(); hdr != nil {
 		uri = &hdr.Address
-
 	}
 	if uri == nil {
-		if u := req.Recipient; u != nil {
-			uri = u
-		} else {
-			return ""
-		}
+		uri = &req.Recipient
 	}
 
 	host := uri.Host
@@ -213,13 +206,13 @@ func (req *Request) Destination() string {
 // NOTE: it does not copy Via header. This is left to transport or caller to enforce
 // Deprecated: use DialogClient for building dialogs
 func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
-	Recipient := inviteRequest.Recipient
+	Recipient := &inviteRequest.Recipient
 	if contact := inviteResponse.Contact(); contact != nil {
 		Recipient = &contact.Address
 	}
 	ackRequest := NewRequest(
 		ACK,
-		Recipient,
+		*Recipient.Clone(),
 	)
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
@@ -330,7 +323,7 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 // NOTE: it does not copy Via header. This is left to transport or caller to enforce
 // Deprecated: use DialogClient for building dialogs
 func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
-	recipient := inviteRequest.Recipient
+	recipient := &inviteRequest.Recipient
 	cont := inviteResponse.Contact()
 	if cont != nil {
 		// BYE is subsequent request
@@ -339,7 +332,7 @@ func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []b
 
 	byeRequest := NewRequest(
 		BYE,
-		recipient,
+		*recipient.Clone(),
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
 
@@ -385,7 +378,7 @@ func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []b
 func cloneRequest(req *Request) *Request {
 	newReq := NewRequest(
 		req.Method,
-		req.Recipient.Clone(),
+		*req.Recipient.Clone(),
 	)
 	newReq.SipVersion = req.SipVersion
 

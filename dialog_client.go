@@ -59,7 +59,7 @@ func (e ErrDialogResponse) Error() string {
 // Invite sends INVITE request and creates early dialog session.
 // You need to call WaitAnswer after for establishing dialog
 // For passing custom Invite request use WriteInvite
-func (dc *DialogClient) Invite(ctx context.Context, recipient *sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
+func (dc *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
 	req := sip.NewRequest(sip.INVITE, recipient)
 	if body != nil {
 		req.SetBody(body)

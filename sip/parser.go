@@ -171,7 +171,7 @@ func parseLine(startLine string) (msg Message, err error) {
 			return nil, err
 		}
 
-		m := NewRequest(method, &recipient)
+		m := NewRequest(method, recipient)
 		m.SipVersion = sipVersion
 		return m, nil
 	}
