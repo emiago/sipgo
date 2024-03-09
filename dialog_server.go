@@ -42,6 +42,7 @@ func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer
 
 // ReadInvite should read from your OnInvite handler for which it creates dialog context
 // You need to use DialogServerSession for all further responses
+// Do not forget to add ReadAck and ReadBye for confirming dialog and terminating
 func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
 	cont := req.Contact()
 	if cont == nil {
@@ -85,6 +86,7 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 	return nil
 }
 
+// ReadAck should read from your OnBye handler
 func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
 	id, err := sip.MakeDialogIDFromRequest(req)
 	if err != nil {
