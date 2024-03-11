@@ -117,3 +117,7 @@ func (ua *UserAgent) Name() string {
 func (ua *UserAgent) TransportLayer() *sip.TransportLayer {
 	return ua.tp
 }
+
+func (ua *UserAgent) TransactionLayer() *sip.TransactionLayer {
+	return ua.tx
+}
