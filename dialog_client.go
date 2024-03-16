@@ -243,6 +243,11 @@ func (s *DialogClientSession) Ack(ctx context.Context) error {
 }
 
 func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) error {
+	// Check Record-Route Header
+	if rr := s.InviteResponse.RecordRoute(); rr != nil {
+		ack.SetDestination(rr.Address.HostPort())
+	}
+
 	if err := s.dc.c.WriteRequest(ack); err != nil {
 		// Make sure we close our error
 		// s.Close()
@@ -271,6 +276,11 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	// In case dialog was not updated
 	if sip.DialogState(state) != sip.DialogStateConfirmed {
 		return fmt.Errorf("Dialog not confirmed. ACK not send?")
+	}
+
+	// Check Record-Route Header
+	if rr := s.InviteResponse.RecordRoute(); rr != nil {
+		bye.SetDestination(rr.Address.HostPort())
 	}
 
 	tx, err := dc.c.TransactionRequest(ctx, bye)

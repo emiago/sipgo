@@ -322,6 +322,7 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 				"transport": sip.NetworkToLower(r.Transport()),
 				"lr":        "",
 			},
+			Headers: sip.NewParams(),
 		},
 	}
 

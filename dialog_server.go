@@ -240,6 +240,11 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return fmt.Errorf("non matching ID %q %q", s.ID, byeID)
 	}
 
+	// Check Route Header
+	if rr := bye.Route(); rr != nil {
+		bye.SetDestination(rr.Address.HostPort())
+	}
+
 	tx, err := cli.TransactionRequest(ctx, bye)
 	if err != nil {
 		return err
