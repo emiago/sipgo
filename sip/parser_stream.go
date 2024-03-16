@@ -99,7 +99,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 
 				err = p.headersParsers.parseMsgHeader(msg, line)
 				if err != nil {
-					return nil, fmt.Errorf("%s: %w", err.Error(), ErrParseInvalidMessage)
+					return nil, fmt.Errorf("%s: %w", err.Error(), ErrParseEOF)
 					// log.Info().Err(err).Str("line", line).Msg("skip header due to error")
 				}
 				unparsed = reader.Bytes()

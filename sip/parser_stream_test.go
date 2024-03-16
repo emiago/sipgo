@@ -27,7 +27,7 @@ func TestParserStreamBadMessage(t *testing.T) {
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.ParseSIPStream([]byte(msgstr))
-		require.ErrorIs(t, err, ErrParseInvalidMessage)
+		require.ErrorIs(t, err, ErrParseEOF)
 	})
 	t.Run("finish empty line", func(t *testing.T) {
 		rawMsg := []string{

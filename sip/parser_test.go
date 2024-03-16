@@ -228,7 +228,7 @@ func TestParseBadMessages(t *testing.T) {
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.ParseSIP([]byte(msgstr))
-		require.ErrorIs(t, err, ErrParseInvalidMessage)
+		require.ErrorIs(t, err, ErrParseEOF)
 	})
 	t.Run("finish empty line", func(t *testing.T) {
 		rawMsg := []string{
@@ -239,7 +239,7 @@ func TestParseBadMessages(t *testing.T) {
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.ParseSIP([]byte(msgstr))
-		require.Error(t, err, ErrParseInvalidMessage)
+		require.Error(t, err, ErrParseEOF)
 	})
 
 }
@@ -262,7 +262,7 @@ func TestParseRequest(t *testing.T) {
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
 		} {
 			_, err := parser.ParseSIP([]byte(msgstr))
-			assert.ErrorIs(t, err, ErrParseInvalidMessage)
+			assert.ErrorIs(t, err, ErrParseEOF)
 		}
 	})
 

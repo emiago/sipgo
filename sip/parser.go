@@ -22,8 +22,8 @@ const abnfWs = " \t"
 const maxCseq = 2147483647
 
 var (
-	ErrParseLineNoCRLF     = errors.New("line has no CRLF")
-	ErrParseInvalidMessage = errors.New("invalid SIP message")
+	ErrParseLineNoCRLF = errors.New("line has no CRLF")
+	ErrParseEOF        = errors.New("EOF on reading line")
 
 	// Stream parse errors
 	ErrParseSipPartial         = errors.New("SIP partial data")
@@ -110,7 +110,7 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 
 		if err != nil {
 			if err == io.EOF {
-				return nil, ErrParseInvalidMessage
+				return nil, ErrParseEOF
 			}
 			return nil, err
 		}
@@ -122,7 +122,8 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 
 		err = p.headersParsers.parseMsgHeader(msg, line)
 		if err != nil {
-			p.log.Info().Err(err).Str("line", line).Msg("skip header due to error")
+			err := fmt.Errorf("parsing header failed line=%q: %w", line, err)
+			return nil, err
 		}
 	}
 
