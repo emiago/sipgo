@@ -511,7 +511,7 @@ func (h *ToHeader) headerClone() Header {
 
 	newTo = &ToHeader{
 		DisplayName: h.DisplayName,
-		Address:     h.Address,
+		Address:     *h.Address.Clone(),
 	}
 	// if h.Address != nil {
 	// 	newTo.Address = h.Address.Clone()
@@ -578,7 +578,7 @@ func (h *FromHeader) headerClone() Header {
 
 	newFrom = &FromHeader{
 		DisplayName: h.DisplayName,
-		Address:     h.Address,
+		Address:     *h.Address.Clone(),
 	}
 	// if h.Address != nil {
 	// 	newFrom.Address = h.Address.Clone()
@@ -952,13 +952,8 @@ func (h *RouteHeader) headerClone() Header {
 }
 
 func (h *RouteHeader) Clone() *RouteHeader {
-	newRoute := h.cloneFirst()
-	return newRoute
-}
-
-func (h *RouteHeader) cloneFirst() *RouteHeader {
 	newRoute := &RouteHeader{
-		Address: h.Address,
+		Address: *h.Address.Clone(),
 	}
 	return newRoute
 }
@@ -999,13 +994,8 @@ func (h *RecordRouteHeader) headerClone() Header {
 }
 
 func (h *RecordRouteHeader) Clone() *RecordRouteHeader {
-	newRoute := h.cloneFirst()
-	return newRoute
-}
-
-func (h *RecordRouteHeader) cloneFirst() *RecordRouteHeader {
 	newRoute := &RecordRouteHeader{
-		Address: h.Address,
+		Address: *h.Address.Clone(),
 	}
 	return newRoute
 }
