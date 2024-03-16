@@ -194,6 +194,11 @@ func (req *Request) Destination() string {
 
 	var uri *Uri
 	if hdr := req.Route(); hdr != nil {
+		// TODO This may be a problem if we are not a proxy, as we also need to remove this header
+		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
+		// any client MUST send any
+		// subsequent requests for this call leg to the first Request-URI in the
+		// Route request header field and remove that entry.
 		uri = &hdr.Address
 	}
 	if uri == nil {
@@ -227,6 +232,7 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	if len(inviteRequest.GetHeaders("Route")) > 0 {
 		CopyHeaders("Route", inviteRequest, ackRequest)
 	} else {
+		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
 		hdrs := inviteResponse.GetHeaders("Record-Route")
 		for i := len(hdrs) - 1; i >= 0; i-- {
 			h := hdrs[i].headerClone()
@@ -290,7 +296,7 @@ func newAckRequestNon2xx(inviteRequest *Request, inviteResponse *Response, body 
 	return ackRequest
 }
 
-func NewCancelRequest(requestForCancel *Request) *Request {
+func newCancelRequest(requestForCancel *Request) *Request {
 	cancelReq := NewRequest(
 		CANCEL,
 		requestForCancel.Recipient,
@@ -324,63 +330,6 @@ func NewCancelRequest(requestForCancel *Request) *Request {
 	cancelReq.SetDestination(requestForCancel.Destination())
 
 	return cancelReq
-}
-
-// NewByeRequestUAC creates bye request from established dialog
-// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.1
-// NOTE: it does not copy Via header. This is left to transport or caller to enforce
-// Deprecated: use DialogClient for building dialogs
-func NewByeRequestUAC(inviteRequest *Request, inviteResponse *Response, body []byte) *Request {
-	recipient := &inviteRequest.Recipient
-	cont := inviteResponse.Contact()
-	if cont != nil {
-		// BYE is subsequent request
-		recipient = &cont.Address
-	}
-
-	byeRequest := NewRequest(
-		BYE,
-		*recipient.Clone(),
-	)
-	byeRequest.SipVersion = inviteRequest.SipVersion
-
-	if len(inviteRequest.GetHeaders("Route")) > 0 {
-		CopyHeaders("Route", inviteRequest, byeRequest)
-	} else {
-		hdrs := inviteResponse.GetHeaders("Record-Route")
-		for i := len(hdrs) - 1; i >= 0; i-- {
-			h := hdrs[i].headerClone()
-			byeRequest.AppendHeader(h)
-		}
-	}
-
-	maxForwardsHeader := MaxForwardsHeader(70)
-	byeRequest.AppendHeader(&maxForwardsHeader)
-	if h := inviteRequest.From(); h != nil {
-		byeRequest.AppendHeader(h.headerClone())
-	}
-
-	if h := inviteResponse.To(); h != nil {
-		byeRequest.AppendHeader(h.headerClone())
-	}
-
-	if h := inviteRequest.CallID(); h != nil {
-		byeRequest.AppendHeader(h.headerClone())
-	}
-
-	if h := inviteRequest.CSeq(); h != nil {
-		byeRequest.AppendHeader(h.headerClone())
-	}
-
-	cseq := byeRequest.CSeq()
-	cseq.SeqNo = cseq.SeqNo + 1
-	cseq.MethodName = BYE
-
-	byeRequest.SetBody(body)
-	byeRequest.SetTransport(inviteRequest.Transport())
-	byeRequest.SetSource(inviteRequest.Source())
-
-	return byeRequest
 }
 
 func cloneRequest(req *Request) *Request {

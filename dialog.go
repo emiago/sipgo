@@ -17,7 +17,10 @@ var (
 type Dialog struct {
 	ID string
 
-	InviteRequest  *sip.Request
+	// InviteRequest is set when dialog is created. It is not thread safe!
+	InviteRequest *sip.Request
+
+	// InviteResponse is last response received or sent. It is not thread safe!
 	InviteResponse *sip.Response
 
 	state   atomic.Int32

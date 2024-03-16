@@ -141,7 +141,7 @@ func (tx *ClientTx) cancel() {
 	lastResp := tx.lastResp
 	tx.mu.RUnlock()
 
-	cancelRequest := NewCancelRequest(tx.origin)
+	cancelRequest := newCancelRequest(tx.origin)
 	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
 		var lastRespStr string
 		if lastResp != nil {

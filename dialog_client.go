@@ -150,7 +150,9 @@ type AnswerOptions struct {
 
 // WaitAnswer waits for success response or returns ErrDialogResponse in case non 2xx
 // Canceling context while waiting 2xx will send Cancel request
-// Returns ErrDialogResponse in case non 2xx response
+// Returns errors:
+// - ErrDialogResponse in case non 2xx response
+// - any internal in case waiting answer failed for different reasons
 func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions) error {
 	client, tx, inviteRequest := s.dc.c, s.inviteTx, s.InviteRequest
 
@@ -169,7 +171,8 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			return ctx.Err()
 
 		case <-tx.Done():
-			return tx.Err()
+			// tx.Err() can be empty
+			return errors.Join(fmt.Errorf("transaction terminated"), tx.Err())
 		}
 
 		if opts.OnResponse != nil {
@@ -251,7 +254,7 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 
 // Bye sends bye and terminates session. Use WriteBye if you want to customize bye request
 func (s *DialogClientSession) Bye(ctx context.Context) error {
-	bye := sip.NewByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
+	bye := newByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
 	return s.WriteBye(ctx, bye)
 }
 
@@ -342,4 +345,53 @@ func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Requ
 	req.RemoveHeader("Via")
 	tx, err := client.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
 	return tx, err
+}
+
+// newByeRequestUAC creates bye request from established dialog
+// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.1
+// NOTE: it does not copy Via header. This is left to transport or caller to enforce
+func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, body []byte) *sip.Request {
+	recipient := &inviteRequest.Recipient
+	cont := inviteResponse.Contact()
+	if cont != nil {
+		// BYE is subsequent request
+		recipient = &cont.Address
+	}
+
+	byeRequest := sip.NewRequest(
+		sip.BYE,
+		*recipient.Clone(),
+	)
+	byeRequest.SipVersion = inviteRequest.SipVersion
+
+	if len(inviteRequest.GetHeaders("Route")) > 0 {
+		sip.CopyHeaders("Route", inviteRequest, byeRequest)
+	}
+
+	maxForwardsHeader := sip.MaxForwardsHeader(70)
+	byeRequest.AppendHeader(&maxForwardsHeader)
+	if h := inviteRequest.From(); h != nil {
+		byeRequest.AppendHeader(sip.HeaderClone(h))
+	}
+
+	if h := inviteResponse.To(); h != nil {
+		byeRequest.AppendHeader(sip.HeaderClone(h))
+	}
+
+	if h := inviteRequest.CallID(); h != nil {
+		byeRequest.AppendHeader(sip.HeaderClone(h))
+	}
+
+	if h := inviteRequest.CSeq(); h != nil {
+		byeRequest.AppendHeader(sip.HeaderClone(h))
+	}
+
+	cseq := byeRequest.CSeq()
+	cseq.SeqNo = cseq.SeqNo + 1
+	cseq.MethodName = sip.BYE
+
+	byeRequest.SetBody(body)
+	byeRequest.SetTransport(inviteRequest.Transport())
+	byeRequest.SetSource(inviteRequest.Source())
+	return byeRequest
 }

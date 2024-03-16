@@ -1,7 +1,6 @@
 package sip
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -824,7 +823,7 @@ type ViaHeader struct {
 }
 
 func (hop *ViaHeader) SentBy() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	buf.WriteString(hop.Host)
 	if hop.Port > 0 {
 		buf.WriteString(fmt.Sprintf(":%d", hop.Port))
@@ -848,7 +847,7 @@ func (h *ViaHeader) StringWrite(buffer io.StringWriter) {
 func (h *ViaHeader) Name() string { return "Via" }
 
 func (h *ViaHeader) Value() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	h.ValueStringWrite(&buffer)
 	return buffer.String()
 }
@@ -925,7 +924,7 @@ type RouteHeader struct {
 func (h *RouteHeader) Name() string { return "Route" }
 
 func (h *RouteHeader) Value() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	h.ValueStringWrite(&buffer)
 	return buffer.String()
 }
@@ -958,8 +957,7 @@ func (h *RouteHeader) Clone() *RouteHeader {
 }
 
 func (h *RouteHeader) cloneFirst() *RouteHeader {
-	var newRoute *RouteHeader
-	newRoute = &RouteHeader{
+	newRoute := &RouteHeader{
 		Address: h.Address,
 	}
 	return newRoute
@@ -968,26 +966,20 @@ func (h *RouteHeader) cloneFirst() *RouteHeader {
 // RecordRouteHeader is Record-Route header representation.
 type RecordRouteHeader struct {
 	Address Uri
-	Next    *RecordRouteHeader
 }
 
 func (h *RecordRouteHeader) Name() string { return "Record-Route" }
 
 func (h *RecordRouteHeader) Value() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	h.ValueStringWrite(&buffer)
 	return buffer.String()
 }
 
 func (h *RecordRouteHeader) ValueStringWrite(buffer io.StringWriter) {
-	for hop := h; hop != nil; hop = hop.Next {
-		buffer.WriteString("<")
-		hop.Address.StringWrite(buffer)
-		buffer.WriteString(">")
-		if hop.Next != nil {
-			buffer.WriteString(", ")
-		}
-	}
+	buffer.WriteString("<")
+	h.Address.StringWrite(buffer)
+	buffer.WriteString(">")
 }
 
 func (h *RecordRouteHeader) String() string {
@@ -1008,17 +1000,11 @@ func (h *RecordRouteHeader) headerClone() Header {
 
 func (h *RecordRouteHeader) Clone() *RecordRouteHeader {
 	newRoute := h.cloneFirst()
-	newNext := newRoute
-	for hop := h.Next; hop != nil; hop = hop.Next {
-		newNext.Next = hop.Next.cloneFirst()
-		newNext = newNext.Next
-	}
 	return newRoute
 }
 
 func (h *RecordRouteHeader) cloneFirst() *RecordRouteHeader {
-	var newRoute *RecordRouteHeader
-	newRoute = &RecordRouteHeader{
+	newRoute := &RecordRouteHeader{
 		Address: h.Address,
 	}
 	return newRoute

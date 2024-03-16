@@ -71,14 +71,8 @@ func TestIntegrationDialog(t *testing.T) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
-	srvReady := make(chan struct{})
-	go srv.ListenAndServe(
-		context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady)),
-		"udp",
-		uasContact.Address.HostPort(),
-	)
-	// Wait server to be ready
-	<-srvReady
+	startTestServer(ctx, srv, uasContact.Address.HostPort())
+
 	// Client
 	{
 		ua, _ := NewUA()
@@ -101,13 +95,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
-		srvReady := make(chan struct{})
-		ctx := context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady))
-		go srv.ListenAndServe(ctx, "udp", contactHDR.Address.HostPort())
-		// Wait server to be ready
-		<-srvReady
-		time.Sleep(200 * time.Millisecond) // just to avoid race with listeners on UDP
-
+		startTestServer(ctx, srv, contactHDR.Address.HostPort())
 		t.Run("UAS hangup", func(t *testing.T) {
 			// INVITE
 			t.Log("UAC: INVITE")
@@ -198,14 +186,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
-	srvReady := make(chan struct{})
-	go srv.ListenAndServe(
-		context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady)),
-		"udp",
-		uasContact.Address.HostPort(),
-	)
-	// Wait server to be ready
-	<-srvReady
+	startTestServer(ctx, srv, uasContact.Address.HostPort())
 
 	// Client
 	{
@@ -229,12 +210,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
-		srvReady := make(chan struct{})
-		ctx := context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady))
-		go srv.ListenAndServe(ctx, "udp", contactHDR.Address.HostPort())
-		// Wait server to be ready
-		<-srvReady
-		time.Sleep(200 * time.Millisecond)
+		startTestServer(ctx, srv, contactHDR.Address.HostPort())
 
 		t.Run("UAS BYE Error", func(t *testing.T) {
 			srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -283,4 +259,16 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 	}
 
+}
+
+func startTestServer(ctx context.Context, srv *Server, hostPort string) {
+	srvReady := make(chan struct{})
+	go srv.ListenAndServe(
+		context.WithValue(ctx, ListenReadyCtxKey, ListenReadyCtxValue(srvReady)),
+		"udp",
+		hostPort,
+	)
+	// Wait server to be ready
+	<-srvReady
+	time.Sleep(200 * time.Millisecond) // just to avoid race with listeners on UDP
 }

@@ -149,6 +149,7 @@ func (s *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, 
 	return s.WriteResponse(res)
 }
 
+// WriteResponse allows passing you custom response
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
 
@@ -228,6 +229,45 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		break
 	}
 
+	bye := newByeRequestUAS(req, res)
+
+	// Check that we have still match same dialog
+	callidHDR := bye.CallID()
+	newFrom := bye.From()
+	newTo := bye.To()
+	byeID := sip.MakeDialogID(callidHDR.Value(), newFrom.Params["tag"], newTo.Params["tag"])
+	if s.ID != byeID {
+		return fmt.Errorf("non matching ID %q %q", s.ID, byeID)
+	}
+
+	tx, err := cli.TransactionRequest(ctx, bye)
+	if err != nil {
+		return err
+	}
+	defer tx.Terminate() // Terminates current transaction
+
+	// s.setState(sip.DialogStateEnded)
+
+	// Wait 200
+	select {
+	case res := <-tx.Responses():
+		if res.StatusCode != 200 {
+			return ErrDialogResponse{res}
+		}
+		s.setState(sip.DialogStateEnded)
+		return nil
+	case <-tx.Done():
+		return tx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// newByeRequestUAS generates request for UAS within dialog
+// it does not add VIA header, as this must be handled by transport layer
+func newByeRequestUAS(req *sip.Request, res *sip.Response) *sip.Request {
+	// We must check record route header
+	// https://datatracker.ietf.org/doc/html/rfc2543#section-6.13
 	cont := req.Contact()
 	bye := sip.NewRequest(sip.BYE, cont.Address)
 
@@ -252,48 +292,30 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	bye.AppendHeader(newTo)
 	bye.AppendHeader(callid)
 
-	recordRoute := req.RecordRoute()
-	if recordRoute != nil {
-		if recordRoute.Address.UriParams.Has("lr") {
-			bye.AppendHeader(&sip.RouteHeader{Address: recordRoute.Address})
-		} else {
-			/* TODO
-			   If the route set is not empty, and its first URI does not contain the
-			   lr parameter, the UAC MUST place the first URI from the route set
-			   into the Request-URI, stripping any parameters that are not allowed
-			   in a Request-URI.  The UAC MUST add a Route header field containing
-			   the remainder of the route set values in order, including all
-			   parameters.  The UAC MUST then place the remote target URI into the
-			   Route header field as the last value.
-			*/
-		}
+	// TODO check correct behavior strict routing vs loose routing
+	// recordRoute := req.RecordRoute()
+	// if recordRoute != nil {
+	// 	if recordRoute.Address.UriParams.Has("lr") {
+	// 		bye.AppendHeader(&sip.RouteHeader{Address: recordRoute.Address})
+	// 	} else {
+	// 		/* TODO
+	// 		   If the route set is not empty, and its first URI does not contain the
+	// 		   lr parameter, the UAC MUST place the first URI from the route set
+	// 		   into the Request-URI, stripping any parameters that are not allowed
+	// 		   in a Request-URI.  The UAC MUST add a Route header field containing
+	// 		   the remainder of the route set values in order, including all
+	// 		   parameters.  The UAC MUST then place the remote target URI into the
+	// 		   Route header field as the last value.
+	// 		*/
+	// 	}
+	// }
+
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
+	hdrs := req.GetHeaders("Record-Route")
+	for i := len(hdrs) - 1; i >= 0; i-- {
+		recordRoute := hdrs[i]
+		bye.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
 	}
 
-	callidHDR := bye.CallID()
-	byeID := sip.MakeDialogID(callidHDR.Value(), newFrom.Params["tag"], newTo.Params["tag"])
-	if s.ID != byeID {
-		return fmt.Errorf("Non matching ID %q %q", s.ID, byeID)
-	}
-
-	tx, err := cli.TransactionRequest(ctx, bye)
-	if err != nil {
-		return err
-	}
-	defer tx.Terminate() // Terminates current transaction
-
-	// s.setState(sip.DialogStateEnded)
-
-	// Wait 200
-	select {
-	case res := <-tx.Responses():
-		if res.StatusCode != 200 {
-			return ErrDialogResponse{res}
-		}
-		s.setState(sip.DialogStateEnded)
-		return nil
-	case <-tx.Done():
-		return tx.Err()
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return bye
 }
