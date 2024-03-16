@@ -93,6 +93,8 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 // Clone
 func (uri *Uri) Clone() *Uri {
 	c := *uri
+	c.UriParams = uri.UriParams.clone()
+	c.Headers = uri.Headers.clone()
 	return &c
 }
 

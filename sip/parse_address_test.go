@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseAddressValue(t *testing.T) {
@@ -30,6 +31,17 @@ func TestParseAddressValue(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 1, uri.UriParams.Length())
 	assert.Equal(t, "phone", user)
+}
+
+func TestParseAddressBad(t *testing.T) {
+
+	t.Run("double ports in uri", func(t *testing.T) {
+		uri := Uri{}
+		params := NewParams()
+		address := "<sip:127.0.0.1:5060:5060;lr;transport=udp>"
+		_, err := ParseAddressValue(address, &uri, params)
+		require.Error(t, err)
+	})
 }
 
 // TODO

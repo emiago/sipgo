@@ -92,3 +92,16 @@ func TestMaxForwardIncDec(t *testing.T) {
 	maxfwd.Dec()
 	assert.Equal(t, uint32(69), maxfwd.Val(), "Value returned %d", maxfwd.Val())
 }
+
+func TestCopyHeaders(t *testing.T) {
+	invite, _, _ := testCreateInvite(t, "sip:bob@example.com", "udp", "test.com")
+	invite.AppendHeader(NewHeader("Record-Route", "<sip:p1:5060;lr;transport=udp>"))
+	invite.AppendHeader(NewHeader("Record-Route", "<sip:p2:5060;lr>"))
+
+	res := NewResponse(StatusOK, "OK")
+	CopyHeaders("Record-Route", invite, res)
+
+	hdrs := res.GetHeaders("Record-Route")
+	require.Equal(t, "Record-Route: <sip:p1:5060;lr;transport=udp>", hdrs[0].String())
+	require.Equal(t, "Record-Route: <sip:p2:5060;lr>", hdrs[1].String())
+}

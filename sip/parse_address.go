@@ -28,7 +28,7 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 		headerParams: headerParams,
 	}
 
-	parseNameAddress(addressText, &a)
+	err = parseNameAddress(addressText, &a)
 	displayName = a.displayName
 	return
 }
@@ -97,7 +97,7 @@ func addressStateUriBracket(a *nameAddress, s string) (addressFSM, string, error
 			return addressStateHeaderParams, s[i+1:], err
 		}
 	}
-	return nil, s, nil
+	return nil, s, fmt.Errorf("invalid uri, missing end bracket")
 }
 
 func addressStateUri(a *nameAddress, s string) (addressFSM, string, error) {
