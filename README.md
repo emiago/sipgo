@@ -19,10 +19,11 @@ Fetch lib with:
 
 *To keep project development you can* [support it](https://ko-fi.com/emiasupport) 
 
-*Also, if you are using lib in any way, we would like to share it here.*
+*Also, if you are using lib in any way, let us known, we would like to share it here.*
 
 
-For open discussion you can join on [slack sipgo](https://app.slack.com/client/T06FPMTT46Q/C06FPMTV70U)
+You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
+
 
 ## Supported protocols
 
