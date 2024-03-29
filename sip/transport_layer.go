@@ -422,23 +422,44 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		addr.IP = ip.IP
 		return nil
 	}
-	log.Debug().Err(err).Msg("IP addr resolving failed, doing via dns resolver")
+	log.Debug().Err(err).Msg("IP addr resolving failed, doing via dns SRV resolver...")
+	return l.resolveAddrSRV(ctx, network, host, addr)
+}
 
-	var lookupnet string
+func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hostname string, addr *Addr) error {
+	var proto string
 	switch network {
-	case "udp":
-		lookupnet = "udp"
+	case "udp", "udp4", "udp6":
+		proto = "udp"
+	case "tls":
+		proto = "tls"
 	default:
-		lookupnet = "tcp"
+		proto = "tcp"
 	}
 
-	_, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", lookupnet, host)
+	// The returned records are sorted by priority and randomized
+	// by weight within a priority.
+	_, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", proto, hostname)
 	if err != nil {
-		return fmt.Errorf("fail to resolve target for %q: %w", host, err)
+		return fmt.Errorf("fail to lookup SRV for %q: %w", hostname, err)
 	}
-	a := addrs[0]
-	addr.IP = net.ParseIP(a.Target[:len(a.Target)-1])
-	addr.Port = int(a.Port)
+	log.Debug().Str("addrs", addr.String()).Msg("SRV resolved")
+	record := addrs[0]
+
+	// ipStr := record.Target[:len(record.Target)-1]
+
+	ips, err := l.dnsResolver.LookupIP(ctx, "ip", record.Target)
+	if err != nil {
+		return err
+	}
+
+	addr.IP = ips[0]
+	addr.Port = int(record.Port)
+
+	if addr.IP == nil {
+		return fmt.Errorf("SRV resolving failed for %q", record.Target)
+	}
+
 	return nil
 }
 
