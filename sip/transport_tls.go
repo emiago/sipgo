@@ -16,7 +16,8 @@ type transportTLS struct {
 	*transportTCP
 
 	// rootPool *x509.CertPool
-	tlsConf *tls.Config
+	tlsConf   *tls.Config
+	tlsClient func(conn net.Conn, hostname string) *tls.Conn
 }
 
 // newTLSTransport needs dialTLSConf for creating connections when dialing
@@ -29,6 +30,15 @@ func newTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
 
 	// p.rootPool = roots
 	p.tlsConf = dialTLSConf
+	p.tlsClient = func(conn net.Conn, hostname string) *tls.Conn {
+		config := dialTLSConf
+
+		if config.ServerName == "" {
+			config = config.Clone()
+			config.ServerName = hostname
+		}
+		return tls.Client(conn, config)
+	}
 	p.log = log.Logger.With().Str("caller", "transport<TLS>").Logger()
 	return p
 }
@@ -39,10 +49,10 @@ func (t *transportTLS) String() string {
 
 // CreateConnection creates TLS connection for TCP transport
 func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	// raddr, err := net.ResolveTCPAddr("tcp", addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	hostname := raddr.Hostname
+	if hostname == "" {
+		hostname = raddr.IP.String()
+	}
 
 	var tladdr *net.TCPAddr = nil
 	if laddr.IP != nil {
@@ -57,30 +67,25 @@ func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		Port: raddr.Port,
 	}
 
-	return t.createConnection(ctx, tladdr, traddr, handler)
-}
-
-func (t *transportTLS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
-	addr := raddr.String()
-	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
-
-	//TODO does this need to be each config
-	// SHould we make copy of rootPool?
-	// There is Clone of config
-
-	dialer := tls.Dialer{
-		NetDialer: &net.Dialer{
-			LocalAddr: laddr,
-		},
-		Config: t.tlsConf,
+	netDialer := &net.Dialer{
+		LocalAddr: tladdr,
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	addr := traddr.String()
+	log.Debug().Str("raddr", addr).Msg("Dialing new connection")
+	// No resolving should happen here
+	conn, err := netDialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s dial err=%w", t, err)
+		return nil, fmt.Errorf("dial TCP error: %w", err)
 	}
 
-	c := t.initConnection(conn, addr, handler)
+	tlsConn := t.tlsClient(conn, hostname)
+
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		return nil, fmt.Errorf("TLS handshake error: %w", err)
+	}
+
+	c := t.initConnection(tlsConn, addr, handler)
 	c.Ref(1)
 	return c, nil
 }

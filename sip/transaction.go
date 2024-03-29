@@ -94,6 +94,7 @@ type ServerTransaction interface {
 	Transaction
 	Respond(res *Response) error
 	Acks() <-chan *Request
+	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
 	Cancels() <-chan *Request
 }
 
@@ -102,6 +103,7 @@ type ClientTransaction interface {
 	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
 	// Cancel sends cancel request
+	// TODO: Do we need context passing here?
 	Cancel() error
 }
 

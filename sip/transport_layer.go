@@ -292,8 +292,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	// dns srv lookup
 
 	raddr := Addr{
-		IP:   net.ParseIP(host),
-		Port: port,
+		IP:       net.ParseIP(host),
+		Port:     port,
+		Hostname: host,
 	}
 	if raddr.IP == nil {
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {

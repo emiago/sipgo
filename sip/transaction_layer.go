@@ -89,6 +89,10 @@ func (txl *TransactionLayer) handleRequest(req *Request) {
 
 	if req.IsCancel() {
 		// transaction for CANCEL already completed and terminated
+
+		// If the UAS did not find a matching transaction for the CANCEL
+		// according to the procedure above, it SHOULD respond to the CANCEL
+		// with a 481 (Call Leg/Transaction Does Not Exist).
 		return
 	}
 

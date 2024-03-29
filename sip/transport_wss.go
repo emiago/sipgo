@@ -5,6 +5,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -26,6 +29,16 @@ func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
 	}
 
 	p.dialer.TLSConfig = dialTLSConf
+	p.dialer.TLSClient = func(conn net.Conn, hostname string) net.Conn {
+		// This is just extracted from tls dialer code
+		config := dialTLSConf
+
+		if config.ServerName == "" {
+			config = config.Clone()
+			config.ServerName = hostname
+		}
+		return tls.Client(conn, config)
+	}
 
 	// p.tlsConf = dialTLSConf
 	p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
@@ -39,11 +52,22 @@ func (t *transportWSS) String() string {
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
 func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	// raddr, err := net.ResolveTCPAddr("tcp", addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	log := &t.log
 
+	// Must have IP resolved
+	if raddr.IP == nil {
+		return nil, fmt.Errorf("remote address IP not resolved")
+	}
+
+	// We need to distict IPAddr vs address with hostname
+	// Hostname must be passed for TLS if provided due to certificates check
+	hostname := raddr.Hostname
+	if hostname == "" {
+		hostname = raddr.IP.String()
+	}
+	addr := net.JoinHostPort(hostname, strconv.Itoa(raddr.Port))
+
+	// USe default unless local address is set
 	var tladdr *net.TCPAddr = nil
 	if laddr.IP != nil {
 		tladdr = &net.TCPAddr{
@@ -57,21 +81,43 @@ func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		Port: raddr.Port,
 	}
 
-	return t.createConnection(ctx, tladdr, traddr, handler)
-}
-
-func (t *transportWSS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
-	addr := raddr.String()
-	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
-
-	// How to pass local interface
-
-	conn, _, _, err := t.dialer.Dial(ctx, "wss://"+addr)
-	if err != nil {
-		return nil, fmt.Errorf("%s dial err=%w", t, err)
+	// Make sure we have port set
+	if traddr.Port == 0 {
+		traddr.Port = 443
 	}
 
-	c := t.initConnection(conn, addr, true, handler)
+	netDialer := &net.Dialer{
+		LocalAddr: tladdr,
+	}
+
+	log.Debug().Str("raddr", traddr.String()).Msg("Dialing new connection")
+	conn, err := netDialer.DialContext(ctx, "tcp", traddr.String())
+	if err != nil {
+		return nil, fmt.Errorf("dial TCP error: %w", err)
+	}
+
+	log.Debug().Str("hostname", hostname).Msg("Setuping TLS connection")
+	tlsConn := t.dialer.TLSClient(conn, hostname)
+
+	u, err := url.ParseRequestURI("wss://" + addr)
+	if err != nil {
+		return nil, fmt.Errorf("parse request wss uri failed: %w", err)
+	}
+
+	// Check ctx deadline
+	// TODO handle cancelation?
+	if deadline, ok := ctx.Deadline(); ok {
+		tlsConn.SetDeadline(deadline)
+		defer tlsConn.SetDeadline(time.Time{})
+	}
+
+	_, _, err = t.dialer.Upgrade(tlsConn, u)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upgrade: %w", err)
+	}
+
+	ipAddr := traddr.String()
+	c := t.initConnection(tlsConn, ipAddr, true, handler)
 	c.Ref(1)
 	return c, nil
 }

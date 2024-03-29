@@ -44,13 +44,14 @@ type Transport interface {
 }
 
 type Addr struct {
-	IP   net.IP // Must be in IP format
-	Port int
+	IP       net.IP // Must be in IP format
+	Port     int
+	Hostname string // Original hostname before resolved to IP
 }
 
 func (a *Addr) String() string {
 	if a.IP == nil {
-		return net.JoinHostPort("", strconv.Itoa(a.Port))
+		return net.JoinHostPort(a.Hostname, strconv.Itoa(a.Port))
 	}
 
 	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
