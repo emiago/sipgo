@@ -37,7 +37,12 @@ You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
 
 - Stateful proxy [example/proxysip](example/proxysip)  
 - Register with authentication [example/register](example/register)  
-- RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)  
+- RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)
+
+Also thanks to [pion](https://github.com/pion/webrtc) project sharing this example of using SIPgo with webrtc:
+- https://github.com/pion/example-webrtc-applications/tree/master/sip-to-webrtc  original post [on X](https://twitter.com/_pion/status/1742955942314913958)
+
+
 
 ## Tools developed:
 - CLI softphone for easy testing [gophone](https://github.com/emiago/gophone)
