@@ -5,7 +5,7 @@ go 1.21.1
 replace github.com/emiago/sipgo => ../../
 
 require (
-	github.com/emiago/sipgo v0.0.0-00010101000000-000000000000
+	github.com/emiago/sipgo v0.19.1-0.20240404080657-8f142652da33
 	github.com/prometheus/client_golang v1.17.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sirupsen/logrus v1.9.3

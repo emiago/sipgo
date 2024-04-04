@@ -11,19 +11,39 @@ services:
     cpus: 4.0
     cpuset: 0,1,2,3
     # mem_limit: 4G
-    network_mode: "host"
+    # network_mode: "host"
+
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.20
 
   uas:
     image: ctaloi/sipp
-    command: -sn uas -i 127.0.0.2
-    network_mode: "host"
+    command: -sn uas -f 30 -i 10.5.0.30
+    # network_mode: "host"
     cpuset: "4"
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.30
+
 
   uac:
     image: ctaloi/sipp
-    command: -sn uac -r 1000 -rp 1000 -i 127.0.0.3 -rsa 127.0.0.1:5060 127.0.0.2:5060
-    network_mode: "host"
+    command: -sn uac -r 1 -rp 1000 -rate_increase 50 -rate_interval 1 -rate_max 1000 -no_rate_quit -m 100000 -fd 1 -i 10.5.0.10 -rsa 10.5.0.20:5060 10.5.0.30  
+    # network_mode: "host"
     cpuset: "5"
     depends_on:
       - proxy
       - uas
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.10
+
+
+networks:
+  mynet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
