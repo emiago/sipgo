@@ -175,10 +175,8 @@ func (tx *ServerTx) actRespondComplete() fsmInput {
 	if !tx.reliable {
 		tx.mu.Lock()
 		if tx.timer_g == nil {
-			// tx.Log().Tracef("timer_g set to %v", tx.timer_g_time)
 
 			tx.timer_g = time.AfterFunc(tx.timer_g_time, func() {
-				// tx.Log().Trace("timer_g fired")
 				tx.spinFsm(server_input_timer_g)
 			})
 		} else {
@@ -186,8 +184,6 @@ func (tx *ServerTx) actRespondComplete() fsmInput {
 			if tx.timer_g_time > T2 {
 				tx.timer_g_time = T2
 			}
-
-			// tx.Log().Tracef("timer_g reset to %v", tx.timer_g_time)
 
 			tx.timer_g.Reset(tx.timer_g_time)
 		}
@@ -197,7 +193,6 @@ func (tx *ServerTx) actRespondComplete() fsmInput {
 	tx.mu.Lock()
 	if tx.timer_h == nil {
 		tx.timer_h = time.AfterFunc(Timer_H, func() {
-			// tx.Log().Trace("timer_h fired")
 			tx.spinFsm(server_input_timer_h)
 		})
 	}
@@ -212,9 +207,7 @@ func (tx *ServerTx) actRespondAccept() fsmInput {
 	}
 
 	tx.mu.Lock()
-	// tx.Log().Tracef("timer_l set to %v", Timer_L)
 	tx.timer_l = time.AfterFunc(Timer_L, func() {
-		// tx.Log().Trace("timer_l fired")
 		tx.spinFsm(server_input_timer_l)
 	})
 	tx.mu.Unlock()
@@ -258,8 +251,6 @@ func (tx *ServerTx) actTimeout() fsmInput {
 
 // Just delete the transaction.
 func (tx *ServerTx) actDelete() fsmInput {
-	// tx.Log().Debug("actDelete")
-
 	tx.delete()
 
 	return FsmInputNone
@@ -283,11 +274,6 @@ func (tx *ServerTx) actRespondDelete() fsmInput {
 }
 
 func (tx *ServerTx) actConfirm() fsmInput {
-	// tx.Log().Debug("actConfirm")
-
-	// todo bloody patch
-	// defer func() { recover() }()
-
 	tx.mu.Lock()
 
 	if tx.timer_g != nil {
@@ -299,8 +285,6 @@ func (tx *ServerTx) actConfirm() fsmInput {
 		tx.timer_h.Stop()
 		tx.timer_h = nil
 	}
-
-	// tx.Log().Tracef("timer_i set to %v", Timer_I)
 
 	tx.timer_i = time.AfterFunc(Timer_I, func() {
 		// tx.Log().Trace("timer_i fired")
