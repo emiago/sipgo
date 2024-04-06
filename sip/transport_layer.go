@@ -42,6 +42,9 @@ type TransportLayer struct {
 
 	// ConnectionReuse will force connection reuse when passing request
 	ConnectionReuse bool
+
+	// PreferSRV does always SRV lookup first
+	DNSPreferSRV bool
 }
 
 // NewLayer creates transport layer.
@@ -415,15 +418,39 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		}
 	}(time.Now())
 
-	l.log.Debug().Str("host", host).Msg("DNS Resolving")
-	// We need to try local resolving.
-	ip, err := net.ResolveIPAddr("ip", host)
+	if l.DNSPreferSRV {
+		err := l.resolveAddrSRV(ctx, network, host, addr)
+		if err == nil {
+			return nil
+		}
+		log.Warn().Str("host", host).Err(err).Msg("Doing SRV lookup failed.")
+		return l.resolveAddrIP(ctx, host, addr)
+	}
+
+	err := l.resolveAddrIP(ctx, host, addr)
 	if err == nil {
-		addr.IP = ip.IP
 		return nil
 	}
-	log.Debug().Err(err).Msg("IP addr resolving failed, doing via dns SRV resolver...")
+
+	log.Info().Err(err).Msg("IP addr resolving failed, doing via dns SRV resolver...")
 	return l.resolveAddrSRV(ctx, network, host, addr)
+}
+
+func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, addr *Addr) error {
+	l.log.Debug().Str("host", hostname).Msg("DNS Resolving")
+
+	// Do local resolving
+	ips, err := l.dnsResolver.LookupIPAddr(ctx, hostname)
+	if err != nil {
+		return err
+	}
+	if len(ips) == 0 {
+		// Should not happen
+		return fmt.Errorf("lookup ip addr did not return any ip addr")
+	}
+
+	addr.IP = ips[0].IP
+	return nil
 }
 
 func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hostname string, addr *Addr) error {
