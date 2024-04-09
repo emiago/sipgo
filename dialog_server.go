@@ -149,6 +149,16 @@ func (s *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, 
 	return s.WriteResponse(res)
 }
 
+// RespondSDP is just wrapper to call 200 with SDP.
+// It is better to use this when answering as it provide correct headers
+func (s *DialogServerSession) RespondSDP(sdp []byte) error {
+	if sdp == nil {
+		return fmt.Errorf("sdp not provided")
+	}
+	res := sip.NewSDPResponseFromRequest(s.InviteRequest, sdp)
+	return s.WriteResponse(res)
+}
+
 // WriteResponse allows passing you custom response
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
@@ -179,13 +189,17 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	s.Dialog.ID = id
+
+	// We need to make dialog present as ACK can land immediately after
+	s.s.dialogs.Store(id, s)
 	s.setState(sip.DialogStateEstablished)
 
 	if err := tx.Respond(res); err != nil {
+		// We could also not delete this as Close will handle cleanup
+		s.s.dialogs.Delete(id)
 		return err
 	}
 
-	s.s.dialogs.Store(id, s)
 	return nil
 }
 
@@ -201,7 +215,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	res := s.Dialog.InviteResponse
 
 	if !res.IsSuccess() {
-		return fmt.Errorf("Can not send bye on NON success response")
+		return fmt.Errorf("can not send bye on NON success response")
 	}
 
 	// This is tricky
