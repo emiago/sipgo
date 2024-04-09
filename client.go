@@ -37,6 +37,7 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 // WithClientHost allows setting default route host or IP on Via
 // in case of IP it will enforce transport layer to create/reuse connection with this IP
 // default: user agent IP
+// This is useful when you need to act as client first and avoid creating server handle listeners.
 // NOTE: From header hostname is WithUserAgentHostname option on UA or modify request manually
 func WithClientHostname(hostname string) ClientOption {
 	return func(s *Client) error {

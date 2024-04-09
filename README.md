@@ -73,8 +73,8 @@ Using server or client handle for UA you can build incoming or outgoing requests
 
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
-srv, _ := sipgo.NewServer(ua) // Creating server handle
-client, _ := sipgo.NewClient(ua) // Creating client handle
+srv, _ := sipgo.NewServer(ua) // Creating server handle for ua
+client, _ := sipgo.NewClient(ua) // Creating client handle for ua
 srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
 srv.OnCancel(cancelHandler)
@@ -99,6 +99,24 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
+```
+
+### UAC first
+
+If you are acting as client first, you can say to client which host:port to use, and this connection will be
+reused until closing UA. Any request received can be still processed with server handle.
+
+```go
+ua, _ := sipgo.NewUA() // Build user agent
+defer ua.Close()
+
+client, _ := sipgo.NewClient(ua, sipgo.WithClientHostname("127.0.0.1"), sipgo.WithClientPort(5060))
+server, _ := sipgo.NewServer(ua) 
+srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction)) {
+    // This will be received on 127.0.0.1:5060
+}
+
+tx, err := client.TransactionRequest(ctx, sip.NewRequest(sip.INVITE, recipient)) 
 ```
 
 ## Server Transaction
@@ -170,7 +188,7 @@ select {
 
 ```go
 client, _ := sipgo.NewClient(ua) // Creating client handle
-req := sip.NewRequest(method, &recipment)
+req := sip.NewRequest(method, recipient)
 // Send request and forget
 client.WriteRequest(req)
 ```
