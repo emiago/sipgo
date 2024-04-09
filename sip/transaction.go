@@ -39,6 +39,8 @@ var (
 	Timer_1xx = 200 * time.Millisecond
 
 	TxSeperator = "__"
+
+	TransactionFSMDebug bool
 )
 
 func init() {
@@ -161,6 +163,9 @@ func (tx *commonTx) currentFsmState() fsmContextState {
 func (tx *commonTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
 	for i := in; i != FsmInputNone; {
+		if TransactionFSMDebug {
+			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+		}
 		i = tx.fsmState(i)
 	}
 	tx.fsmMu.Unlock()
