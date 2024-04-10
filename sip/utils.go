@@ -146,7 +146,7 @@ func SplitByWhitespace(text string) []string {
 
 	for _, char := range text {
 		s := string(char)
-		if strings.Contains(abnfWs, s) {
+		if strings.Contains(abnf, s) {
 			if inString {
 				// First whitespace char following text; flush buffer to the results array.
 				result = append(result, buffer.String())

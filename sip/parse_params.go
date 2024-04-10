@@ -1,5 +1,10 @@
 package sip
 
+import (
+	"strings"
+	"unicode"
+)
+
 const (
 	paramsStateNone = iota
 	paramsStateKey
@@ -11,6 +16,8 @@ const (
 func UnmarshalParams(s string, seperator rune, ending rune, p HeaderParams) (n int, err error) {
 	var start, sep, quote int = 0, 0, -1
 	state := paramsStateKey
+
+	s = strings.TrimLeftFunc(s, unicode.IsSpace) // Remove trailing spaces
 	n = len(s)
 	for i, c := range s {
 		if c == ending {

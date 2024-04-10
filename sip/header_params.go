@@ -106,7 +106,7 @@ func (hp HeaderParams) ToString(sep uint8) string {
 		buffer.WriteString(sepstr)
 		buffer.WriteString(k)
 		// This could be removed
-		if strings.ContainsAny(v, abnfWs) {
+		if strings.ContainsAny(v, abnf) {
 			buffer.WriteString("=\"")
 			buffer.WriteString(v)
 			buffer.WriteString("\"")
@@ -140,7 +140,7 @@ func (hp HeaderParams) ToStringWrite(sep uint8, buffer io.StringWriter) {
 			continue
 		}
 		// This could be removed
-		if strings.ContainsAny(v, abnfWs) {
+		if strings.ContainsAny(v, abnf) {
 			buffer.WriteString("=\"")
 			buffer.WriteString(v)
 			buffer.WriteString("\"")

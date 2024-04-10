@@ -85,8 +85,8 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 	if !ok {
 		// We have no registered parser for this header type,
 		// so we encapsulate the header data in a GenericHeader struct.
+		// We do only forwarding on this with trimmed space. Validation and parsing is required by user
 
-		// TODO Should we check for comma here as well ??
 		header := NewHeader(fieldName, fieldText)
 		msg.AppendHeader(header)
 		return nil
@@ -165,7 +165,7 @@ func headerParserCSeq(headerName string, headerText string) (headers Header, err
 
 // parseCSeqHeader parses CSeq header
 func parseCSeqHeader(headerText string, cseq *CSeqHeader) error {
-	ind := strings.IndexAny(headerText, abnfWs)
+	ind := strings.IndexAny(headerText, abnf)
 	if ind < 1 || len(headerText)-ind < 2 {
 		return fmt.Errorf("CSeq field should have precisely one whitespace section: '%s'", headerText)
 	}

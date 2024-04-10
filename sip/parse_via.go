@@ -52,7 +52,7 @@ func viaStateProtocol(h *ViaHeader, s string) (viaFSM, int, error) {
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed protocol name in Via header")
 	}
-	h.ProtocolName = s[:ind]
+	h.ProtocolName = strings.TrimSpace(s[:ind])
 	return viaStateProtocolVersion, ind + 1, nil
 }
 
@@ -61,7 +61,7 @@ func viaStateProtocolVersion(h *ViaHeader, s string) (viaFSM, int, error) {
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed protocol version in Via header")
 	}
-	h.ProtocolVersion = s[:ind]
+	h.ProtocolVersion = strings.TrimSpace(s[:ind])
 	return viaStateProtocolTransport, ind + 1, nil
 }
 
@@ -70,7 +70,7 @@ func viaStateProtocolTransport(h *ViaHeader, s string) (viaFSM, int, error) {
 	if ind < 0 {
 		return nil, 0, errors.New("Malformed transport in Via header")
 	}
-	h.Transport = s[:ind]
+	h.Transport = strings.TrimSpace(s[:ind])
 	return viaStateHost, ind + 1, nil
 }
 
@@ -95,9 +95,9 @@ loop:
 		if err != nil {
 			return nil, 0, nil
 		}
-		h.Host = s[:colonInd]
+		h.Host = strings.TrimSpace(s[:colonInd])
 	} else {
-		h.Host = s[:endIndex]
+		h.Host = strings.TrimSpace(s[:endIndex])
 	}
 
 	if endIndex == len(s) {

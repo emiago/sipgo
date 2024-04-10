@@ -49,6 +49,19 @@ func TestParseHeaders(t *testing.T) {
 		// TODO find better way to compare
 		unordered := header[:strings.Index(header, ";")] + ";branch=" + branch + ";rport"
 		assert.True(t, hstr == header || hstr == unordered, hstr)
+
+		t.Run("tourture", func(t *testing.T) {
+			// Some tourture test
+			header := `Via: SIP  /   2.0
+ /UDP
+	192.0.2.2  ;  branch=390skdjuw`
+			h := testParseHeader(t, parser, header)
+
+			hstr := h.String()
+			assert.Equal(t, "Via: SIP/2.0/UDP 192.0.2.2;branch=390skdjuw", hstr)
+			via := h.(*ViaHeader)
+			assert.Equal(t, "UDP", via.Transport)
+		})
 	})
 
 	t.Run("ToHeader", func(t *testing.T) {
@@ -411,7 +424,7 @@ func TestSIPTortuous(t *testing.T) {
 	rawMsg := []string{
 		`INVITE sip:vivekg@chair-dnrc.example.com;unknownparam SIP/2.0`,
 		`TO :
-sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n`,
+ sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n`,
 		`from   : "J Rosenberg \\\""       <sip:jdrosen@example.com>
 ;
 tag = 98asjd8`,
@@ -421,7 +434,7 @@ tag = 98asjd8`,
 		`cseq: 0009
   INVITE`,
 		`Via  : SIP  /   2.0
-/UDP
+ /UDP
 	192.0.2.2;branch=390skdjuw`,
 		`s :`,
 		`NewFangledHeader:   newfangled value
@@ -429,11 +442,11 @@ tag = 98asjd8`,
 		`UnknownHeaderWithUnusualValue: ;;,,;;,;`,
 		`Content-Type: application/sdp`,
 		`Route:
-<sip:services.example.com;lr;unknownwith=value;unknown-no-value>`,
+ <sip:services.example.com;lr;unknownwith=value;unknown-no-value>`,
 		`v:  SIP  / 2.0  / TCP     spindle.example.com   ;
-branch  =   z9hG4bK9ikj8  ,
-SIP  /    2.0   / UDP  192.168.255.111   ; branch=
-z9hG4bK30239`,
+  branch  =   z9hG4bK9ikj8  ,
+ SIP  /    2.0   / UDP  192.168.255.111   ; branch=
+ z9hG4bK30239`,
 		`m:"Quoted string \"\"" <sip:jdrosen@example.com> ; newparam =
 	newvalue ;
 secondparam ; q = 0.33`,

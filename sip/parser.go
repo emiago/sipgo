@@ -15,7 +15,7 @@ import (
 
 // The whitespace characters recognised by the Augmented Backus-Naur Form syntax
 // that SIP uses (RFC 3261 S.25).
-const abnfWs = " \t"
+const abnf = " \t"
 
 // The maximum permissible CSeq number in a SIP message (2**31 - 1).
 // C.f. RFC 3261 S. 8.1.1.5.
@@ -332,4 +332,36 @@ func parseStatusLine(statusLine string) (
 	reasonPhrase = strings.Join(parts[2:], " ")
 
 	return
+}
+
+func filterABNF(s string) string {
+	b := strings.Builder{}
+	for _, c := range s {
+		c = filterABNFRune(c)
+		if c < 0 {
+			continue
+		}
+		b.WriteRune(c)
+	}
+
+	return b.String()
+}
+
+// From std
+var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}
+
+// https://datatracker.ietf.org/doc/html/rfc3261#section-25.1
+// returns negative rune in case shouldbe skipped
+// TODO need to handle SWS, LWS cases better
+func filterABNFRune(c rune) rune {
+	// We need to detect empty space
+	// LWS (Linear Whitespace).
+	// All linear white space, including folding, has the same meaning as a single space (SP)
+	//
+	// SWS (Separating Whitespace) is used when linear white space is optional, typically between tokens and separators.
+
+	if asciiSpace[c] == 1 {
+		return -1
+	}
+	return c
 }
