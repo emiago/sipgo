@@ -20,6 +20,7 @@ type transportWSS struct {
 }
 
 // newWSSTransport needs dialTLSConf for creating connections when dialing
+// tls.Config must not be nil
 func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
 	tcptrans := newWSTransport(par)
 	tcptrans.transport = TransportWSS

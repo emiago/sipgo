@@ -15,6 +15,9 @@ import (
 )
 
 var (
+	tlsEmptyConf tls.Config
+
+	// Errors
 	ErrTransportNotSuported = errors.New("protocol not supported")
 )
 
@@ -65,6 +68,10 @@ func NewTransportLayer(
 
 	l.log = log.Logger.With().Str("caller", "transportlayer").Logger()
 
+	if tlsConfig == nil {
+		// Use empty tls config
+		tlsConfig = &tlsEmptyConf
+	}
 	// TODO consider this transports are configurable from outside
 	// Make some default transports available.
 	l.udp = newUDPTransport(sipparser)
