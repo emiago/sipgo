@@ -30,12 +30,22 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
 		return uriStateUser, s[4:], nil
-	} else if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
+	}
+
+	if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
 		uri.Encrypted = true
 		return uriStateUser, s[5:], nil
-	} else {
-		return uriStateUser, s, nil
 	}
+
+	if s == "*" {
+		// Normally this goes under url path, but we set on host
+		uri.Host = "*"
+		uri.Wildcard = true
+		return nil, "", nil
+	}
+
+	// return nil, "", errors.New("missing protocol scheme")
+	return uriStateUser, s, nil
 }
 
 func uriStateUser(uri *Uri, s string) (uriFSM, string, error) {
@@ -89,6 +99,8 @@ func uriStateHost(uri *Uri, s string) (uriFSM, string, error) {
 	}
 	// If no special chars found, it means we are at end
 	uri.Host = s
+	// Check is this wildcard
+	uri.Wildcard = s == "*"
 	return uriStateUriParams, "", nil
 }
 
