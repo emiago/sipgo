@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseAddressValue(t *testing.T) {
-	t.Run("All", func(t *testing.T) {
+	t.Run("all", func(t *testing.T) {
 		address := "\"Bob\" <sips:bob:password@127.0.0.1:5060;user=phone>;tag=1234"
 
 		uri := Uri{}
@@ -35,7 +35,7 @@ func TestParseAddressValue(t *testing.T) {
 
 	})
 
-	t.Run("NoDisplayName", func(t *testing.T) {
+	t.Run("no display name", func(t *testing.T) {
 		address := "sip:1215174826@222.222.222.222;tag=9300025590389559597"
 		uri := Uri{}
 		params := NewParams()
@@ -48,7 +48,7 @@ func TestParseAddressValue(t *testing.T) {
 		assert.Equal(t, false, uri.Encrypted)
 	})
 
-	t.Run("Wildcard", func(t *testing.T) {
+	t.Run("wildcard", func(t *testing.T) {
 		address := "*"
 		uri := Uri{}
 		params := NewParams()
