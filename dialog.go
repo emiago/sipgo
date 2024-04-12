@@ -1,6 +1,7 @@
 package sipgo
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 
@@ -26,7 +27,9 @@ type Dialog struct {
 	state   atomic.Int32
 	stateCh chan sip.DialogState
 
-	done chan struct{}
+	//
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func (d *Dialog) Body() []byte {
@@ -46,7 +49,7 @@ func (d *Dialog) setState(s sip.DialogState) {
 	}
 
 	if s == sip.DialogStateEnded {
-		close(d.done) // Broadcasting done
+		d.cancel()
 	}
 }
 
@@ -54,6 +57,14 @@ func (d *Dialog) State() <-chan sip.DialogState {
 	return d.stateCh
 }
 
+// Done is signaled when dialog state ended
+//
+// Deprecated:
+// It is wrapper on context, so better to use Context()
 func (d *Dialog) Done() <-chan struct{} {
-	return d.done
+	return d.ctx.Done()
+}
+
+func (d *Dialog) Context() context.Context {
+	return d.ctx
 }

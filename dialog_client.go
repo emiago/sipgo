@@ -82,12 +82,14 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 		return nil, err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	dtx := &DialogClientSession{
 		Dialog: Dialog{
 			InviteRequest: inviteRequest,
 			state:         atomic.Int32{},
 			stateCh:       make(chan sip.DialogState, 3),
-			done:          make(chan struct{}),
+			ctx:           ctx,
+			cancel:        cancel,
 		},
 		dc:       dc,
 		inviteTx: tx,

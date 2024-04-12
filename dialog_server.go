@@ -49,12 +49,14 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 		return nil, ErrDialogInviteNoContact
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			InviteRequest: req,
 			state:         atomic.Int32{},
 			stateCh:       make(chan sip.DialogState, 3),
-			done:          make(chan struct{}),
+			ctx:           ctx,
+			cancel:        cancel,
 		},
 		inviteTx: tx,
 		s:        s,
