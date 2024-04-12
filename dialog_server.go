@@ -179,8 +179,17 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	if !res.IsSuccess() {
-		// This will not create dialog so we will just respond
-		return tx.Respond(res)
+		if res.IsProvisional() {
+			// This will not create dialog so we will just respond
+			return tx.Respond(res)
+		}
+
+		// For final response we want to set dialog ended state
+		if err := tx.Respond(res); err != nil {
+			return err
+		}
+		s.setState(sip.DialogStateEnded)
+		return nil
 	}
 
 	id, err := sip.MakeDialogIDFromResponse(res)
