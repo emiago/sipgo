@@ -246,7 +246,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg.Respond(sip.StatusOK, "OK", nil)
     
     // Instead Done also dlg.State() can be used for granular state checking
-    <-dlg.Done()
+    <-dlg.Context().Done()
 })
 
 srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
