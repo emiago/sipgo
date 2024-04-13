@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testCreateMessage(t testing.TB, rawMsg []string) Message {
@@ -30,6 +33,24 @@ func testCreateInvite(t testing.TB, targetSipUri string, transport, fromAddr str
 		"",
 		"",
 	}).(*Request), callid, ftag
+}
+
+func TestResolveInterfaceIP(t *testing.T) {
+	ip, iface, err := ResolveInterfacesIP("ip4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ip)
+
+	t.Log(ip.String(), len(ip), iface.Name)
+	assert.False(t, ip.IsLoopback())
+	assert.NotNil(t, ip.To4())
+
+	ip, iface, err = ResolveInterfacesIP("ip6", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ip)
+
+	t.Log(ip.String(), len(ip), iface.Name)
+	assert.False(t, ip.IsLoopback())
+	assert.NotNil(t, ip.To16())
 }
 
 func BenchmarkHeaderToLower(b *testing.B) {

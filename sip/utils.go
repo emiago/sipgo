@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"reflect"
@@ -210,42 +211,84 @@ func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
 	return -1
 }
 
-// Forked from github.com/StefanKopieczek/gossip by @StefanKopieczek
+// ResolveSelfIP returns first non loopback IP
+//
+// Deprecated use ResolveInterfacesIP
 func ResolveSelfIP() (net.IP, error) {
+	ip, _, err := ResolveInterfacesIP("ip4", nil)
+	return ip, err
+}
+
+// ResolveInterfaceIP will check current interfaces and resolve to IP
+// Using targetIP it will try to match interface with same subnet
+// network can be "ip" "ip4" "ip6"
+// by default it avoids loopack IP unless targetIP is loopback
+func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return nil, err
+		return nil, net.Interface{}, err
 	}
+
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
 			continue // interface down
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
-			continue // loopback interface
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			return nil, err
-		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
+			if targetIP != nil && targetIP.IsLoopback() {
+				continue // loopback interface
 			}
-			if ip == nil || ip.IsLoopback() {
-				continue
-			}
+		}
+
+		ip, err := resolveInterfaceIp(iface, network, targetIP)
+		if errors.Is(err, io.EOF) {
+			continue
+		}
+		return ip, iface, err
+	}
+
+	return nil, net.Interface{}, errors.New("no interface found on system")
+}
+
+func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (net.IP, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			// IPAddr is returned on multicast not on unicast
+			continue
+		}
+
+		if targetIP != nil && !ipNet.Contains(targetIP) {
+			continue
+		}
+
+		ip = ipNet.IP
+
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+
+		if network == "ip4" {
 			ip = ip.To4()
 			if ip == nil {
 				continue // not an ipv4 address
 			}
-			return ip, nil
 		}
+
+		if network == "ip6" {
+			ip = ip.To16()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+		}
+
+		return ip, nil
 	}
-	return nil, errors.New("server not connected to any network")
+	return nil, io.EOF
 }
 
 func NonceWrite(buf []byte) {
