@@ -19,9 +19,11 @@ type Dialog struct {
 	ID string
 
 	// InviteRequest is set when dialog is created. It is not thread safe!
+	// Use it only as read only and use methods to change headers
 	InviteRequest *sip.Request
 
 	// InviteResponse is last response received or sent. It is not thread safe!
+	// Use it only as read only and do not change values
 	InviteResponse *sip.Response
 
 	state   atomic.Int32

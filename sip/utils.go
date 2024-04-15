@@ -272,18 +272,16 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 			continue
 		}
 
-		if network == "ip4" {
+		switch network {
+		case "ip4":
 			ip = ip.To4()
-			if ip == nil {
-				continue // not an ipv4 address
-			}
+
+		case "ip6":
+			ip = ip.To16()
 		}
 
-		if network == "ip6" {
-			ip = ip.To16()
-			if ip == nil {
-				continue // not an ipv4 address
-			}
+		if ip == nil {
+			continue // not an ipv4 address
 		}
 
 		return ip, nil
