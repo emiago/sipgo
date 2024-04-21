@@ -76,9 +76,12 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		}
 
 		if c == ';' {
+			if startQuote > 0 {
+				continue
+			}
 			// detect early
 			// uri can be without <> in that case there all after ; are header params
-			return addressStateUri, s[:i], nil
+			return addressStateUri, s, nil
 		}
 	}
 

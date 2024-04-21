@@ -21,7 +21,8 @@ const (
 	StatusQueued            StatusCode = 182
 	StatusSessionInProgress StatusCode = 183
 
-	StatusOK StatusCode = 200
+	StatusOK       StatusCode = 200
+	StatusAccepted StatusCode = 202
 
 	StatusMovedPermanently StatusCode = 301
 	StatusMovedTemporarily StatusCode = 302

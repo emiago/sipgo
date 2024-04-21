@@ -71,6 +71,15 @@ func TestParseHeaders(t *testing.T) {
 		hstr := h.String()
 		unordered := header[:strings.Index(header, ";")] + ";yyyy=yyyy;xxx=xxx"
 		assert.True(t, hstr == header || hstr == unordered, hstr)
+
+		// Test short version
+		header = "t: sip:alice@localhost;tag=4kRDkjpU3xxLzmIHPn2646xwZVNeLPUM"
+		req, _ := testParseHeaderOnRequest(t, parser, header)
+
+		h = req.GetHeader("To")
+		require.NotNil(t, h)
+		hstr = h.String()
+		assert.True(t, hstr == "To: <sip:alice@localhost>;tag=4kRDkjpU3xxLzmIHPn2646xwZVNeLPUM", hstr)
 	})
 
 	t.Run("FromHeader", func(t *testing.T) {
@@ -79,6 +88,15 @@ func TestParseHeaders(t *testing.T) {
 
 		hstr := h.String()
 		assert.True(t, hstr == header, hstr)
+
+		// Test short version
+		header = "f: sip:alice@localhost;tag=4kRDkjpU3xxLzmIHPn2646xwZVNeLPUM"
+		req, _ := testParseHeaderOnRequest(t, parser, header)
+
+		h = req.GetHeader("From")
+		require.NotNil(t, h)
+		hstr = h.String()
+		assert.True(t, hstr == "From: <sip:alice@localhost>;tag=4kRDkjpU3xxLzmIHPn2646xwZVNeLPUM", hstr)
 	})
 
 	t.Run("ContactHeader", func(t *testing.T) {
