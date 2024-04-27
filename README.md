@@ -19,9 +19,7 @@ Fetch lib with:
 
 **NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
-*To keep project development you can* [support it](https://ko-fi.com/emiasupport) 
-
-*Also, if you are using lib in any way, let us known, we would like to share it here.*
+*If you like/use project currently or need additional help/support checkout [Support section](#support) 
 
 
 You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
@@ -62,6 +60,10 @@ To find out more about performance check the latest results:
 <a href="https://www.babelforce.com">
 <img src="icons/babelforce-logo.png" width="300" alt="babelforce">
 </a>
+
+
+---
+*If you are using in company, your logo can be here.*
 
 # Usage
 
@@ -332,7 +334,9 @@ This unfortunately required many design changes, therefore this libraries are no
 
 ## Support
 
-If you find this project interesting for bigger support or contributing, you can contact me on
-[mail](emirfreelance91@gmail.com) 
+If you find this project interesting for bigger support or consulting, you can contact me on
+[mail](emirfreelance91@gmail.com)
+
+*You can buy me a coffee in meantime on* [ko-fi.com/emiasupport](https://ko-fi.com/emiasupport) 
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
