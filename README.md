@@ -9,9 +9,9 @@
 **SIPGO** is library for writing fast SIP services in GO language.  
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)) optimized for fast parsing.
 
-For experimental features checkout also   
+For extra functionality checkout also   
 [github.com/emiago/sipgox](https://github.com/emiago/sipgox)
-It adds media, call, dialog creation on top of sipgo more easily.
+It adds *media, rtp, sdp, softphone* creation on top of sipgo more easily.
 
 Fetch lib with:
 
