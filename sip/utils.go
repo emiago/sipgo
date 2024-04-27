@@ -234,7 +234,7 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 			continue // interface down
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
-			if targetIP != nil && targetIP.IsLoopback() {
+			if targetIP != nil && !targetIP.IsLoopback() {
 				continue // loopback interface
 			}
 		}
@@ -261,14 +261,18 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 			// IPAddr is returned on multicast not on unicast
 			continue
 		}
-
-		if targetIP != nil && !ipNet.Contains(targetIP) {
-			continue
+		ip = ipNet.IP
+		if targetIP != nil {
+			if !ipNet.Contains(targetIP) {
+				continue
+			}
+		} else {
+			if ip.IsLoopback() {
+				continue
+			}
 		}
 
-		ip = ipNet.IP
-
-		if ip == nil || ip.IsLoopback() {
+		if ip == nil {
 			continue
 		}
 

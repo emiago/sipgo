@@ -2,6 +2,7 @@ package sip
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,10 @@ func TestResolveInterfaceIP(t *testing.T) {
 	t.Log(ip.String(), len(ip), iface.Name)
 	assert.False(t, ip.IsLoopback())
 	assert.NotNil(t, ip.To16())
+
+	ip, iface, err = ResolveInterfacesIP("ip4", net.ParseIP("127.0.0.1"))
+	require.NoError(t, err)
+	require.NotNil(t, ip)
 }
 
 func BenchmarkHeaderToLower(b *testing.B) {
