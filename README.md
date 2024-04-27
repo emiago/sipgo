@@ -25,6 +25,8 @@ Fetch lib with:
 You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
 
 
+More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
+
 ## Supported protocols
 
 - [x] UDP
@@ -307,20 +309,26 @@ Server: Asterisk PBX 18.16.0
 Content-Length:  0
 ```
 
+## Support
 
-## Documentation
-More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
+If you find this project interesting for bigger support or consulting, you can contact me on
+[mail](emirfreelance91@gmail.com)
+
+*You can buy me a coffee in meantime on* [ko-fi.com/emiasupport](https://ko-fi.com/emiasupport) 
+
+For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
 
 
-## E2E/integration testing
+## Extra
+
+
+### E2E/integration testing
 
 If you are interested using lib for your testing services then checkout 
 [article on how easy you can make calls and other](https://github.com/emiago/sipgo/wiki/E2E-testing)
 
 
-## Tests
-
-Coverage: 36.7%
+### Tests
 
 Library will be covered with more tests. Focus is more on benchmarking currently.
 ```
@@ -332,11 +340,3 @@ go test ./...
 This project was influenced by [gosip](https://github.com/ghettovoice/gosip), project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
 This unfortunately required many design changes, therefore this libraries are not compatible.
 
-## Support
-
-If you find this project interesting for bigger support or consulting, you can contact me on
-[mail](emirfreelance91@gmail.com)
-
-*You can buy me a coffee in meantime on* [ko-fi.com/emiasupport](https://ko-fi.com/emiasupport) 
-
-For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
