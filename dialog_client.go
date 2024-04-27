@@ -86,6 +86,7 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 	dtx := &DialogClientSession{
 		Dialog: Dialog{
 			InviteRequest: inviteRequest,
+			lastCSeqNo:    inviteRequest.CSeq().SeqNo,
 			state:         atomic.Int32{},
 			stateCh:       make(chan sip.DialogState, 3),
 			ctx:           ctx,
@@ -130,6 +131,55 @@ type DialogClientSession struct {
 	Dialog
 	dc       *DialogClient
 	inviteTx sip.ClientTransaction
+}
+
+// TransactionRequest is doing client DIALOG request based on RFC
+// https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
+// This ensures that you have proper request done within dialog
+func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	cseq := req.CSeq()
+	if cseq == nil {
+		cseq = &sip.CSeqHeader{
+			SeqNo:      s.InviteRequest.CSeq().SeqNo,
+			MethodName: req.Method,
+		}
+		req.AppendHeader(cseq)
+	}
+
+	// For safety make sure we are starting with our last dialog cseq num
+	cseq.SeqNo = s.lastCSeqNo
+
+	if !req.IsAck() && !req.IsCancel() {
+		// Do cseq increment within dialog
+		cseq.SeqNo = s.lastCSeqNo + 1
+	}
+
+	// Check record route header
+	if s.InviteResponse != nil {
+		cont := s.InviteResponse.Contact()
+		if cont != nil {
+			req.Recipient = cont.Address
+		}
+
+		if rr := s.InviteResponse.RecordRoute(); rr != nil {
+			req.SetDestination(rr.Address.HostPort())
+		}
+	}
+
+	s.lastCSeqNo = cseq.SeqNo
+	// Passing option to avoid CSEQ apply
+	return s.dc.c.TransactionRequest(ctx, req, ClientRequestBuild)
+}
+
+func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
+	// Check Record-Route Header
+	if s.InviteResponse != nil {
+		// Record Route handling
+		if rr := s.InviteResponse.RecordRoute(); rr != nil {
+			req.SetDestination(rr.Address.HostPort())
+		}
+	}
+	return s.dc.c.WriteRequest(req)
 }
 
 // Close must be always called in order to cleanup some internal resources
@@ -245,12 +295,7 @@ func (s *DialogClientSession) Ack(ctx context.Context) error {
 }
 
 func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) error {
-	// Check Record-Route Header
-	if rr := s.InviteResponse.RecordRoute(); rr != nil {
-		ack.SetDestination(rr.Address.HostPort())
-	}
-
-	if err := s.dc.c.WriteRequest(ack); err != nil {
+	if err := s.WriteRequest(ack); err != nil {
 		// Make sure we close our error
 		// s.Close()
 		return err
@@ -266,7 +311,6 @@ func (s *DialogClientSession) Bye(ctx context.Context) error {
 }
 
 func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) error {
-	dc := s.dc
 	defer s.Close()
 
 	state := s.state.Load()
@@ -280,12 +324,7 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		return fmt.Errorf("Dialog not confirmed. ACK not send?")
 	}
 
-	// Check Record-Route Header
-	if rr := s.InviteResponse.RecordRoute(); rr != nil {
-		bye.SetDestination(rr.Address.HostPort())
-	}
-
-	tx, err := dc.c.TransactionRequest(ctx, bye)
+	tx, err := s.TransactionRequest(ctx, bye)
 	if err != nil {
 		return err
 	}
@@ -399,7 +438,6 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	}
 
 	cseq := byeRequest.CSeq()
-	cseq.SeqNo = cseq.SeqNo + 1
 	cseq.MethodName = sip.BYE
 
 	byeRequest.SetBody(body)

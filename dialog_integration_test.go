@@ -60,10 +60,18 @@ func TestIntegrationDialog(t *testing.T) {
 	})
 
 	srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
+		if req.Recipient.Addr() != uasContact.Address.Addr() {
+			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Not valid SIP uri", nil))
+			return
+		}
 		dialogSrv.ReadAck(req, tx)
 	})
 
 	srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+		if req.Recipient.Addr() != uasContact.Address.Addr() {
+			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Not valid SIP uri", nil))
+			return
+		}
 		dialogSrv.ReadBye(req, tx)
 	})
 

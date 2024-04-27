@@ -53,6 +53,7 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			InviteRequest: req,
+			lastCSeqNo:    req.CSeq().SeqNo,
 			state:         atomic.Int32{},
 			stateCh:       make(chan sip.DialogState, 3),
 			ctx:           ctx,
@@ -107,6 +108,14 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		// }
 		return ErrDialogDoesNotExists
 	}
+	// Make sure this is bye for this dialog
+	if req.CSeq().SeqNo != (dt.lastCSeqNo + 1) {
+		res := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Cseq is incorect", nil)
+		if err := tx.Respond(res); err != nil {
+			return err
+		}
+	}
+
 	defer dt.Close()
 	defer dt.inviteTx.Terminate() // Terminates Invite transaction
 
@@ -124,6 +133,67 @@ type DialogServerSession struct {
 	Dialog
 	inviteTx sip.ServerTransaction
 	s        *DialogServer
+}
+
+// TransactionRequest is doing client DIALOG request based on RFC
+// https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
+// This ensures that you have proper request done within dialog
+func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	cseq := req.CSeq()
+	if cseq == nil {
+		cseq = &sip.CSeqHeader{
+			SeqNo:      s.InviteRequest.CSeq().SeqNo,
+			MethodName: req.Method,
+		}
+		req.AppendHeader(cseq)
+	}
+
+	// For safety make sure we are starting with our last dialog cseq num
+	cseq.SeqNo = s.lastCSeqNo
+
+	if !req.IsAck() && !req.IsCancel() {
+		// Do cseq increment within dialog
+		cseq.SeqNo = s.lastCSeqNo + 1
+	}
+
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
+	hdrs := req.GetHeaders("Record-Route")
+	for i := len(hdrs) - 1; i >= 0; i-- {
+		recordRoute := hdrs[i]
+		req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
+	}
+
+	// Check Route Header
+	// Should be handled by transport layer but here we are making this explicit
+	if rr := req.Route(); rr != nil {
+		req.SetDestination(rr.Address.HostPort())
+	}
+
+	// TODO check correct behavior strict routing vs loose routing
+	// recordRoute := req.RecordRoute()
+	// if recordRoute != nil {
+	// 	if recordRoute.Address.UriParams.Has("lr") {
+	// 		bye.AppendHeader(&sip.RouteHeader{Address: recordRoute.Address})
+	// 	} else {
+	// 		/* TODO
+	// 		   If the route set is not empty, and its first URI does not contain the
+	// 		   lr parameter, the UAC MUST place the first URI from the route set
+	// 		   into the Request-URI, stripping any parameters that are not allowed
+	// 		   in a Request-URI.  The UAC MUST add a Route header field containing
+	// 		   the remainder of the route set values in order, including all
+	// 		   parameters.  The UAC MUST then place the remote target URI into the
+	// 		   Route header field as the last value.
+	// 		*/
+	// 	}
+	// }
+
+	s.lastCSeqNo = cseq.SeqNo
+	// Passing option to avoid CSEQ apply
+	return s.s.c.TransactionRequest(ctx, req, ClientRequestBuild)
+}
+
+func (s *DialogServerSession) WriteRequest(req *sip.Request) error {
+	return s.s.c.WriteRequest(req)
 }
 
 // Close is always good to call for cleanup or terminating dialog state
@@ -221,7 +291,10 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return nil
 	}
 
-	cli := s.s.c
+	if sip.DialogState(state) != sip.DialogStateConfirmed {
+		return nil
+	}
+
 	req := s.Dialog.InviteRequest
 	res := s.Dialog.InviteResponse
 
@@ -265,12 +338,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return fmt.Errorf("non matching ID %q %q", s.ID, byeID)
 	}
 
-	// Check Route Header
-	if rr := bye.Route(); rr != nil {
-		bye.SetDestination(rr.Address.HostPort())
-	}
-
-	tx, err := cli.TransactionRequest(ctx, bye)
+	tx, err := s.TransactionRequest(ctx, bye)
 	if err != nil {
 		return err
 	}
@@ -321,31 +389,6 @@ func newByeRequestUAS(req *sip.Request, res *sip.Response) *sip.Request {
 	bye.AppendHeader(newFrom)
 	bye.AppendHeader(newTo)
 	bye.AppendHeader(callid)
-
-	// TODO check correct behavior strict routing vs loose routing
-	// recordRoute := req.RecordRoute()
-	// if recordRoute != nil {
-	// 	if recordRoute.Address.UriParams.Has("lr") {
-	// 		bye.AppendHeader(&sip.RouteHeader{Address: recordRoute.Address})
-	// 	} else {
-	// 		/* TODO
-	// 		   If the route set is not empty, and its first URI does not contain the
-	// 		   lr parameter, the UAC MUST place the first URI from the route set
-	// 		   into the Request-URI, stripping any parameters that are not allowed
-	// 		   in a Request-URI.  The UAC MUST add a Route header field containing
-	// 		   the remainder of the route set values in order, including all
-	// 		   parameters.  The UAC MUST then place the remote target URI into the
-	// 		   Route header field as the last value.
-	// 		*/
-	// 	}
-	// }
-
-	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
-	hdrs := req.GetHeaders("Record-Route")
-	for i := len(hdrs) - 1; i >= 0; i-- {
-		recordRoute := hdrs[i]
-		bye.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
-	}
 
 	return bye
 }

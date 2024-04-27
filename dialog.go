@@ -22,6 +22,9 @@ type Dialog struct {
 	// Use it only as read only and use methods to change headers
 	InviteRequest *sip.Request
 
+	// lastCSeqNo is set for every request within dialog except ACK CANCEL
+	lastCSeqNo uint32
+
 	// InviteResponse is last response received or sent. It is not thread safe!
 	// Use it only as read only and do not change values
 	InviteResponse *sip.Response

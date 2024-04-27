@@ -108,9 +108,9 @@ func (c *Client) GetHostname() string {
 }
 
 // TransactionRequest uses transaction layer to send request and returns transaction
-// NOTE: By default request will not be cloned and it will populate request with missing headers unless options are used
 //
-//	In most cases you want this as you will retry with additional headers
+// NOTE: By default request will not be cloned and it will populate request with missing headers unless options are used
+// In most cases you want this as you will retry with additional headers
 //
 // Following header fields will be added if not exist to have correct SIP request:
 // To, From, CSeq, Call-ID, Max-Forwards, Via
