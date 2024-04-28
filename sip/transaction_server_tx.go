@@ -8,8 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type FSMfunc func() FSMfunc
-
 type ServerTx struct {
 	commonTx
 	lastAck      *Request
@@ -243,6 +241,9 @@ func (tx *ServerTx) initFSM() {
 		tx.fsmState = tx.stateTrying
 	}
 	tx.fsmMu.Unlock()
+}
+
+func (tx *ServerTx) State() {
 }
 
 func (tx *ServerTx) delete() {

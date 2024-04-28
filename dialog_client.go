@@ -36,6 +36,19 @@ func (s *DialogClient) loadDialog(id string) *DialogClientSession {
 	return t
 }
 
+func (s *DialogClient) MatchDialogRequest(req *sip.Request) (*DialogClientSession, error) {
+	id, err := sip.UACReadRequestDialogID(req)
+	if err != nil {
+		return nil, errors.Join(err, ErrDialogOutsideDialog)
+	}
+
+	dt := s.loadDialog(id)
+	if dt == nil {
+		return nil, ErrDialogDoesNotExists
+	}
+	return dt, nil
+}
+
 // NewDialogClient provides handle for managing UAC dialog
 // Contact hdr must be provided for correct invite
 // In case handling different transports you should have multiple instances per transport
@@ -59,7 +72,7 @@ func (e ErrDialogResponse) Error() string {
 // Invite sends INVITE request and creates early dialog session.
 // You need to call WaitAnswer after for establishing dialog
 // For passing custom Invite request use WriteInvite
-func (dc *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
+func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
 	req := sip.NewRequest(sip.INVITE, recipient)
 	if body != nil {
 		req.SetBody(body)
@@ -68,13 +81,13 @@ func (dc *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []by
 	for _, h := range headers {
 		req.AppendHeader(h)
 	}
-	return dc.WriteInvite(ctx, req)
+	return c.WriteInvite(ctx, req)
 }
 
-func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
-	cli := dc.c
+func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+	cli := c.c
 
-	inviteRequest.AppendHeader(&dc.contactHDR)
+	inviteRequest.AppendHeader(&c.contactHDR)
 
 	// TODO passing client transaction options is now hidden
 	tx, err := cli.TransactionRequest(ctx, inviteRequest)
@@ -92,23 +105,17 @@ func (dc *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Requ
 			ctx:           ctx,
 			cancel:        cancel,
 		},
-		dc:       dc,
+		dc:       c,
 		inviteTx: tx,
 	}
 
 	return dtx, nil
 }
 
-func (dc *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	callid := req.CallID()
-	from := req.From()
-	to := req.To()
-
-	id := sip.MakeDialogID(callid.Value(), from.Params["tag"], to.Params["tag"])
-
-	dt := dc.loadDialog(id)
-	if dt == nil {
-		return fmt.Errorf("callid=%q: %w", callid.Value(), ErrDialogDoesNotExists)
+func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
+	dt, err := c.MatchDialogRequest(req)
+	if err != nil {
+		return err
 	}
 
 	dt.setState(sip.DialogStateEnded)

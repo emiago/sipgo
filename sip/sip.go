@@ -63,37 +63,44 @@ func DefaultPort(transport string) int {
 	}
 }
 
-func MakeDialogIDFromRequest(msg *Request) (string, error) {
-	var callID, innerID, externalID string = "", "", ""
-	if err := getDialogIDFromMessage(msg, &callID, &innerID, &externalID); err != nil {
-		return "", err
-	}
-	return MakeDialogID(callID, innerID, externalID), nil
-}
-
-func MakeDialogIDFromResponse(msg *Response) (string, error) {
-	var callID, innerID, externalID string = "", "", ""
-	// TODO switching this fields make no sense?
-	if err := getDialogIDFromMessage(msg, &callID, &innerID, &externalID); err != nil {
-		return "", err
-	}
-	return MakeDialogID(callID, innerID, externalID), nil
-}
-
 // MakeDialogIDFromMessage creates dialog ID of message.
+// Use UASReadRequestDialogID UACReadRequestDialogID for more specific
 // returns error if callid or to tag or from tag does not exists
-// Deprecated! Will be removed
-func MakeDialogIDFromMessage(msg Message) (string, error) {
-	switch m := msg.(type) {
-	case *Request:
-		return MakeDialogIDFromRequest(m)
-	case *Response:
-		return MakeDialogIDFromResponse(m)
-	}
-	return "", fmt.Errorf("unknown message format")
+func MakeDialogIDFromRequest(msg *Request) (string, error) {
+	return UASReadRequestDialogID(msg)
 }
 
-func getDialogIDFromMessage(msg Message, callId, innerId, externalId *string) error {
+// MakeDialogIDFromResponse creates dialog ID of message.
+// returns error if callid or to tag or from tag does not exists
+func MakeDialogIDFromResponse(msg *Response) (string, error) {
+	var callID, toTag, fromTag string = "", "", ""
+	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
+		return "", err
+	}
+	return MakeDialogID(callID, toTag, fromTag), nil
+}
+
+// UASReadRequestDialogID creates dialog ID of message if receiver has UAS role.
+// returns error if callid or to tag or from tag does not exists
+func UASReadRequestDialogID(msg *Request) (string, error) {
+	var callID, toTag, fromTag string = "", "", ""
+	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
+		return "", err
+	}
+	return MakeDialogID(callID, toTag, fromTag), nil
+}
+
+// UACReadRequestDialogID creates dialog ID of message if receiver has UAC role.
+// returns error if callid or to tag or from tag does not exists
+func UACReadRequestDialogID(msg *Request) (string, error) {
+	var callID, toTag, fromTag string = "", "", ""
+	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
+		return "", err
+	}
+	return MakeDialogID(callID, fromTag, toTag), nil
+}
+
+func getDialogIDFromMessage(msg Message, callId, toHeaderTag, fromHeaderTag *string) error {
 	callID := msg.CallID()
 	if callID == nil {
 		return fmt.Errorf("missing Call-ID header")
@@ -119,11 +126,11 @@ func getDialogIDFromMessage(msg Message, callId, innerId, externalId *string) er
 		return fmt.Errorf("missing tag param in From header")
 	}
 	*callId = string(*callID)
-	*innerId = toTag
-	*externalId = fromTag
+	*toHeaderTag = toTag
+	*fromHeaderTag = fromTag
 	return nil
 }
 
 func MakeDialogID(callID, innerID, externalID string) string {
-	return strings.Join([]string{callID, innerID, externalID}, "__")
+	return strings.Join([]string{callID, innerID, externalID}, TxSeperator)
 }

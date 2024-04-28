@@ -27,6 +27,19 @@ func (s *DialogServer) loadDialog(id string) *DialogServerSession {
 	return t
 }
 
+func (s *DialogServer) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
+	id, err := sip.UASReadRequestDialogID(req)
+	if err != nil {
+		return nil, errors.Join(ErrDialogOutsideDialog, err)
+	}
+
+	dt := s.loadDialog(id)
+	if dt == nil {
+		return nil, ErrDialogDoesNotExists
+	}
+	return dt, nil
+}
+
 // NewDialogServer provides handle for managing UAS dialog
 // Contact hdr must be provided for responses
 // Client is needed for termination dialog session
@@ -68,36 +81,21 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 
 // ReadAck should read from your OnAck handler
 func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
-	id, err := sip.MakeDialogIDFromRequest(req)
+	dt, err := s.MatchDialogRequest(req)
 	if err != nil {
-		return errors.Join(ErrDialogOutsideDialog, err)
-	}
-
-	dt := s.loadDialog(id)
-	if dt == nil {
-		// res := sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil)
-		// if err := tx.Respond(res); err != nil {
-		// 	return err
-		// }
-		return ErrDialogDoesNotExists
+		return err
 	}
 
 	dt.setState(sip.DialogStateConfirmed)
-
 	// Acks are normally just absorbed, but in case of proxy
 	// they still need to be passed
 	return nil
 }
 
-// ReadAck should read from your OnBye handler
+// ReadBye should read from your OnBye handler
 func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	id, err := sip.MakeDialogIDFromRequest(req)
+	dt, err := s.MatchDialogRequest(req)
 	if err != nil {
-		return err
-	}
-
-	dt := s.loadDialog(id)
-	if dt == nil {
 		// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.2
 		// If the BYE does not
 		//    match an existing dialog, the UAS core SHOULD generate a 481
@@ -106,7 +104,7 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		// if err := tx.Respond(res); err != nil {
 		// 	return err
 		// }
-		return ErrDialogDoesNotExists
+		return err
 	}
 	// Make sure this is bye for this dialog
 	if req.CSeq().SeqNo != (dt.lastCSeqNo + 1) {
