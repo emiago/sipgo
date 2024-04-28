@@ -36,7 +36,7 @@ func (s *DialogClient) loadDialog(id string) *DialogClientSession {
 	return t
 }
 
-func (s *DialogClient) MatchDialogRequest(req *sip.Request) (*DialogClientSession, error) {
+func (s *DialogClient) matchDialogRequest(req *sip.Request) (*DialogClientSession, error) {
 	id, err := sip.UACReadRequestDialogID(req)
 	if err != nil {
 		return nil, errors.Join(err, ErrDialogOutsideDialog)
@@ -113,7 +113,7 @@ func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Reque
 }
 
 func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := c.MatchDialogRequest(req)
+	dt, err := c.matchDialogRequest(req)
 	if err != nil {
 		return err
 	}

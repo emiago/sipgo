@@ -32,7 +32,6 @@ type Dialog struct {
 	state   atomic.Int32
 	stateCh chan sip.DialogState
 
-	//
 	ctx    context.Context
 	cancel context.CancelFunc
 }

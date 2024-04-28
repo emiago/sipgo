@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
+	uuid "github.com/satori/go.uuid"
 )
 
 type DialogServer struct {
@@ -27,7 +28,7 @@ func (s *DialogServer) loadDialog(id string) *DialogServerSession {
 	return t
 }
 
-func (s *DialogServer) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
+func (s *DialogServer) matchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
 	id, err := sip.UASReadRequestDialogID(req)
 	if err != nil {
 		return nil, errors.Join(ErrDialogOutsideDialog, err)
@@ -62,9 +63,22 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 		return nil, ErrDialogInviteNoContact
 	}
 
+	// Prebuild already to tag for response as it must be same for all responds
+	// NewResponseFromRequest will skip this for all 100
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return nil, fmt.Errorf("generating dialog to tag failed: %w", err)
+	}
+	req.To().Params["tag"] = uuid.String()
+	id, err := sip.UASReadRequestDialogID(req)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
+			ID:            id, // this id has already prebuilt tag
 			InviteRequest: req,
 			lastCSeqNo:    req.CSeq().SeqNo,
 			state:         atomic.Int32{},
@@ -81,7 +95,7 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 
 // ReadAck should read from your OnAck handler
 func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.MatchDialogRequest(req)
+	dt, err := s.matchDialogRequest(req)
 	if err != nil {
 		return err
 	}
@@ -94,7 +108,7 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 
 // ReadBye should read from your OnBye handler
 func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.MatchDialogRequest(req)
+	dt, err := s.matchDialogRequest(req)
 	if err != nil {
 		// https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.2
 		// If the BYE does not
@@ -267,7 +281,9 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return err
 	}
 
-	s.Dialog.ID = id
+	if id != s.Dialog.ID {
+		return fmt.Errorf("ID do not match. Invite request has changed headers?")
+	}
 
 	// We need to make dialog present as ACK can land immediately after
 	s.s.dialogs.Store(id, s)

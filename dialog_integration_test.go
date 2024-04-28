@@ -109,6 +109,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
+			defer sess.Close()
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
 			require.NoError(t, err)
@@ -127,6 +128,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
+			defer sess.Close()
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
 			require.NoError(t, err)
@@ -228,6 +230,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
+			defer sess.Close()
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
 			require.NoError(t, err)
@@ -249,6 +252,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
+			defer sess.Close()
 
 			err = sess.WaitAnswer(ctx, AnswerOptions{})
 			require.NoError(t, err)
@@ -278,5 +282,5 @@ func startTestServer(ctx context.Context, srv *Server, hostPort string) {
 	)
 	// Wait server to be ready
 	<-srvReady
-	time.Sleep(200 * time.Millisecond) // just to avoid race with listeners on UDP
+	time.Sleep(500 * time.Millisecond) // just to avoid race with listeners on UDP
 }
