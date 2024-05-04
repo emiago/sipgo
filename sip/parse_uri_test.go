@@ -67,6 +67,15 @@ func TestParseUri(t *testing.T) {
 
 	})
 
+	t.Run("with sip scheme slashes", func(t *testing.T) {
+		// No scheme we currently allow
+		uri = Uri{}
+		str = "sip://alice@localhost:5060"
+		err = ParseUri(str, &uri)
+		require.NoError(t, err)
+		assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+	})
+
 	t.Run("no sip scheme", func(t *testing.T) {
 		// No scheme we currently allow
 		uri = Uri{}

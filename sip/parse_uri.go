@@ -29,12 +29,12 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 
 func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
-		return uriStateUser, s[4:], nil
+		return uriStateScheme, s[4:], nil
 	}
 
 	if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
 		uri.Encrypted = true
-		return uriStateUser, s[5:], nil
+		return uriStateScheme, s[5:], nil
 	}
 
 	if s == "*" {
@@ -45,6 +45,13 @@ func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 	}
 
 	// return nil, "", errors.New("missing protocol scheme")
+	return uriStateUser, s, nil
+}
+
+func uriStateScheme(_ *Uri, s string) (uriFSM, string, error) {
+	// Check does uri contain slashes
+	// They are valid in uri but normally we cut them
+	s, _ = strings.CutPrefix(s, "//")
 	return uriStateUser, s, nil
 }
 
