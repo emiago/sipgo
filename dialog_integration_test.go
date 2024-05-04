@@ -166,7 +166,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 	defer cancel()
 
 	uasContact := sip.ContactHeader{
-		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+		Address: sip.Uri{User: "test", Host: "127.0.0.201", Port: 5099},
 	}
 
 	dialogSrv := NewDialogServer(cli, uasContact)
@@ -207,7 +207,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		cli, _ := NewClient(ua)
 
 		contactHDR := sip.ContactHeader{
-			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
+			Address: sip.Uri{User: "test", Host: "127.0.0.201", Port: 5088},
 		}
 		dialogCli := NewDialogClient(cli, contactHDR)
 
@@ -227,7 +227,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 				tx.Respond(sip.NewResponseFromRequest(req, sip.StatusInternalServerError, "", nil))
 			})
 			// INVITE
-			t.Log("UAC: INVITE")
+			t.Log("UAC: INVITE ", uasContact.Address.String())
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 			defer sess.Close()
@@ -249,7 +249,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 		t.Run("UAS ACK Error", func(t *testing.T) {
 			// INVITE
-			t.Log("UAC: INVITE")
+			t.Log("UAC: INVITE ", uasContact.Address.String())
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
 			require.NoError(t, err)
 			defer sess.Close()

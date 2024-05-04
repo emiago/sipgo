@@ -50,7 +50,8 @@ func (s *DialogClient) matchDialogRequest(req *sip.Request) (*DialogClientSessio
 }
 
 // NewDialogClient provides handle for managing UAC dialog
-// Contact hdr must be provided for correct invite
+// Contact hdr is default to be provided for correct invite. It is not used if you provided hdr as part of request,
+// but contact hdr must be present so this makes sure correct dialog is established.
 // In case handling different transports you should have multiple instances per transport
 func NewDialogClient(client *Client, contactHDR sip.ContactHeader) *DialogClient {
 	s := &DialogClient{
@@ -70,6 +71,7 @@ func (e ErrDialogResponse) Error() string {
 }
 
 // Invite sends INVITE request and creates early dialog session.
+// This is actually not yet dialog (ID is empty)
 // You need to call WaitAnswer after for establishing dialog
 // For passing custom Invite request use WriteInvite
 func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
@@ -87,9 +89,11 @@ func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byt
 func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
 	cli := c.c
 
-	inviteRequest.AppendHeader(&c.contactHDR)
+	if inviteRequest.Contact() == nil {
+		// Set contact only if not exists
+		inviteRequest.AppendHeader(&c.contactHDR)
+	}
 
-	// TODO passing client transaction options is now hidden
 	tx, err := cli.TransactionRequest(ctx, inviteRequest)
 	if err != nil {
 		return nil, err
@@ -407,7 +411,7 @@ func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Requ
 
 // newByeRequestUAC creates bye request from established dialog
 // https://datatracker.ietf.org/doc/html/rfc3261#section-15.1.1
-// NOTE: it does not copy Via header. This is left to transport or caller to enforce
+// NOTE: it does not copy Via header neither increases CSEQ. This is left to dialog transaction request
 func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, body []byte) *sip.Request {
 	recipient := &inviteRequest.Recipient
 	cont := inviteResponse.Contact()

@@ -42,7 +42,7 @@ func (s *DialogServer) matchDialogRequest(req *sip.Request) (*DialogServerSessio
 }
 
 // NewDialogServer provides handle for managing UAS dialog
-// Contact hdr must be provided for responses
+// Contact hdr is default that is provided for responses.
 // Client is needed for termination dialog session
 // In case handling different transports you should have multiple instances per transport
 func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer {
@@ -89,7 +89,7 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 		inviteTx: tx,
 		s:        s,
 	}
-
+	s.dialogs.Store(id, dtx)
 	return dtx, nil
 }
 
@@ -247,8 +247,11 @@ func (s *DialogServerSession) RespondSDP(sdp []byte) error {
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
 
-	// Must add contact header
-	res.AppendHeader(&s.s.contactHDR)
+	if res.Contact() == nil {
+		// Add our default contact header
+		res.AppendHeader(&s.s.contactHDR)
+	}
+
 	s.Dialog.InviteResponse = res
 
 	// Do we have cancel in meantime
@@ -285,10 +288,7 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return fmt.Errorf("ID do not match. Invite request has changed headers?")
 	}
 
-	// We need to make dialog present as ACK can land immediately after
-	s.s.dialogs.Store(id, s)
 	s.setState(sip.DialogStateEstablished)
-
 	if err := tx.Respond(res); err != nil {
 		// We could also not delete this as Close will handle cleanup
 		s.s.dialogs.Delete(id)
@@ -317,7 +317,6 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	}
 
 	// This is tricky
-	defer s.Close()              // Delete our dialog always
 	defer s.inviteTx.Terminate() // Terminates INVITE in all cases
 
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-15
