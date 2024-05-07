@@ -138,6 +138,67 @@ func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 	return nil
 }
 
+// Experiment
+// ReadRefer reads REFER (Transfer action) and parses referURI if dialog exists.
+// Returned dialog you should use to pass NOTIFY and BYE if your new INVITE dialog is successful
+func (c *DialogClient) ReadRefer(req *sip.Request, tx sip.ServerTransaction, referUri *sip.Uri) (*DialogClientSession, error) {
+	dt, err := c.matchDialogRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	cseq := req.CSeq().SeqNo
+	if cseq <= dt.lastCSeqNo {
+		return nil, ErrDialogOutsideDialog
+	}
+
+	referToHdr := req.GetHeader("Refer-to")
+	if referToHdr == nil {
+		return nil, fmt.Errorf("no Refer-to header present")
+	}
+
+	if err := sip.ParseUri(referToHdr.Value(), referUri); err != nil {
+		return nil, err
+	}
+
+	res := sip.NewResponseFromRequest(req, 202, "Accepted", nil)
+	if err := tx.Respond(res); err != nil {
+		return nil, err
+	}
+
+	// Now dialog should do invite
+	// And implicit subscription should be done
+	// invite := sip.NewRequest(sip.INVITE, *referUri)
+	// invite.SetBody(dt.InviteRequest.Body())
+	// invite
+
+	// // dt.TransactionRequest(context.TODO(), invite)
+	// c.WriteInvite(context.TODO(), invite)
+
+	return dt, nil
+
+	// Dial until current dialog is canceled. Therefore we pass dt.Context
+	// ctx, cancel := context.WithTimeout(dt.Context(), 30*time.Second)
+	// defer cancel()
+
+	// c.Invite(ctx, referUri)
+
+	// dt.setState(sip.DialogStateEnded)
+
+	// res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+	// if err := tx.Respond(res); err != nil {
+	// 	return err
+	// }
+	// defer dt.Close()              // Delete our dialog always
+	// defer dt.inviteTx.Terminate() // Terminates Invite transaction
+
+	// // select {
+	// // case <-tx.Done():
+	// // 	return tx.Err()
+	// // }
+	// return nil
+}
+
 type DialogClientSession struct {
 	Dialog
 	dc       *DialogClient
@@ -146,7 +207,7 @@ type DialogClientSession struct {
 
 // TransactionRequest is doing client DIALOG request based on RFC
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
-// This ensures that you have proper request done within dialog
+// This ensures that you have proper request done within dialog. You should avoid setting any Dialog header (cseq, from, to, callid)
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
 	cseq := req.CSeq()
 	if cseq == nil {
@@ -178,6 +239,20 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	s.lastCSeqNo = cseq.SeqNo
+
+	// Keep any request inside dialog
+	if h, invH := req.From(), s.InviteRequest.From(); h == nil {
+		req.AppendHeader(sip.HeaderClone(invH))
+	}
+
+	if h, invH := req.To(), s.InviteResponse.To(); h == nil && invH != nil {
+		req.AppendHeader(sip.HeaderClone(invH))
+	}
+
+	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
+		req.AppendHeader(sip.HeaderClone(invH))
+	}
+
 	// Passing option to avoid CSEQ apply
 	return s.dc.c.TransactionRequest(ctx, req, ClientRequestBuild)
 }
@@ -348,7 +423,7 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		if res.StatusCode != 200 {
 			return ErrDialogResponse{res}
 		}
-		s.setState(sip.DialogStateConfirmed)
+		s.setState(sip.DialogStateEnded)
 		return nil
 	case <-tx.Done():
 		return tx.Err()
