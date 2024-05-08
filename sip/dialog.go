@@ -20,6 +20,6 @@ func (s DialogState) String() string {
 	case DialogStateEnded:
 		return "Ended"
 	default:
-		return "Unknown Dialog State"
+		return "InProgress"
 	}
 }
