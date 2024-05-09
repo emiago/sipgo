@@ -153,18 +153,25 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	for i, h := range hs.headerOrder {
 		if h.Name() == name {
 			ind = i
+			break
 		}
 	}
 
-	if ind < 0 {
+	if ind == -1 {
+		hs.AppendHeader(header)
+		return
+	}
+
+	if ind+1 > len(hs.headerOrder) {
 		hs.AppendHeader(header)
 		return
 	}
 
 	newOrder := make([]Header, len(hs.headerOrder)+1)
 	copy(newOrder, hs.headerOrder[:ind+1])
-	newOrder[ind] = header
-	copy(newOrder[ind+1:], hs.headerOrder[ind:])
+	newOrder[ind+1] = header
+	hs.setHeaderRef(header)
+	copy(newOrder[ind+2:], hs.headerOrder[ind+1:])
 	hs.headerOrder = newOrder
 }
 
