@@ -162,7 +162,7 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 		return
 	}
 
-	if ind+1 > len(hs.headerOrder) {
+	if ind+1 == len(hs.headerOrder) {
 		hs.AppendHeader(header)
 		return
 	}
