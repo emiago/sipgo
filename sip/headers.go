@@ -153,7 +153,6 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	for i, h := range hs.headerOrder {
 		if h.Name() == name {
 			ind = i
-			break
 		}
 	}
 
