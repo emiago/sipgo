@@ -4,6 +4,10 @@ import (
 	"time"
 )
 
+// TODO v2
+// Better design could by passing some context through fsm state
+// Context could carry either response or error
+
 func (tx *ClientTx) inviteStateCalling(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
@@ -226,7 +230,7 @@ func (tx *ClientTx) actResend() fsmInput {
 func (tx *ClientTx) actInviteProceeding() fsmInput {
 	// tx.Log().Debug("actInviteProceeding")
 
-	tx.passUp()
+	tx.fsmPassUp()
 
 	tx.mu.Lock()
 
@@ -248,7 +252,7 @@ func (tx *ClientTx) actInviteFinal() fsmInput {
 	// tx.Log().Debug("actInviteFinal")
 
 	tx.ack()
-	tx.passUp()
+	tx.fsmPassUp()
 
 	tx.mu.Lock()
 
@@ -275,7 +279,7 @@ func (tx *ClientTx) actInviteFinal() fsmInput {
 func (tx *ClientTx) actFinal() fsmInput {
 	// tx.Log().Debug("actFinal")
 
-	tx.passUp()
+	tx.fsmPassUp()
 
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -351,7 +355,7 @@ func (tx *ClientTx) actTimeout() fsmInput {
 }
 
 func (tx *ClientTx) actPassup() fsmInput {
-	tx.passUp()
+	tx.fsmPassUp()
 	tx.stopTimerA()
 	return FsmInputNone
 }
@@ -362,13 +366,13 @@ func (tx *ClientTx) actPassupRetransmission() fsmInput {
 }
 
 func (tx *ClientTx) actPassupDelete() fsmInput {
-	tx.passUp()
+	tx.fsmPassUp()
 	tx.stopTimerA()
 	return client_input_delete
 }
 
 func (tx *ClientTx) actPassupAccept() fsmInput {
-	tx.passUp()
+	tx.fsmPassUp()
 
 	tx.mu.Lock()
 	if tx.timer_a != nil {
@@ -381,12 +385,6 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 	}
 
 	tx.timer_m = time.AfterFunc(Timer_M, func() {
-		select {
-		case <-tx.done:
-			return
-		default:
-		}
-
 		tx.spinFsm(client_input_timer_m)
 	})
 	tx.mu.Unlock()
@@ -406,4 +404,36 @@ func (tx *ClientTx) stopTimerA() {
 		tx.timer_a = nil
 	}
 	tx.mu.Unlock()
+}
+
+func (tx *ClientTx) fsmPassUp() {
+	lastResp := tx.fsmResp
+
+	if lastResp == nil {
+		return
+	}
+
+	select {
+	case <-tx.done:
+	case tx.responses <- lastResp:
+	}
+}
+
+func (tx *ClientTx) passUpRetransmission() {
+	// RFC 6026 handling retransmissions
+	lastResp := tx.fsmResp
+
+	if lastResp == nil {
+		return
+	}
+
+	// Client probably left or not interested, so therefore we must not block here
+	// For proxies they should handle this retransmission
+	select {
+	case <-tx.done:
+	case tx.responses <- lastResp:
+		// TODO is T1 best here option? This can take Timer_M as 64*T1
+	case <-time.After(T1):
+		tx.log.Debug().Msg("skipped response. Retransimission")
+	}
 }

@@ -115,15 +115,20 @@ type commonTx struct {
 	origin *Request
 	// tpl    *transport.Layer
 
-	conn     Connection
-	lastResp *Response
-
-	lastErr error
-	done    chan struct{}
+	conn Connection
+	done chan struct{}
 
 	//State machine control
-	fsmMu    sync.RWMutex
+	fsmMu    sync.Mutex
 	fsmState fsmContextState
+
+	// fsmResp fsmErr fsmAck fsmCancel are set on spin FSM
+	// Use it only if tx is inside fsm State
+	// outside is not thread safe and it must be protected with fsm Lock
+	fsmResp   *Response
+	fsmErr    error
+	fsmAck    *Request
+	fsmCancel *Request
 
 	log         zerolog.Logger
 	onTerminate FnTxTerminate
@@ -153,10 +158,28 @@ func (tx *commonTx) OnTerminate(f FnTxTerminate) {
 	tx.onTerminate = f
 }
 
+// TODO
+// FSM should be moved out commontx to seperate struct
 func (tx *commonTx) currentFsmState() fsmContextState {
 	tx.fsmMu.Lock()
 	defer tx.fsmMu.Unlock()
 	return tx.fsmState
+}
+
+// Initialises the correct kind of FSM based on request method.
+func (tx *commonTx) initFSM(fsmState fsmContextState) {
+	tx.fsmMu.Lock()
+	tx.fsmState = fsmState
+	tx.fsmMu.Unlock()
+}
+
+func (tx *commonTx) spinFsmUnsafe(in fsmInput) {
+	for i := in; i != FsmInputNone; {
+		if TransactionFSMDebug {
+			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+		}
+		i = tx.fsmState(i)
+	}
 }
 
 // Choose the right FSM init function depending on request method.
@@ -169,6 +192,40 @@ func (tx *commonTx) spinFsm(in fsmInput) {
 		i = tx.fsmState(i)
 	}
 	tx.fsmMu.Unlock()
+}
+
+func (tx *commonTx) spinFsmWithResponse(in fsmInput, resp *Response) {
+	tx.fsmMu.Lock()
+	tx.fsmResp = resp
+	tx.spinFsmUnsafe(in)
+	tx.fsmMu.Unlock()
+}
+
+func (tx *commonTx) spinFsmWithRequest(in fsmInput, req *Request) {
+	// TODO do we really need handling ACK and Cancel seperate
+	tx.fsmMu.Lock()
+	switch {
+	case req.IsAck(): // ACK for non-2xx response
+		tx.fsmAck = req
+	case req.IsCancel():
+		tx.fsmCancel = req
+	}
+	tx.spinFsmUnsafe(in)
+	tx.fsmMu.Unlock()
+}
+
+func (tx *commonTx) spinFsmWithError(in fsmInput, err error) {
+	tx.fsmMu.Lock()
+	tx.fsmErr = err
+	tx.spinFsmUnsafe(in)
+	tx.fsmMu.Unlock()
+}
+
+func (tx *commonTx) Err() error {
+	tx.fsmMu.Lock()
+	err := tx.fsmErr
+	tx.fsmMu.Unlock()
+	return err
 }
 
 type FnTxTerminate func(key string)

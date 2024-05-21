@@ -2,11 +2,15 @@
 package sip
 
 import (
+	"fmt"
 	"time"
 )
 
+// TODO v2
+// Better design could by passing some context through fsm state
+// Context could carry either response or error
+
 // invite state machine https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
-// TODO needs to be refactored
 func (tx *ServerTx) inviteStateProcceeding(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
@@ -239,13 +243,13 @@ func (tx *ServerTx) actFinal() fsmInput {
 
 // Inform user of transport error
 func (tx *ServerTx) actTransErr() fsmInput {
-	tx.log.Debug().Err(tx.Err()).Msg("Transport error. Transaction will terminate")
+	tx.log.Debug().Err(tx.fsmErr).Msg("Transport error. Transaction will terminate")
 	return server_input_delete
 }
 
 // Inform user of timeout error
 func (tx *ServerTx) actTimeout() fsmInput {
-	tx.log.Debug().Err(tx.Err()).Msg("Timed out. Transaction will terminate")
+	tx.log.Debug().Err(tx.fsmErr).Msg("Timed out. Transaction will terminate")
 	return server_input_delete
 }
 
@@ -260,12 +264,10 @@ func (tx *ServerTx) actDelete() fsmInput {
 func (tx *ServerTx) actRespondDelete() fsmInput {
 	// tx.Log().Debug("actRespondDelete")
 	tx.delete()
-	err := tx.conn.WriteMsg(tx.lastResp)
+	err := tx.conn.WriteMsg(tx.fsmResp)
 
 	if err != nil {
-		tx.mu.Lock()
-		tx.lastErr = wrapTransportError(err)
-		tx.mu.Unlock()
+		tx.fsmErr = wrapTransportError(err)
 		tx.log.Debug().Err(err).Msg("fail to actRespondDelete")
 		return server_input_transport_err
 	}
@@ -300,4 +302,39 @@ func (tx *ServerTx) actConfirm() fsmInput {
 func (tx *ServerTx) actCancel() fsmInput {
 	tx.passCancel()
 	return FsmInputNone
+}
+
+func (tx *ServerTx) passAck() {
+	r := tx.fsmAck
+	if r == nil {
+		return
+	}
+
+	tx.ackSendAsync(r)
+}
+
+func (tx *ServerTx) passCancel() {
+	r := tx.fsmCancel
+
+	if r == nil {
+		return
+	}
+	tx.cancelSendAsync(r)
+}
+
+func (tx *ServerTx) passResp() error {
+	lastResp := tx.fsmResp
+
+	if lastResp == nil {
+		return fmt.Errorf("none response")
+	}
+
+	// tx.Log().Debug("actFinal")
+	err := tx.conn.WriteMsg(lastResp)
+	if err != nil {
+		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
+		tx.fsmErr = wrapTransportError(err)
+		return err
+	}
+	return nil
 }

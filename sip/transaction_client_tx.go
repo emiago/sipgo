@@ -70,14 +70,20 @@ func (tx *ClientTx) Init() error {
 	// Timer B - timeout
 	tx.mu.Lock()
 	tx.timer_b = time.AfterFunc(Timer_B, func() {
-		tx.mu.Lock()
-		tx.lastErr = fmt.Errorf("Timer_B timed out. %w", ErrTransactionTimeout)
-		tx.mu.Unlock()
-		tx.spinFsm(client_input_timer_b)
+		tx.spinFsmWithError(client_input_timer_b, fmt.Errorf("Timer_B timed out. %w", ErrTransactionTimeout))
 	})
 	tx.mu.Unlock()
 	tx.log.Debug().Str("tx", tx.Key()).Msg("Client transaction initialized")
 	return nil
+}
+
+// Initialises the correct kind of FSM based on request method.
+func (tx *ClientTx) initFSM() {
+	if tx.origin.IsInvite() {
+		tx.commonTx.initFSM(tx.inviteStateCalling)
+	} else {
+		tx.commonTx.initFSM(tx.stateCalling)
+	}
 }
 
 func (tx *ClientTx) Responses() <-chan *Response {
@@ -100,24 +106,14 @@ func (tx *ClientTx) Terminate() {
 	tx.delete()
 }
 
-func (tx *ClientTx) Err() error {
-	tx.mu.RLock()
-	err := tx.lastErr
-	tx.mu.RUnlock()
-	return err
-}
-
-// receive will process response in safe way and change transaction state
-// NOTE: it could block and passing response to client
-func (tx *ClientTx) receive(res *Response) error {
+// Receive will process response in safe way and change transaction state
+// NOTE: it could block while passing response to client,
+// therefore running in seperate goroutine is needed
+func (tx *ClientTx) Receive(res *Response) {
 	var input fsmInput
 	if res.IsCancel() {
 		input = client_input_canceled
 	} else {
-		tx.mu.Lock()
-		tx.lastResp = res
-		tx.mu.Unlock()
-
 		switch {
 		case res.IsProvisional():
 			input = client_input_1xx
@@ -128,8 +124,7 @@ func (tx *ClientTx) receive(res *Response) error {
 		}
 	}
 
-	tx.spinFsm(input)
-	return nil
+	tx.spinFsmWithResponse(input, res)
 }
 
 func (tx *ClientTx) cancel() {
@@ -137,61 +132,36 @@ func (tx *ClientTx) cancel() {
 		return
 	}
 
-	tx.mu.RLock()
-	lastResp := tx.lastResp
-	tx.mu.RUnlock()
-
 	cancelRequest := newCancelRequest(tx.origin)
 	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
-		var lastRespStr string
-		if lastResp != nil {
-			lastRespStr = lastResp.Short()
-		}
 		tx.log.Error().
 			Str("invite_request", tx.origin.Short()).
-			Str("invite_response", lastRespStr).
 			Str("cancel_request", cancelRequest.Short()).
 			Msgf("send CANCEL request failed: %s", err)
 
-		tx.mu.Lock()
-		tx.lastErr = wrapTransportError(err)
-		tx.mu.Unlock()
-
-		go tx.spinFsm(client_input_transport_err)
+		err := wrapTransportError(err)
+		go tx.spinFsmWithError(client_input_transport_err, err)
 	}
 }
 
 func (tx *ClientTx) ack() {
-	tx.mu.RLock()
-	lastResp := tx.lastResp
-	tx.mu.RUnlock()
+	resp := tx.fsmResp
+	if resp == nil {
+		panic("Response in ack should not be nil")
+	}
 
-	ack := newAckRequestNon2xx(tx.origin, lastResp, nil)
+	ack := newAckRequestNon2xx(tx.origin, resp, nil)
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().
 			Str("invite_request", tx.origin.Short()).
-			Str("invite_response", lastResp.Short()).
+			Str("invite_response", resp.Short()).
 			Str("cancel_request", ack.Short()).
 			Msgf("send ACK request failed: %s", err)
 
-		tx.mu.Lock()
-		tx.lastErr = wrapTransportError(err)
-		tx.mu.Unlock()
-
-		go tx.spinFsm(client_input_transport_err)
+		err := wrapTransportError(err)
+		go tx.spinFsmWithError(client_input_transport_err, err)
 	}
-}
-
-// Initialises the correct kind of FSM based on request method.
-func (tx *ClientTx) initFSM() {
-	tx.fsmMu.Lock()
-	if tx.origin.IsInvite() {
-		tx.fsmState = tx.inviteStateCalling
-	} else {
-		tx.fsmState = tx.stateCalling
-	}
-	tx.fsmMu.Unlock()
 }
 
 func (tx *ClientTx) resend() {
@@ -205,48 +175,9 @@ func (tx *ClientTx) resend() {
 
 	err := tx.conn.WriteMsg(tx.origin)
 	if err != nil {
-		tx.mu.Lock()
-		tx.lastErr = wrapTransportError(err)
-		tx.mu.Unlock()
-
 		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to resend request")
-		go tx.spinFsm(client_input_transport_err)
-	}
-}
-
-func (tx *ClientTx) passUp() {
-	tx.mu.RLock()
-	lastResp := tx.lastResp
-	tx.mu.RUnlock()
-
-	if lastResp == nil {
-		return
-	}
-
-	select {
-	case <-tx.done:
-	case tx.responses <- lastResp:
-	}
-}
-
-func (tx *ClientTx) passUpRetransmission() {
-	// RFC 6026 handling retransmissions
-	tx.mu.RLock()
-	lastResp := tx.lastResp
-	tx.mu.RUnlock()
-
-	if lastResp == nil {
-		return
-	}
-
-	// Client probably left or not interested, so therefore we must not block here
-	// For proxies they should handle this retransmission
-	select {
-	case <-tx.done:
-	case tx.responses <- lastResp:
-		// TODO is T1 best here option? This can take Timer_M as 64*T1
-	case <-time.After(T1):
-		tx.log.Debug().Msg("skipped response. Retransimission")
+		err := wrapTransportError(err)
+		go tx.spinFsmWithError(client_input_transport_err, err)
 	}
 }
 
@@ -266,8 +197,6 @@ func (tx *ClientTx) delete() {
 			tx.log.Info().Err(err).Msg("Closing connection returned error")
 		}
 	})
-
-	time.Sleep(time.Microsecond)
 
 	tx.mu.Lock()
 	if tx.timer_a != nil {

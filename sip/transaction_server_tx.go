@@ -10,8 +10,6 @@ import (
 
 type ServerTx struct {
 	commonTx
-	lastAck      *Request
-	lastCancel   *Request
 	acks         chan *Request
 	cancels      chan *Request
 	timer_g      *time.Timer
@@ -48,14 +46,12 @@ func (tx *ServerTx) Init() error {
 	tx.initFSM()
 
 	tx.mu.Lock()
-
 	if tx.reliable {
 		tx.timer_i_time = 0
 	} else {
 		tx.timer_g_time = Timer_G
 		tx.timer_i_time = Timer_I
 	}
-
 	tx.mu.Unlock()
 
 	// RFC 3261 - 17.2.1
@@ -81,35 +77,30 @@ func (tx *ServerTx) Init() error {
 }
 
 // Receive is endpoint for handling received server requests.
+// NOTE: it could block while passing request to client,
+// therefore running in seperate goroutine is needed
 func (tx *ServerTx) Receive(req *Request) error {
-	input, err := tx.receiveRequest(req)
-	if err != nil {
-		return err
-	}
-	tx.spinFsm(input)
-	return nil
-}
-
-func (tx *ServerTx) receiveRequest(req *Request) (fsmInput, error) {
 	tx.mu.Lock()
-	defer tx.mu.Unlock()
-
 	if tx.timer_1xx != nil {
 		tx.timer_1xx.Stop()
 		tx.timer_1xx = nil
 	}
+	tx.mu.Unlock()
 
+	var input fsmInput
 	switch {
 	case req.Method == tx.origin.Method:
-		return server_input_request, nil
+		input = server_input_request
 	case req.IsAck(): // ACK for non-2xx response
-		tx.lastAck = req
-		return server_input_ack, nil
+		input = server_input_ack
 	case req.IsCancel():
-		tx.lastCancel = req
-		return server_input_cancel, nil
+		input = server_input_cancel
+	default:
+		return fmt.Errorf("unexpected message error")
 	}
-	return FsmInputNone, fmt.Errorf("unexpected message error")
+
+	tx.spinFsmWithRequest(input, req)
+	return nil
 }
 
 func (tx *ServerTx) Respond(res *Response) error {
@@ -117,31 +108,24 @@ func (tx *ServerTx) Respond(res *Response) error {
 		return tx.conn.WriteMsg(res)
 	}
 
-	input, err := tx.receiveRespond(res)
-	if err != nil {
-		return err
-	}
-	tx.spinFsm(input)
-	return nil
-}
-
-func (tx *ServerTx) receiveRespond(res *Response) (fsmInput, error) {
 	tx.mu.Lock()
-	defer tx.mu.Unlock()
-
-	tx.lastResp = res
 	if tx.timer_1xx != nil {
 		tx.timer_1xx.Stop()
 		tx.timer_1xx = nil
 	}
+	tx.mu.Unlock()
 
+	var input fsmInput
 	switch {
 	case res.IsProvisional():
-		return server_input_user_1xx, nil
+		input = server_input_user_1xx
 	case res.IsSuccess():
-		return server_input_user_2xx, nil
+		input = server_input_user_2xx
+	default:
+		input = server_input_user_300_plus
 	}
-	return server_input_user_300_plus, nil
+	tx.spinFsmWithResponse(input, res)
+	return nil
 }
 
 // Acks makes channel for sending acks. Channel is created on demand
@@ -149,23 +133,22 @@ func (tx *ServerTx) Acks() <-chan *Request {
 	return tx.acks
 }
 
-func (tx *ServerTx) passAck() {
-	tx.mu.RLock()
-	r := tx.lastAck
-	tx.mu.RUnlock()
-
-	if r == nil {
-		return
-	}
-	// Go routines should be cheap and it will prevent blocking
-	go tx.ackSend(r)
-}
-
 func (tx *ServerTx) ackSend(r *Request) {
 	select {
 	case <-tx.done:
 	case tx.acks <- r:
 	}
+}
+
+func (tx *ServerTx) ackSendAsync(r *Request) {
+	select {
+	case tx.acks <- r:
+		return
+	default:
+	}
+
+	// Go routines should be cheap and it will prevent blocking
+	go tx.ackSend(r)
 }
 
 func (tx *ServerTx) Cancels() <-chan *Request {
@@ -176,18 +159,6 @@ func (tx *ServerTx) Cancels() <-chan *Request {
 	return tx.cancels
 }
 
-func (tx *ServerTx) passCancel() {
-	tx.mu.RLock()
-	r := tx.lastCancel
-	tx.mu.RUnlock()
-
-	if r == nil {
-		return
-	}
-	// Go routines should be cheap
-	go tx.cancelSend(r)
-}
-
 func (tx *ServerTx) cancelSend(r *Request) {
 	select {
 	case <-tx.done:
@@ -195,37 +166,20 @@ func (tx *ServerTx) cancelSend(r *Request) {
 	}
 }
 
-func (tx *ServerTx) passResp() error {
-	tx.mu.RLock()
-	lastResp := tx.lastResp
-	tx.mu.RUnlock()
-
-	if lastResp == nil {
-		return fmt.Errorf("none response")
+func (tx *ServerTx) cancelSendAsync(r *Request) {
+	select {
+	case tx.cancels <- r:
+		return
+	default:
 	}
 
-	// tx.Log().Debug("actFinal")
-	err := tx.conn.WriteMsg(lastResp)
-	if err != nil {
-		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
-		tx.mu.Lock()
-		tx.lastErr = wrapTransportError(err)
-		tx.mu.Unlock()
-		return err
-	}
-	return nil
+	// Go routines should be cheap and it will prevent blocking
+	go tx.cancelSend(r)
 }
 
 func (tx *ServerTx) Terminate() {
 	tx.log.Debug().Msg("Server transaction terminating")
 	tx.delete()
-}
-
-func (tx *ServerTx) Err() error {
-	tx.mu.RLock()
-	err := tx.lastErr
-	tx.mu.RUnlock()
-	return err
 }
 
 // func (tx *ServerTx) OnTerminate(f func()) {
@@ -234,16 +188,11 @@ func (tx *ServerTx) Err() error {
 
 // Choose the right FSM init function depending on request method.
 func (tx *ServerTx) initFSM() {
-	tx.fsmMu.Lock()
 	if tx.Origin().IsInvite() {
-		tx.fsmState = tx.inviteStateProcceeding
+		tx.commonTx.initFSM(tx.inviteStateProcceeding)
 	} else {
-		tx.fsmState = tx.stateTrying
+		tx.commonTx.initFSM(tx.stateTrying)
 	}
-	tx.fsmMu.Unlock()
-}
-
-func (tx *ServerTx) State() {
 }
 
 func (tx *ServerTx) delete() {
