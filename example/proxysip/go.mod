@@ -1,6 +1,6 @@
 module github.com/emiago/sipgo/example/proxysip
 
-go 1.21.1
+go 1.20
 
 replace github.com/emiago/sipgo => ../../
 
