@@ -2,6 +2,7 @@ package sipgo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 
@@ -142,6 +143,36 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 	}
 	return c.tx.Request(ctx, req)
+}
+
+// Experimental
+//
+// Do request is HTTP client like Do request/response
+// It returns on final response.
+// Canceling ctx sends Cancel Request but it still returns ctx error
+// For more control use TransactionRequest
+func (c *Client) Do(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (*sip.Response, error) {
+	tx, err := c.TransactionRequest(ctx, req, options...)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Terminate()
+
+	for {
+		select {
+		case res := <-tx.Responses():
+			if res.IsProvisional() {
+				continue
+			}
+			return res, nil
+
+		case <-tx.Done():
+			return nil, tx.Err()
+
+		case <-ctx.Done():
+			return nil, errors.Join(ctx.Err(), tx.Cancel())
+		}
+	}
 }
 
 type DigestAuth struct {

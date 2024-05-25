@@ -94,6 +94,9 @@ type Transaction interface {
 
 type ServerTransaction interface {
 	Transaction
+
+	// Respond sends response. It is expected that is prebuilt with correct headers
+	// Use NewResponseFromRequest to build response
 	Respond(res *Response) error
 	Acks() <-chan *Request
 	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
