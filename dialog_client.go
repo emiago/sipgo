@@ -292,7 +292,7 @@ type AnswerOptions struct {
 // - ErrDialogResponse in case non 2xx response
 // - any internal in case waiting answer failed for different reasons
 func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions) error {
-	client, tx, inviteRequest := s.dc.c, s.inviteTx, s.InviteRequest
+	tx, inviteRequest := s.inviteTx, s.InviteRequest
 
 	var r *sip.Response
 	var err error
@@ -317,6 +317,8 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			opts.OnResponse(r)
 		}
 
+		s.InviteResponse = r
+
 		if r.IsSuccess() {
 			break
 		}
@@ -329,12 +331,29 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			h := r.GetHeader("Proxy-Authorization")
 			if h == nil {
 				tx.Terminate()
-				tx, err = digestProxyAuthRequest(ctx, client, inviteRequest, r, digest.Options{
+
+				digopts := digest.Options{
 					Method:   sip.INVITE.String(),
 					URI:      inviteRequest.Recipient.Addr(),
 					Username: opts.Username,
 					Password: opts.Password,
-				})
+				}
+
+				// First build this request
+				if err := digestProxyAuthApply(inviteRequest, r, digopts); err != nil {
+					return err
+				}
+
+				// Remove Via from original request and send it through dialog transaction
+				// This keeps transaction within dialog
+				inviteRequest.RemoveHeader("Via")
+				tx, err = s.TransactionRequest(ctx, inviteRequest)
+				// tx, err = digestProxyAuthRequest(ctx, client, inviteRequest, r, digest.Options{
+				// 	Method:   sip.INVITE.String(),
+				// 	URI:      inviteRequest.Recipient.Addr(),
+				// 	Username: opts.Username,
+				// 	Password: opts.Password,
+				// })
 				if err != nil {
 					return err
 				}
@@ -346,12 +365,30 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			h := inviteRequest.GetHeader("Authorization")
 			if h == nil {
 				tx.Terminate()
-				tx, err = digestTransactionRequest(ctx, client, inviteRequest, r, digest.Options{
+
+				digopts := digest.Options{
 					Method:   sip.INVITE.String(),
 					URI:      inviteRequest.Recipient.Addr(),
 					Username: opts.Username,
 					Password: opts.Password,
-				})
+				}
+
+				// First build this request
+				if err := digestAuthApply(inviteRequest, r, digopts); err != nil {
+					return err
+				}
+
+				// Remove Via from original request and send it through dialog transaction
+				// This keeps transaction within dialog
+				inviteRequest.RemoveHeader("Via")
+				tx, err = s.TransactionRequest(ctx, inviteRequest)
+
+				// tx, err = digestTransactionRequest(ctx, client, inviteRequest, r, digest.Options{
+				// 	Method:   sip.INVITE.String(),
+				// 	URI:      inviteRequest.Recipient.Addr(),
+				// 	Username: opts.Username,
+				// 	Password: opts.Password,
+				// })
 				if err != nil {
 					return err
 				}
@@ -432,56 +469,69 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	}
 }
 
-func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
-	authHeader := res.GetHeader("Proxy-Authenticate")
-	chal, err := digest.ParseChallenge(authHeader.Value())
-	if err != nil {
-		return nil, fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
-	}
+// func digestProxyAuthRequestFromRequest
 
-	// Reply with digest
-	cred, err := digest.Digest(chal, opts)
-	if err != nil {
-		return nil, fmt.Errorf("fail to build digest: %w", err)
+func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestProxyAuthApply(req, res, opts); err != nil {
+		return nil, err
 	}
 
 	cseq := req.CSeq()
 	cseq.SeqNo++
-
-	req.RemoveHeader("Proxy-Authorization")
-	req.AppendHeader(sip.NewHeader("Proxy-Authorization", cred.String()))
 
 	req.RemoveHeader("Via")
 	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
 	return tx, err
 }
 
-// digestTransactionRequest checks response if 401 and sends digest auth
-func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
-	// Get WwW-Authenticate
-	wwwAuth := res.GetHeader("WWW-Authenticate")
-	chal, err := digest.ParseChallenge(wwwAuth.Value())
+func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
+	authHeader := res.GetHeader("Proxy-Authenticate")
+	chal, err := digest.ParseChallenge(authHeader.Value())
 	if err != nil {
-		return nil, fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
+		return fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
 	}
 
 	// Reply with digest
 	cred, err := digest.Digest(chal, opts)
 	if err != nil {
-		return nil, fmt.Errorf("fail to build digest: %w", err)
+		return fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	req.RemoveHeader("Proxy-Authorization")
+	req.AppendHeader(sip.NewHeader("Proxy-Authorization", cred.String()))
+	return nil
+}
+
+// digestTransactionRequest checks response if 401 and sends digest auth
+func digestTransactionRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestAuthApply(req, res, opts); err != nil {
+		return nil, err
 	}
 
 	cseq := req.CSeq()
 	cseq.SeqNo++
-	// newReq := req.Clone()
-
-	req.RemoveHeader("Authorization")
-	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
-	// defer req.RemoveHeader("Authorization")
 
 	req.RemoveHeader("Via")
 	tx, err := client.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
 	return tx, err
+}
+
+func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
+	wwwAuth := res.GetHeader("WWW-Authenticate")
+	chal, err := digest.ParseChallenge(wwwAuth.Value())
+	if err != nil {
+		return fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
+	}
+
+	// Reply with digest
+	cred, err := digest.Digest(chal, opts)
+	if err != nil {
+		return fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	req.RemoveHeader("Authorization")
+	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+	return nil
 }
 
 // newByeRequestUAC creates bye request from established dialog

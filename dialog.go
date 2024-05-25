@@ -13,6 +13,7 @@ var (
 	ErrDialogDoesNotExists   = errors.New("Dialog Does Not Exist")
 	ErrDialogInviteNoContact = errors.New("No Contact header")
 	ErrDialogCanceled        = errors.New("Dialog canceled")
+	ErrDialogInvalidCseq     = errors.New("Invalid CSEQ number")
 )
 
 type Dialog struct {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/icholy/digest"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -100,13 +101,18 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 		return err
 	}
 
+	// cseq must match to our last dialog cseq
+	if req.CSeq().SeqNo != dt.lastCSeqNo {
+		return ErrDialogInvalidCseq
+	}
+
 	dt.setState(sip.DialogStateConfirmed)
 	// Acks are normally just absorbed, but in case of proxy
 	// they still need to be passed
 	return nil
 }
 
-// ReadBye should read from your OnBye handler
+// ReadBye should read from your OnBye handler. Returns error if it fails
 func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
 	dt, err := s.matchDialogRequest(req)
 	if err != nil {
@@ -120,12 +126,10 @@ func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 		// }
 		return err
 	}
+
 	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo != (dt.lastCSeqNo + 1) {
-		res := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Cseq is incorect", nil)
-		if err := tx.Respond(res); err != nil {
-			return err
-		}
+	if err := dt.validateRequest(req); err != nil {
+		return err
 	}
 
 	defer dt.Close()
@@ -243,6 +247,45 @@ func (s *DialogServerSession) RespondSDP(sdp []byte) error {
 	return s.WriteResponse(res)
 }
 
+var errDialogUnauthorized = errors.New("unathorized")
+
+func (s *DialogServerSession) authDigest(chal *digest.Challenge, opts digest.Options) error {
+	authorized := func() bool {
+		authorizationHDR := s.InviteRequest.GetHeader("Authorization")
+		if authorizationHDR == nil {
+			return false
+		}
+
+		hdrVal := authorizationHDR.Value()
+		creds, err := digest.ParseCredentials(hdrVal)
+		if err != nil {
+			return false
+		}
+
+		digCred, err := digest.Digest(chal, opts)
+		if err != nil {
+			return false
+		}
+
+		return creds.Response == digCred.Response
+	}()
+
+	if authorized {
+		return nil
+	}
+
+	hdrVal := chal.String()
+	hdr := sip.NewHeader("WWW-Authenticate", hdrVal)
+
+	res := sip.NewResponseFromRequest(s.InviteRequest, sip.StatusUnauthorized, "Unauthorized", nil)
+	res.AppendHeader(hdr)
+	if err := s.WriteResponse(res); err != nil {
+		return err
+	}
+
+	return errDialogUnauthorized
+}
+
 // WriteResponse allows passing you custom response
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
@@ -285,6 +328,7 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	if id != s.Dialog.ID {
+		// TODO. This can be panic
 		return fmt.Errorf("ID do not match. Invite request has changed headers?")
 	}
 
@@ -372,6 +416,14 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
+	// Make sure this is bye for this dialog
+	if req.CSeq().SeqNo != (dt.lastCSeqNo + 1) {
+		return ErrDialogInvalidCseq
+	}
+	return nil
 }
 
 // newByeRequestUAS generates request for UAS within dialog

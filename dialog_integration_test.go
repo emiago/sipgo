@@ -2,11 +2,13 @@ package sipgo
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/icholy/digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,20 +31,42 @@ func TestIntegrationDialog(t *testing.T) {
 	}
 
 	dialogSrv := NewDialogServer(cli, uasContact)
+	// digestChal := digest.Challenge{
+	// 	Username: "alice",
+	// 	Password: "alice123",
+	// }
+	digestChal := digest.Challenge{
+		Realm:     "sipgo-server",
+		Nonce:     fmt.Sprintf("%d", time.Now().UnixMicro()),
+		Opaque:    "sipgo",
+		Algorithm: "MD5",
+	}
+	auth := digest.Options{
+		Method:   "INVITE",
+		URI:      uasContact.Address.Addr(),
+		Username: "alice",
+		Password: "1234",
+	}
 
 	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 		dlg, err := dialogSrv.ReadInvite(req, tx)
 		require.NoError(t, err)
 		// defer dlg.Close()
 
+		if err := dlg.authDigest(&digestChal, auth); err != nil {
+			// TODO check what is error
+			t.Log(err)
+			return
+		}
+
 		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		// ctx, _ := context.WithTimeout(ctx, 3*time.Second)
 		for state := range dlg.State() {
@@ -64,7 +88,9 @@ func TestIntegrationDialog(t *testing.T) {
 			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Not valid SIP uri", nil))
 			return
 		}
-		dialogSrv.ReadAck(req, tx)
+		if err := dialogSrv.ReadAck(req, tx); err != nil {
+			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, err.Error(), nil))
+		}
 	})
 
 	srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -72,7 +98,10 @@ func TestIntegrationDialog(t *testing.T) {
 			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Not valid SIP uri", nil))
 			return
 		}
-		dialogSrv.ReadBye(req, tx)
+
+		if err := dialogSrv.ReadBye(req, tx); err != nil {
+			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, err.Error(), nil))
+		}
 	})
 
 	srv.ServeRequest(func(r *sip.Request) {
@@ -111,7 +140,10 @@ func TestIntegrationDialog(t *testing.T) {
 			require.NoError(t, err)
 			defer sess.Close()
 
-			err = sess.WaitAnswer(ctx, AnswerOptions{})
+			err = sess.WaitAnswer(ctx, AnswerOptions{
+				Username: auth.Username,
+				Password: auth.Password,
+			})
 			require.NoError(t, err)
 			require.Equal(t, sip.StatusOK, sess.InviteResponse.StatusCode)
 
@@ -130,7 +162,10 @@ func TestIntegrationDialog(t *testing.T) {
 			require.NoError(t, err)
 			defer sess.Close()
 
-			err = sess.WaitAnswer(ctx, AnswerOptions{})
+			err = sess.WaitAnswer(ctx, AnswerOptions{
+				Username: auth.Username,
+				Password: auth.Password,
+			})
 			require.NoError(t, err)
 			require.Equal(t, sip.StatusOK, sess.InviteResponse.StatusCode)
 
