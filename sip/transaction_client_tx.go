@@ -9,7 +9,7 @@ import (
 )
 
 type ClientTx struct {
-	commonTx
+	baseTx
 	responses    chan *Response
 	timer_a_time time.Duration // Current duration of timer A.
 	timer_a      *time.Timer
@@ -80,9 +80,9 @@ func (tx *ClientTx) Init() error {
 // Initialises the correct kind of FSM based on request method.
 func (tx *ClientTx) initFSM() {
 	if tx.origin.IsInvite() {
-		tx.commonTx.initFSM(tx.inviteStateCalling)
+		tx.baseTx.initFSM(tx.inviteStateCalling)
 	} else {
-		tx.commonTx.initFSM(tx.stateCalling)
+		tx.baseTx.initFSM(tx.stateCalling)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 )
 
 type ServerTx struct {
-	commonTx
+	baseTx
 	acks         chan *Request
 	cancels      chan *Request
 	timer_g      *time.Timer
@@ -189,9 +189,9 @@ func (tx *ServerTx) Terminate() {
 // Choose the right FSM init function depending on request method.
 func (tx *ServerTx) initFSM() {
 	if tx.Origin().IsInvite() {
-		tx.commonTx.initFSM(tx.inviteStateProcceeding)
+		tx.baseTx.initFSM(tx.inviteStateProcceeding)
 	} else {
-		tx.commonTx.initFSM(tx.stateTrying)
+		tx.baseTx.initFSM(tx.stateTrying)
 	}
 }
 

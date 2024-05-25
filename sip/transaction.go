@@ -112,7 +112,7 @@ type ClientTransaction interface {
 	Cancel() error
 }
 
-type commonTx struct {
+type baseTx struct {
 	key string
 
 	origin *Request
@@ -137,7 +137,7 @@ type commonTx struct {
 	onTerminate FnTxTerminate
 }
 
-func (tx *commonTx) String() string {
+func (tx *baseTx) String() string {
 	if tx == nil {
 		return "<nil>"
 	}
@@ -145,38 +145,38 @@ func (tx *commonTx) String() string {
 	return tx.key
 }
 
-func (tx *commonTx) Origin() *Request {
+func (tx *baseTx) Origin() *Request {
 	return tx.origin
 }
 
-func (tx *commonTx) Key() string {
+func (tx *baseTx) Key() string {
 	return tx.key
 }
 
-func (tx *commonTx) Done() <-chan struct{} {
+func (tx *baseTx) Done() <-chan struct{} {
 	return tx.done
 }
 
-func (tx *commonTx) OnTerminate(f FnTxTerminate) {
+func (tx *baseTx) OnTerminate(f FnTxTerminate) {
 	tx.onTerminate = f
 }
 
 // TODO
 // FSM should be moved out commontx to seperate struct
-func (tx *commonTx) currentFsmState() fsmContextState {
+func (tx *baseTx) currentFsmState() fsmContextState {
 	tx.fsmMu.Lock()
 	defer tx.fsmMu.Unlock()
 	return tx.fsmState
 }
 
 // Initialises the correct kind of FSM based on request method.
-func (tx *commonTx) initFSM(fsmState fsmContextState) {
+func (tx *baseTx) initFSM(fsmState fsmContextState) {
 	tx.fsmMu.Lock()
 	tx.fsmState = fsmState
 	tx.fsmMu.Unlock()
 }
 
-func (tx *commonTx) spinFsmUnsafe(in fsmInput) {
+func (tx *baseTx) spinFsmUnsafe(in fsmInput) {
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
 			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
@@ -186,7 +186,7 @@ func (tx *commonTx) spinFsmUnsafe(in fsmInput) {
 }
 
 // Choose the right FSM init function depending on request method.
-func (tx *commonTx) spinFsm(in fsmInput) {
+func (tx *baseTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
@@ -197,14 +197,14 @@ func (tx *commonTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Unlock()
 }
 
-func (tx *commonTx) spinFsmWithResponse(in fsmInput, resp *Response) {
+func (tx *baseTx) spinFsmWithResponse(in fsmInput, resp *Response) {
 	tx.fsmMu.Lock()
 	tx.fsmResp = resp
 	tx.spinFsmUnsafe(in)
 	tx.fsmMu.Unlock()
 }
 
-func (tx *commonTx) spinFsmWithRequest(in fsmInput, req *Request) {
+func (tx *baseTx) spinFsmWithRequest(in fsmInput, req *Request) {
 	// TODO do we really need handling ACK and Cancel seperate
 	tx.fsmMu.Lock()
 	switch {
@@ -217,14 +217,14 @@ func (tx *commonTx) spinFsmWithRequest(in fsmInput, req *Request) {
 	tx.fsmMu.Unlock()
 }
 
-func (tx *commonTx) spinFsmWithError(in fsmInput, err error) {
+func (tx *baseTx) spinFsmWithError(in fsmInput, err error) {
 	tx.fsmMu.Lock()
 	tx.fsmErr = err
 	tx.spinFsmUnsafe(in)
 	tx.fsmMu.Unlock()
 }
 
-func (tx *commonTx) Err() error {
+func (tx *baseTx) Err() error {
 	tx.fsmMu.Lock()
 	err := tx.fsmErr
 	tx.fsmMu.Unlock()
