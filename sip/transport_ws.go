@@ -105,25 +105,28 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *transportWS) initConnection(conn net.Conn, addr string, clientSide bool, handler MessageHandler) Connection {
+func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide bool, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
-	t.log.Debug().Str("raddr", addr).Msg("New WS connection")
+	laddr := conn.LocalAddr().String()
+	t.log.Debug().Str("raddr", raddr).Msg("New WS connection")
 	c := &WSConnection{
 		Conn:       conn,
 		refcount:   1 + IdleConnection,
 		clientSide: clientSide,
 	}
-	t.pool.Add(addr, c)
-	go t.readConnection(c, addr, handler)
+	t.pool.Add(laddr, c)
+	t.pool.Add(raddr, c)
+	go t.readConnection(c, laddr, raddr, handler)
 	return c
 }
 
 // This should performe better to avoid any interface allocation
-func (t *transportWS) readConnection(conn *WSConnection, raddr string, handler MessageHandler) {
+func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
+	defer t.pool.Delete(laddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
 	defer t.log.Debug().Str("raddr", raddr).Msg("Websocket read connection stopped")
 

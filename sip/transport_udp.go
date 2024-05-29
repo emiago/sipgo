@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 
@@ -17,7 +16,7 @@ var (
 	UDPMTUSize = 1500
 
 	// UDPUseConnectedConnection will force creating UDP connected connection
-	UDPUseConnectedConnection = false
+	// UDPUseConnectedConnection = false
 
 	ErrUDPMTUCongestion = errors.New("size of packet larger than MTU")
 )
@@ -91,9 +90,9 @@ func (t *transportUDP) GetConnection(addr string) (Connection, error) {
 
 // CreateConnection will create new connection
 func (t *transportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	if UDPUseConnectedConnection {
-		return t.createConnectedConnection(ctx, laddr, raddr, handler)
-	}
+	// if UDPUseConnectedConnection {
+	// 	return t.createConnectedConnection(ctx, laddr, raddr, handler)
+	// }
 	return t.createConnection(ctx, laddr, raddr, handler)
 }
 
@@ -127,12 +126,19 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	return c, err
 }
 
-func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, listenAddr string, handler MessageHandler) {
+func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, laddr string, handler MessageHandler) {
 	defer t.pool.Delete(raddr) // should be closed in previous defer
-	t.readListenerConnection(conn, listenAddr, handler)
+	t.readListenerConnection(conn, laddr, handler)
 }
 
-func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
+// via unicast 127.0.0.1
+// This GO will fail to read as it is getting responses from 0.0.0.0
+// More bigger problem are responses that are ariving from different IP ranges
+// ex
+// 192.168.... -> 127.0.0.1
+// 192.168..... <- 192.168..  This will not work as connected connection can not handle this
+/* func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	var uladdr *net.UDPAddr = nil
 	if laddr.IP != nil {
 		uladdr = &net.UDPAddr{
@@ -141,19 +147,6 @@ func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr
 		}
 	}
 
-	// uraddr := &net.UDPAddr{
-	// 	IP:   raddr.IP,
-	// 	Port: raddr.Port,
-	// }
-
-	// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
-	// via unicast 127.0.0.1
-	// This GO will fail to read as it is getting responses from 0.0.0.0
-
-	// More bigger problem are responses that are ariving from different IP ranges
-	// ex
-	// 192.168.... -> 127.0.0.1
-	// 192.168..... <- 192.168..  This will not work as connected connection can not handle this
 	d := net.Dialer{
 		LocalAddr: uladdr,
 	}
@@ -177,12 +170,12 @@ func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr
 	go t.readConnectedConnection(c, handler)
 
 	return c, err
-}
+} */
 
-func (t *transportUDP) readListenerConnection(conn *UDPConnection, addr string, handler MessageHandler) {
+func (t *transportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
-	defer t.pool.CloseAndDelete(conn, addr)
-	defer t.log.Debug().Str("addr", addr).Msg("Read listener connection stopped")
+	defer t.pool.CloseAndDelete(conn, laddr)
+	defer t.log.Debug().Str("addr", laddr).Msg("Read listener connection stopped")
 
 	var lastRaddr string
 	// NOTE: consider to refactor, but for cleanup
@@ -196,10 +189,10 @@ func (t *transportUDP) readListenerConnection(conn *UDPConnection, addr string, 
 		num, raddr, err := conn.ReadFrom(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				t.log.Debug().Str("addr", addr).Err(err).Msg("Read connection closed")
+				t.log.Debug().Str("addr", laddr).Err(err).Msg("Read connection closed")
 				return
 			}
-			t.log.Error().Str("addr", addr).Err(err).Msg("Read connection error")
+			t.log.Error().Str("addr", laddr).Err(err).Msg("Read connection error")
 			return
 		}
 
@@ -220,7 +213,7 @@ func (t *transportUDP) readListenerConnection(conn *UDPConnection, addr string, 
 	}
 }
 
-func (t *transportUDP) readConnectedConnection(conn *UDPConnection, handler MessageHandler) {
+/* func (t *transportUDP) readConnectedConnection(conn *UDPConnection, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	raddr := conn.Conn.RemoteAddr().String()
 	defer t.pool.CloseAndDelete(conn, raddr)
@@ -244,11 +237,11 @@ func (t *transportUDP) readConnectedConnection(conn *UDPConnection, handler Mess
 
 		t.parseAndHandle(data, raddr, handler)
 	}
-}
+} */
 
 // This should performe better to avoid any interface allocation
 // For now no usage, but leaving here
-func (t *transportUDP) readUDPConn(conn *net.UDPConn, handler MessageHandler) {
+/* func (t *transportUDP) readUDPConn(conn *net.UDPConn, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
 	defer conn.Close()
 
@@ -272,7 +265,7 @@ func (t *transportUDP) readUDPConn(conn *net.UDPConn, handler MessageHandler) {
 
 		t.parseAndHandle(data, raddr.String(), handler)
 	}
-}
+} */
 
 func (t *transportUDP) parseAndHandle(data []byte, src string, handler MessageHandler) {
 	// Check is keep alive

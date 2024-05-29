@@ -107,7 +107,6 @@ func (t *transportTCP) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	// if err := conn.SetKeepAlivePeriod(30 * time.Second); err != nil {
 	// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
 	// }
-
 	c := t.initConnection(conn, addr, handler)
 
 	// Increase ref by 1 before returnin
@@ -115,24 +114,25 @@ func (t *transportTCP) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	return c, nil
 }
 
-func (t *transportTCP) initConnection(conn net.Conn, addr string, handler MessageHandler) Connection {
+func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
-
-	t.log.Debug().Str("raddr", addr).Msg("New connection")
+	laddr := conn.LocalAddr().String()
+	t.log.Debug().Str("raddr", raddr).Msg("New connection")
 	c := &TCPConnection{
 		Conn:     conn,
 		refcount: 1 + IdleConnection,
 	}
-	t.pool.Add(addr, c)
-	go t.readConnection(c, addr, handler)
+	t.pool.Add(laddr, c)
+	t.pool.Add(raddr, c)
+	go t.readConnection(c, laddr, raddr, handler)
 	return c
 }
 
 // This should performe better to avoid any interface allocation
-func (t *transportTCP) readConnection(conn *TCPConnection, raddr string, handler MessageHandler) {
+func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, transportBufferSize)
-
+	defer t.pool.Delete(laddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
 
 	// Create stream parser context

@@ -332,8 +332,14 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		Port: viaHop.Port,
 	}
 
-	// TODO refactor code below
-	if l.ConnectionReuse {
+	// Always check does connection exists if full IP:port provided
+	// This is probably client forcing host:port
+	if laddr.IP != nil && laddr.Port > 0 {
+		c, _ = transport.GetConnection(laddr.String())
+		if c != nil {
+			return c, nil
+		}
+	} else if l.ConnectionReuse {
 		viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 
@@ -365,7 +371,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 
 		// In case client handle sets address same as UDP listen addr
 		// try grabbing listener for udp and send packet connectionless
-		if c == nil && network == "udp" && laddr.IP != nil && laddr.Port > 0 {
+		/* if c == nil && network == "udp" && laddr.IP != nil && laddr.Port > 0 {
 			c, _ = transport.GetConnection(laddr.String())
 
 			if c != nil {
@@ -380,7 +386,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 				// }
 				return c, nil
 			}
-		}
+		} */
 		l.log.Debug().Str("addr", addr).Str("raddr", raddr.String()).Msg("Active connection not found")
 	}
 
