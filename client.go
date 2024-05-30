@@ -192,12 +192,40 @@ func (c *Client) DoDigestAuth(ctx context.Context, req *sip.Request, res *sip.Re
 		})
 	}
 
-	return digestTransactionRequest(ctx, c, req, res, digest.Options{
+	return c.digestTransactionRequest(ctx, req, res, digest.Options{
 		Method:   req.Method.String(),
 		URI:      req.Recipient.Addr(),
 		Username: auth.Username,
 		Password: auth.Password,
 	})
+}
+
+// digestTransactionRequest does basic digest auth
+func (c *Client) digestTransactionRequest(ctx context.Context, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestAuthApply(req, res, opts); err != nil {
+		return nil, err
+	}
+
+	cseq := req.CSeq()
+	cseq.SeqNo++
+
+	req.RemoveHeader("Via")
+	tx, err := c.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
+	return tx, err
+}
+
+// digestProxyAuthRequest does basic digest auth with proxy header
+func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestProxyAuthApply(req, res, opts); err != nil {
+		return nil, err
+	}
+
+	cseq := req.CSeq()
+	cseq.SeqNo++
+
+	req.RemoveHeader("Via")
+	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	return tx, err
 }
 
 // WriteRequest sends request directly to transport layer
@@ -377,5 +405,41 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	if maxfwd.Val() <= 0 {
 		return fmt.Errorf("Max forwards reached")
 	}
+	return nil
+}
+
+func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
+	authHeader := res.GetHeader("Proxy-Authenticate")
+	chal, err := digest.ParseChallenge(authHeader.Value())
+	if err != nil {
+		return fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
+	}
+
+	// Reply with digest
+	cred, err := digest.Digest(chal, opts)
+	if err != nil {
+		return fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	req.RemoveHeader("Proxy-Authorization")
+	req.AppendHeader(sip.NewHeader("Proxy-Authorization", cred.String()))
+	return nil
+}
+
+func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
+	wwwAuth := res.GetHeader("WWW-Authenticate")
+	chal, err := digest.ParseChallenge(wwwAuth.Value())
+	if err != nil {
+		return fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
+	}
+
+	// Reply with digest
+	cred, err := digest.Digest(chal, opts)
+	if err != nil {
+		return fmt.Errorf("fail to build digest: %w", err)
+	}
+
+	req.RemoveHeader("Authorization")
+	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 	return nil
 }
