@@ -190,6 +190,16 @@ select {
 }
 
 ```
+
+## Client Do request
+
+Unless you need more control over [Client Transaction](#client-transaction) you can simply go with client `Do` request and wait final response.
+
+```go
+req := sip.NewRequest(sip.INVITE, sip.Uri{User:"bob", Host: "example.com"})
+res, err := client.Do(req)
+```
+
 ## Client stateless request
 
 ```go

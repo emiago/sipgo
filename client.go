@@ -151,8 +151,8 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 // It returns on final response.
 // Canceling ctx sends Cancel Request but it still returns ctx error
 // For more control use TransactionRequest
-func (c *Client) Do(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (*sip.Response, error) {
-	tx, err := c.TransactionRequest(ctx, req, options...)
+func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
+	tx, err := c.TransactionRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
