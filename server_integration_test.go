@@ -292,7 +292,8 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 				}
 
 			})
-			t.ReportMetric(float64(t.N)/max(t.Elapsed().Seconds(), 1), "req/s")
+
+			t.ReportMetric(float64(t.N)/t.Elapsed().Seconds(), "req/s")
 
 			// ua, _ := NewUA(WithUserAgenTLSConfig(clientTLS))
 			// 		client, err := NewClient(ua)

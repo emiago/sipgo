@@ -1,6 +1,6 @@
 module github.com/emiago/sipgo
 
-go 1.21
+go 1.20
 
 require (
 	github.com/gobwas/ws v1.3.2
