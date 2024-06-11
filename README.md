@@ -11,7 +11,7 @@ It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.o
 
 For extra functionality checkout also   
 - [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality
-- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality *rtp/rtcp, sdp* for dealing with real time media.
+- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (*sdp, rtp, rtcp*)
 
 Fetch lib with:
 
