@@ -136,6 +136,7 @@ func (tx *ServerTx) Acks() <-chan *Request {
 func (tx *ServerTx) ackSend(r *Request) {
 	select {
 	case <-tx.done:
+		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("ACK missed")
 	case tx.acks <- r:
 	}
 }
@@ -162,6 +163,7 @@ func (tx *ServerTx) Cancels() <-chan *Request {
 func (tx *ServerTx) cancelSend(r *Request) {
 	select {
 	case <-tx.done:
+		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("CANCEL missed")
 	case tx.cancels <- r:
 	}
 }

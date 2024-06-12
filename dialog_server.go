@@ -105,7 +105,6 @@ func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error
 	if req.CSeq().SeqNo != dt.lastCSeqNo {
 		return ErrDialogInvalidCseq
 	}
-
 	dt.setState(sip.DialogStateConfirmed)
 	// Acks are normally just absorbed, but in case of proxy
 	// they still need to be passed
@@ -317,6 +316,13 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		// For final response we want to set dialog ended state
 		if err := tx.Respond(res); err != nil {
 			return err
+		}
+
+		// We should wait ACK for cleaner exit
+		select {
+		case <-tx.Acks():
+		case <-tx.Done():
+			// This means tx moved to terminated state and no more invite retransmissions is accepted
 		}
 		s.setState(sip.DialogStateEnded)
 		return nil
