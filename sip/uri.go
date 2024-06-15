@@ -132,5 +132,9 @@ func (uri *Uri) Addr() string {
 // HostPort represents host:port part
 func (uri *Uri) HostPort() string {
 	p := strconv.Itoa(uri.Port)
+	// Default the SIP port if it is not provided
+	if p == "0" {
+		p = "5060"
+	}
 	return uri.Host + ":" + p
 }
