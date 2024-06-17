@@ -23,6 +23,9 @@ type Client struct {
 	port  int
 	rport bool
 	log   zerolog.Logger
+
+	requestHandlers map[sip.RequestMethod]RequestHandler
+	noRouteHandler  RequestHandler
 }
 
 type ClientOption func(c *Client) error
@@ -85,9 +88,10 @@ func WithClientAddr(addr string) ClientOption {
 // NewClient creates client handle for user agent
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
-		UserAgent: ua,
-		host:      ua.GetIP().String(),
-		log:       log.Logger.With().Str("caller", "Client").Logger(),
+		UserAgent:       ua,
+		host:            ua.GetIP().String(),
+		requestHandlers: make(map[sip.RequestMethod]RequestHandler),
+		log:             log.Logger.With().Str("caller", "Client").Logger(),
 	}
 
 	for _, o := range options {
@@ -95,8 +99,148 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 			return nil, err
 		}
 	}
+	// TODO have this exported as option
+	c.noRouteHandler = c.defaultUnhandledHandler
+
+	c.tx.OnRequest(c.onRequest)
 
 	return c, nil
+}
+
+// onRequest gets request from Transaction layer
+func (c *Client) onRequest(req *sip.Request, tx sip.ServerTransaction) {
+	// Transaction layer is the one who controls concurency execution of every request
+	// so in this case we should avoid adding more concurency
+	c.handleRequest(req, tx)
+}
+
+// handleRequest must be run in seperate goroutine
+func (c *Client) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
+	// TODO: Add middleware support
+	// for _, mid := range c.requestMiddlewares {
+	// 	mid(req)
+	// }
+
+	handler := c.getHandler(req.Method)
+	handler(req, tx)
+	if tx != nil {
+		// Must be called to prevent any transaction leaks
+		tx.Terminate()
+	}
+}
+
+func (c *Client) getHandler(method sip.RequestMethod) (handler RequestHandler) {
+	handler, ok := c.requestHandlers[method]
+	if !ok {
+		return c.noRouteHandler
+	}
+	return handler
+}
+
+// OnRequest registers new request callback. Can be used as generic way to add handler
+func (c *Client) OnRequest(method sip.RequestMethod, handler RequestHandler) {
+	c.requestHandlers[method] = handler
+}
+
+// OnInvite registers Invite request handler
+func (c *Client) OnInvite(handler RequestHandler) {
+	c.requestHandlers[sip.INVITE] = handler
+}
+
+// OnAck registers Ack request handler
+func (c *Client) OnAck(handler RequestHandler) {
+	c.requestHandlers[sip.ACK] = handler
+}
+
+// OnCancel registers Cancel request handler
+func (c *Client) OnCancel(handler RequestHandler) {
+	c.requestHandlers[sip.CANCEL] = handler
+}
+
+// OnBye registers Bye request handler
+func (c *Client) OnBye(handler RequestHandler) {
+	c.requestHandlers[sip.BYE] = handler
+}
+
+// OnRegister registers Register request handler
+func (c *Client) OnRegister(handler RequestHandler) {
+	c.requestHandlers[sip.REGISTER] = handler
+}
+
+// OnOptions registers Options request handler
+func (c *Client) OnOptions(handler RequestHandler) {
+	c.requestHandlers[sip.OPTIONS] = handler
+}
+
+// OnSubscribe registers Subscribe request handler
+func (c *Client) OnSubscribe(handler RequestHandler) {
+	c.requestHandlers[sip.SUBSCRIBE] = handler
+}
+
+// OnNotify registers Notify request handler
+func (c *Client) OnNotify(handler RequestHandler) {
+	c.requestHandlers[sip.NOTIFY] = handler
+}
+
+// OnRefer registers Refer request handler
+func (c *Client) OnRefer(handler RequestHandler) {
+	c.requestHandlers[sip.REFER] = handler
+}
+
+// OnInfo registers Info request handler
+func (c *Client) OnInfo(handler RequestHandler) {
+	c.requestHandlers[sip.INFO] = handler
+}
+
+// OnMessage registers Message request handler
+func (c *Client) OnMessage(handler RequestHandler) {
+	c.requestHandlers[sip.MESSAGE] = handler
+}
+
+// OnPrack registers Prack request handler
+func (c *Client) OnPrack(handler RequestHandler) {
+	c.requestHandlers[sip.PRACK] = handler
+}
+
+// OnUpdate registers Update request handler
+func (c *Client) OnUpdate(handler RequestHandler) {
+	c.requestHandlers[sip.UPDATE] = handler
+}
+
+// OnPublish registers Publish request handler
+func (c *Client) OnPublish(handler RequestHandler) {
+	c.requestHandlers[sip.PUBLISH] = handler
+}
+
+// OnNoRoute registers no route handler
+// default is handling is responding 405 Method Not allowed
+// This allows customizing your response for any non handled message
+func (c *Client) OnNoRoute(handler RequestHandler) {
+	c.noRouteHandler = handler
+}
+
+func (c *Client) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransaction) {
+	c.log.Warn().Msg("SIP request handler not found")
+	res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
+	// Send response directly and let transaction terminate
+	if err := c.WriteResponse(res); err != nil {
+		c.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
+	}
+}
+
+// WriteResponse will proxy message to transport layer. Use it in stateless mode
+func (c *Client) WriteResponse(r *sip.Response) error {
+	return c.tp.WriteMsg(r)
+}
+
+// RegisteredMethods returns list of registered handlers.
+// Can be used for constructing Allow header
+func (c *Client) RegisteredMethods() []string {
+	r := make([]string, 0, len(c.requestHandlers))
+	for k, _ := range c.requestHandlers {
+		r = append(r, k.String())
+	}
+	return r
 }
 
 // Close client handle. UserAgent must be closed for full transaction and transport layer closing.
