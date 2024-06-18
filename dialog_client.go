@@ -36,6 +36,10 @@ func (s *DialogClient) loadDialog(id string) *DialogClientSession {
 	return t
 }
 
+func (s *DialogClient) MatchRequestDialog(req *sip.Request) (*DialogClientSession, error) {
+	return s.matchDialogRequest(req)
+}
+
 func (s *DialogClient) matchDialogRequest(req *sip.Request) (*DialogClientSession, error) {
 	id, err := sip.UACReadRequestDialogID(req)
 	if err != nil {

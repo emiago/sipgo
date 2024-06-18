@@ -1,40 +1,47 @@
 package sipgo
 
 import (
+	"context"
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDialogServerBye(t *testing.T) {
-	// Fake invite and response
+func TestDialogServerByeRequest(t *testing.T) {
+	ua, _ := NewUA()
+	defer ua.Close()
+	cli, _ := NewClient(ua)
+
+	uasContact := sip.ContactHeader{
+		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+	}
+	dialogSrv := NewDialogServer(cli, uasContact)
+
 	invite, _, _ := createTestInvite(t, "sip:uas@uas.com", "udp", "uas.com:5090")
 	invite.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uas", Port: 1234}})
+	invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P1", Port: 5060}})
+	invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P2", Port: 5060}})
+	invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P3", Port: 5060}})
+
+	dialog, err := dialogSrv.ReadInvite(invite, sip.NewServerTx("test", invite, nil, log.Logger))
+	require.NoError(t, err)
 
 	res := sip.NewResponseFromRequest(invite, sip.StatusOK, "OK", nil)
 	res.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uac", Port: 9876}})
 
 	bye := newByeRequestUAS(invite, res)
-
-	// Callid is same
 	require.Equal(t, invite.CallID(), bye.CallID())
 
-	// To and From is reversed
-	require.Equal(t, invite.To().Address, bye.From().Address)
-	require.Equal(t, invite.To().DisplayName, bye.From().DisplayName)
-	require.Equal(t, invite.From().Address, bye.To().Address)
-	require.Equal(t, invite.From().DisplayName, bye.To().DisplayName)
+	ctxCanceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	// No execution
+	dialog.TransactionRequest(ctxCanceled, bye)
 
-	// // Record-Routes are converted to Routes
-	// invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P1", Port: 5060}})
-	// invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P2", Port: 5060}})
-	// invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P3", Port: 5060}})
-
-	// bye = newByeRequestUAS(invite, res)
-
-	// routes := bye.GetHeaders("Route")
-	// require.Equal(t, "<sip:P3:5060>", routes[0].Value())
-	// require.Equal(t, "<sip:P2:5060>", routes[1].Value())
-	// require.Equal(t, "<sip:P1:5060>", routes[2].Value())
+	routes := bye.GetHeaders("Route")
+	assert.Equal(t, "<sip:P3:5060>", routes[0].Value())
+	assert.Equal(t, "<sip:P2:5060>", routes[1].Value())
+	assert.Equal(t, "<sip:P1:5060>", routes[2].Value())
 }
