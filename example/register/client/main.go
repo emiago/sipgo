@@ -52,8 +52,8 @@ func main() {
 	defer client.Close()
 
 	// Create basic REGISTER request structure
-	recipient := &sip.Uri{}
-	sip.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), recipient)
+	recipient := sip.Uri{}
+	sip.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), &recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
 		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *inter)),
