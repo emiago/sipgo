@@ -235,8 +235,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
 		hdrs := inviteResponse.GetHeaders("Record-Route")
 		for i := len(hdrs) - 1; i >= 0; i-- {
-			h := hdrs[i].headerClone()
-			ackRequest.AppendHeader(h)
+			recordRoute := hdrs[i]
+			ackRequest.AppendHeader(NewHeader("Route", recordRoute.Value()))
 		}
 	}
 
