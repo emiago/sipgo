@@ -238,7 +238,13 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 		}
 
 		if rr := s.InviteResponse.RecordRoute(); rr != nil {
-			req.SetDestination(rr.Address.HostPort())
+			if rr.Address.UriParams.Has("lr") {
+				req.AppendHeader(&sip.RouteHeader{
+					Address: rr.Address,
+				})
+			} else {
+				req.SetDestination(rr.Address.HostPort())
+			}
 		}
 	}
 
