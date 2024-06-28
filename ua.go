@@ -53,6 +53,9 @@ func WithUserAgenTLSConfig(c *tls.Config) UserAgentOption {
 	}
 }
 
+// WithUserAgentParser allows removing default behavior of parser
+// You can define and remove default headers parser map and pass here.
+// Only use if your benchmarks are better than default
 func WithUserAgentParser(p *sip.Parser) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.parser = p

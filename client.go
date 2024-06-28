@@ -110,15 +110,13 @@ func (c *Client) GetHostname() string {
 
 // TransactionRequest uses transaction layer to send request and returns transaction
 //
-// NOTE: By default request will not be cloned and it will populate request with missing headers unless options are used
+// By default request will not be cloned and it will populate request with missing headers unless options are used
 // In most cases you want this as you will retry with additional headers
 //
 // Following header fields will be added if not exist to have correct SIP request:
 // To, From, CSeq, Call-ID, Max-Forwards, Via
-//
-// Passing options will override this behavior, that is it is expected
-// that you have request fully built
-// This is useful when using client handle in proxy building as request are already parsed
+// Passing options will override this behavior, that is, it is expected that your request is already prebuild
+// This is mostly the case when creating proxy
 func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if req.IsAck() {
 		return nil, fmt.Errorf("ACK request must be sent directly through transport. Use WriteRequest")
@@ -145,12 +143,10 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 	return c.tx.Request(ctx, req)
 }
 
-// Experimental
-//
-// Do request is HTTP client like Do request/response
+// Do request is HTTP client like Do request/response.
 // It returns on final response.
 // Canceling ctx sends Cancel Request but it still returns ctx error
-// For more control use TransactionRequest
+// For more lower API use TransactionRequest directly
 func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := c.TransactionRequest(ctx, req)
 	if err != nil {
@@ -170,7 +166,8 @@ func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			return nil, errors.Join(ctx.Err(), tx.Cancel())
+			err := tx.Cancel()
+			return nil, errors.Join(ctx.Err(), err)
 		}
 	}
 }
@@ -210,21 +207,7 @@ func (c *Client) digestTransactionRequest(ctx context.Context, req *sip.Request,
 	cseq.SeqNo++
 
 	req.RemoveHeader("Via")
-	tx, err := c.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
-	return tx, err
-}
-
-// digestProxyAuthRequest does basic digest auth with proxy header
-func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
-	if err := digestProxyAuthApply(req, res, opts); err != nil {
-		return nil, err
-	}
-
-	cseq := req.CSeq()
-	cseq.SeqNo++
-
-	req.RemoveHeader("Via")
-	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	tx, err := c.TransactionRequest(ctx, req, ClientRequestAddVia)
 	return tx, err
 }
 
@@ -403,7 +386,7 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	maxfwd.Dec()
 
 	if maxfwd.Val() <= 0 {
-		return fmt.Errorf("Max forwards reached")
+		return fmt.Errorf("max forwards reached")
 	}
 	return nil
 }
@@ -442,4 +425,18 @@ func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) e
 	req.RemoveHeader("Authorization")
 	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 	return nil
+}
+
+// digestProxyAuthRequest does basic digest auth with proxy header
+func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestProxyAuthApply(req, res, opts); err != nil {
+		return nil, err
+	}
+
+	cseq := req.CSeq()
+	cseq.SeqNo++
+
+	req.RemoveHeader("Via")
+	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	return tx, err
 }

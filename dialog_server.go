@@ -214,9 +214,6 @@ func (s *DialogServerSession) WriteRequest(req *sip.Request) error {
 // Close is always good to call for cleanup or terminating dialog state
 func (s *DialogServerSession) Close() error {
 	s.s.dialogs.Delete(s.ID)
-	// s.setState(sip.DialogStateEnded)
-	// ctx, _ := context.WithTimeout(context.Background(), transaction.Timer_B)
-	// return s.Bye(ctx)
 	return nil
 }
 
@@ -406,8 +403,6 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return err
 	}
 	defer tx.Terminate() // Terminates current transaction
-
-	// s.setState(sip.DialogStateEnded)
 
 	// Wait 200
 	select {

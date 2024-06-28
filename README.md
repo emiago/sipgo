@@ -324,8 +324,6 @@ Content-Length:  0
 If you find this project interesting for bigger support or consulting, you can contact me on
 [mail](emirfreelance91@gmail.com)
 
-*You can buy me a coffee in meantime on* [ko-fi.com/emiasupport](https://ko-fi.com/emiasupport) 
-
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
 
 
