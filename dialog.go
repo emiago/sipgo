@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/emiago/sipgo/sip"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 )
 
 var (

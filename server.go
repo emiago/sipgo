@@ -9,7 +9,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/emiago/sipgo/sip"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

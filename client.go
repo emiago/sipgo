@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
 	"github.com/icholy/digest"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 )
 
 func Init() {

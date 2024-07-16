@@ -1,31 +1,30 @@
 <img src="icons/icon.png" width="300" alt="SIPGO">
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/emiago/sipgo)](https://goreportcard.com/report/github.com/emiago/sipgo)
-![Used By](https://sourcegraph.com/github.com/emiago/sipgo/-/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/shpendbeqiraj2/sipgo)](https://goreportcard.com/report/github.com/shpendbeqiraj2/sipgo)
+![Used By](https://sourcegraph.com/github.com/shpendbeqiraj2/sipgo/-/badge.svg)
 ![Coverage](https://img.shields.io/badge/coverage-45.9%25-blue)
-[![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/emiago/sipgo/LICENCE) 
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/emiago/sipgo)
+[![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/shpendbeqiraj2/sipgo/LICENCE)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/shpendbeqiraj2/sipgo)
 
 **SIPGO** is library for writing fast SIP services in GO language.  
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)) optimized for fast parsing.
 
-For extra functionality checkout also   
-- [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality
-- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (*sdp, rtp, rtcp*)
+For extra functionality checkout also
+
+- [github.com/shpendbeqiraj2/sipgox](https://github.com/shpendbeqiraj2/sipgox) - Extra SIP functionality
+- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (_sdp, rtp, rtcp_)
 
 Fetch lib with:
 
-`go get github.com/emiago/sipgo`
+`go get github.com/shpendbeqiraj2/sipgo`
 
 **NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
-*If you like/use project currently or need additional help/support checkout [Support section](#support) 
-
+\*If you like/use project currently or need additional help/support checkout [Support section](#support)
 
 You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
 
-
-More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
+More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/shpendbeqiraj2/sipgo)
 
 ## Supported protocols
 
@@ -37,25 +36,25 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 
 ## Examples
 
-- Stateful proxy [example/proxysip](example/proxysip)  
-- Register with authentication [example/register](example/register)  
-- RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)
+- Stateful proxy [example/proxysip](example/proxysip)
+- Register with authentication [example/register](example/register)
+- RTP echo with sipgox [example/dialog](https://github.com/shpendbeqiraj2/sipgox/tree/main/echome)
 
 Also thanks to [pion](https://github.com/pion/webrtc) project sharing this example of using SIPgo with webrtc:
-- https://github.com/pion/example-webrtc-applications/tree/master/sip-to-webrtc  original post [on X](https://twitter.com/_pion/status/1742955942314913958)
 
-
+- https://github.com/pion/example-webrtc-applications/tree/master/sip-to-webrtc original post [on X](https://twitter.com/_pion/status/1742955942314913958)
 
 ## Tools developed:
+
 - CLI softphone for easy testing [gophone](https://github.com/emiago/gophone)
 - Simple proxy where NAT is problem [psip](https://github.com/emiago/psip)
-- ... *your tool can be here*
+- ... _your tool can be here_
 
 ## Performance
 
-As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
+As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`.
 To find out more about performance check the latest results:  
-[example/proxysip](example/proxysip) 
+[example/proxysip](example/proxysip)
 
 ## Used By
 
@@ -63,15 +62,14 @@ To find out more about performance check the latest results:
 <img src="icons/babelforce-logo.png" width="300" alt="babelforce">
 </a>
 
-
 ---
-*If you are using in company, your logo can be here.*
+
+_If you are using in company, your logo can be here._
 
 # Usage
 
 Lib allows you to write easily sip servers, clients, stateful proxies, registrars or any sip routing.
 Writing in GO we are not limited to handle SIP requests/responses in many ways, or to integrate and scale with any external services (databases, caches...).
-
 
 ## UAS/UAC build
 
@@ -98,9 +96,9 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 - Server handle creates listeners and reacts on incoming requests. [More on server transactions](#server-transaction)
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
-
 ### TLS transports
-```go 
+
+```go
 // TLS
 conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
@@ -117,12 +115,12 @@ ua, _ := sipgo.NewUA() // Build user agent
 defer ua.Close()
 
 client, _ := sipgo.NewClient(ua, sipgo.WithClientHostname("127.0.0.1"), sipgo.WithClientPort(5060))
-server, _ := sipgo.NewServer(ua) 
+server, _ := sipgo.NewServer(ua)
 srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction)) {
     // This will be received on 127.0.0.1:5060
 }
 
-tx, err := client.TransactionRequest(ctx, sip.NewRequest(sip.INVITE, recipient)) 
+tx, err := client.TransactionRequest(ctx, sip.NewRequest(sip.INVITE, recipient))
 ```
 
 ## Server Transaction
@@ -138,9 +136,9 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 
     select {
         case m := <-tx.Acks(): // Handle ACK . ACKs on 2xx are send as different request
-        case m := <-tx.Cancels(): // Handle Cancel 
+        case m := <-tx.Cancels(): // Handle Cancel
         case <-tx.Done():
-            // Signal transaction is done. 
+            // Signal transaction is done.
             // Check any errors with tx.Err() to have more info why terminated
             return
     }
@@ -162,14 +160,14 @@ func ackHandler(req *sip.Request, tx sip.ServerTransaction) {
 srv.OnACK(ackHandler)
 ```
 
-
 ## Client Transaction
 
-Using client handle allows easy creating and sending request. 
+Using client handle allows easy creating and sending request.
 Unless you customize transaction request with opts by default `client.TransactionRequest` will build all other
 headers needed to pass correct sip request.
 
 Here is full example:
+
 ```go
 ctx := context.Background()
 client, _ := sipgo.NewClient(ua) // Creating client handle
@@ -211,12 +209,12 @@ client.WriteRequest(req)
 
 ## Dialog handling
 
-`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions. 
+`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions.
 They are seperated based on your **request context**, but they act more like `peer`.
 They both need `client` **handle** to be able send request and `server` **handle** to accept request.
 
-
 **UAC**:
+
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
 srv, _ := sipgo.NewServer(ua) // Creating server handle
@@ -245,6 +243,7 @@ err = dialog.Bye(ctx)
 ```
 
 **UAS**:
+
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
 srv, _ := sipgo.NewServer(ua) // Creating server handle
@@ -260,7 +259,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     // handle error
     dlg.Respond(sip.StatusTrying, "Trying", nil)
     dlg.Respond(sip.StatusOK, "OK", nil)
-    
+
     // Instead Done also dlg.State() can be used for granular state checking
     <-dlg.Context().Done()
 })
@@ -280,6 +279,7 @@ Proxy is combination client and server handle that creates server/client transac
 same **ua** same like uac/uas build.
 
 Forwarding request is done via client handle:
+
 ```go
 ua, _ := sipgo.NewUA() // Build user agent
 srv, _ := sipgo.NewServer(ua) // Creating server handle
@@ -301,6 +301,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 You can have full SIP messages dumped from transport into Debug level message.
 
 Example:
+
 ```go
 sip.SIPDebug = true
 ```
@@ -324,27 +325,24 @@ Content-Length:  0
 If you find this project interesting for bigger support or consulting, you can contact me on
 [mail](emirfreelance91@gmail.com)
 
-For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
-
+For bugs features pls create [issue](https://github.com/shpendbeqiraj2/sipgo/issues).
 
 ## Extra
 
-
 ### E2E/integration testing
 
-If you are interested using lib for your testing services then checkout 
-[article on how easy you can make calls and other](https://github.com/emiago/sipgo/wiki/E2E-testing)
-
+If you are interested using lib for your testing services then checkout
+[article on how easy you can make calls and other](https://github.com/shpendbeqiraj2/sipgo/wiki/E2E-testing)
 
 ### Tests
 
 Library will be covered with more tests. Focus is more on benchmarking currently.
+
 ```
-go test ./...  
+go test ./...
 ```
 
 ## Credits
 
 This project was influenced by [gosip](https://github.com/ghettovoice/gosip), project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
 This unfortunately required many design changes, therefore this libraries are not compatible.
-

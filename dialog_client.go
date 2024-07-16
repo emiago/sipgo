@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 )
 
 type DialogClient struct {

@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
 	uuid "github.com/satori/go.uuid"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 )
 
 type DialogServer struct {

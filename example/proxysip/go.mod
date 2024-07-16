@@ -1,11 +1,11 @@
-module github.com/emiago/sipgo/example/proxysip
+module github.com/shpendbeqiraj2/sipgo/example/proxysip
 
 go 1.21.1
 
-replace github.com/emiago/sipgo => ../../
+replace github.com/shpendbeqiraj2/sipgo => ../../
 
 require (
-	github.com/emiago/sipgo v0.19.1-0.20240404080657-8f142652da33
+	github.com/shpendbeqiraj2/sipgo v0.19.1-0.20240404080657-8f142652da33
 	github.com/prometheus/client_golang v1.17.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sirupsen/logrus v1.9.3

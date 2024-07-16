@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emiago/sipgo"
-	"github.com/emiago/sipgo/sip"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shpendbeqiraj2/sipgo"
+	"github.com/shpendbeqiraj2/sipgo/sip"
 
 	"github.com/icholy/digest"
 )
