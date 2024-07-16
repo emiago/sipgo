@@ -22,6 +22,10 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 		return "", errors.New("Empty Address")
 	}
 
+	if headerParams == nil {
+		headerParams = HeaderParams{}
+	}
+	
 	// adds alloc but easier to maintain
 	a := nameAddress{
 		uri:          uri,
