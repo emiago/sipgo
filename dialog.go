@@ -37,10 +37,6 @@ type Dialog struct {
 	cancel context.CancelFunc
 }
 
-func (d *Dialog) Body() []byte {
-	return d.InviteResponse.Body()
-}
-
 func (d *Dialog) setState(s sip.DialogState) {
 	old := d.state.Swap(int32(s))
 	if old == int32(s) {

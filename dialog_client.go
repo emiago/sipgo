@@ -289,7 +289,7 @@ func (s *DialogClientSession) Close() error {
 }
 
 type AnswerOptions struct {
-	OnResponse func(res *sip.Response)
+	OnResponse func(res *sip.Response) error
 
 	// For digest authentication
 	Username string
@@ -324,7 +324,9 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		}
 
 		if opts.OnResponse != nil {
-			opts.OnResponse(r)
+			if err := opts.OnResponse(r); err != nil {
+				return err
+			}
 		}
 
 		s.InviteResponse = r
