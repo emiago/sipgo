@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
@@ -15,6 +14,25 @@ type DialogClient struct {
 	c          *Client
 	dialogs    sync.Map // TODO replace with typed version
 	contactHDR sip.ContactHeader
+
+	ua DialogUA
+}
+
+// NewDialogClient provides handle for managing UAC dialog
+// Contact hdr is default to be provided for correct invite. It is not used if you provided hdr as part of request,
+// but contact hdr must be present so this makes sure correct dialog is established.
+// In case handling different transports you should have multiple instances per transport
+func NewDialogClient(client *Client, contactHDR sip.ContactHeader) *DialogClient {
+	s := &DialogClient{
+		c:          client,
+		dialogs:    sync.Map{},
+		contactHDR: contactHDR,
+		ua: DialogUA{
+			Client:     client,
+			ContactHDR: contactHDR,
+		},
+	}
+	return s
 }
 
 func (s *DialogClient) dialogsLen() int {
@@ -53,71 +71,74 @@ func (s *DialogClient) matchDialogRequest(req *sip.Request) (*DialogClientSessio
 	return dt, nil
 }
 
-// NewDialogClient provides handle for managing UAC dialog
-// Contact hdr is default to be provided for correct invite. It is not used if you provided hdr as part of request,
-// but contact hdr must be present so this makes sure correct dialog is established.
-// In case handling different transports you should have multiple instances per transport
-func NewDialogClient(client *Client, contactHDR sip.ContactHeader) *DialogClient {
-	s := &DialogClient{
-		c:          client,
-		dialogs:    sync.Map{},
-		contactHDR: contactHDR,
-	}
-	return s
-}
-
-type ErrDialogResponse struct {
-	Res *sip.Response
-}
-
-func (e ErrDialogResponse) Error() string {
-	return fmt.Sprintf("Invite failed with response: %s", e.Res.StartLine())
-}
-
 // Invite sends INVITE request and creates early dialog session.
 // This is actually not yet dialog (ID is empty)
 // You need to call WaitAnswer after for establishing dialog
 // For passing custom Invite request use WriteInvite
 func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
-	req := sip.NewRequest(sip.INVITE, recipient)
-	if body != nil {
-		req.SetBody(body)
-	}
-
-	for _, h := range headers {
-		req.AppendHeader(h)
-	}
-	return c.WriteInvite(ctx, req)
-}
-
-func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
-	cli := c.c
-
-	if inviteRequest.Contact() == nil {
-		// Set contact only if not exists
-		inviteRequest.AppendHeader(&c.contactHDR)
-	}
-
-	tx, err := cli.TransactionRequest(ctx, inviteRequest)
+	dt, err := c.ua.Invite(ctx, recipient, body, headers...)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	dtx := &DialogClientSession{
-		Dialog: Dialog{
-			InviteRequest: inviteRequest,
-			lastCSeqNo:    inviteRequest.CSeq().SeqNo,
-			state:         atomic.Int32{},
-			stateCh:       make(chan sip.DialogState, 3),
-			ctx:           ctx,
-			cancel:        cancel,
-		},
-		dc:       c,
-		inviteTx: tx,
+	dt.OnClose = func() {
+		c.dialogs.Delete(dt.ID)
+	}
+	dt.OnDialog = func(id string) {
+		c.dialogs.Store(id, dt)
+	}
+	// req := sip.NewRequest(sip.INVITE, recipient)
+	// if body != nil {
+	// 	req.SetBody(body)
+	// }
+
+	// for _, h := range headers {
+	// 	req.AppendHeader(h)
+	// }
+	// return c.WriteInvite(ctx, req)
+	return dt, err
+}
+
+func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+	dt, err := c.ua.WriteInvite(ctx, inviteRequest)
+	if err != nil {
+		return nil, err
 	}
 
-	return dtx, nil
+	dt.OnClose = func() {
+		c.dialogs.Delete(dt.ID)
+	}
+	dt.OnDialog = func(id string) {
+		c.dialogs.Store(id, dt)
+	}
+	// cli := c.c
+
+	// if inviteRequest.Contact() == nil {
+	// 	// Set contact only if not exists
+	// 	inviteRequest.AppendHeader(&c.contactHDR)
+	// }
+
+	// tx, err := cli.TransactionRequest(ctx, inviteRequest)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// ctx, cancel := context.WithCancel(context.Background())
+	// dtx := &DialogClientSession{
+	// 	Dialog: Dialog{
+	// 		InviteRequest: inviteRequest,
+	// 		lastCSeqNo:    inviteRequest.CSeq().SeqNo,
+	// 		state:         atomic.Int32{},
+	// 		stateCh:       make(chan sip.DialogState, 3),
+	// 		ctx:           ctx,
+	// 		cancel:        cancel,
+	// 	},
+	// 	dc:       c,
+	// 	inviteTx: tx,
+	// }
+
+	// return dtx, nil
+	return dt, err
 }
 
 func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
@@ -125,21 +146,7 @@ func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error
 	if err != nil {
 		return err
 	}
-
-	dt.setState(sip.DialogStateEnded)
-
-	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-	if err := tx.Respond(res); err != nil {
-		return err
-	}
-	defer dt.Close()              // Delete our dialog always
-	defer dt.inviteTx.Terminate() // Terminates Invite transaction
-
-	// select {
-	// case <-tx.Done():
-	// 	return tx.Err()
-	// }
-	return nil
+	return dt.ReadBye(req, tx)
 }
 
 // Experiment
@@ -150,9 +157,41 @@ func (c *DialogClient) ReadRefer(req *sip.Request, tx sip.ServerTransaction, ref
 	if err != nil {
 		return nil, err
 	}
+	return dt.ReadRefer(req, tx, referUri)
+}
 
+type DialogClientSession struct {
+	Dialog
+	// dc       *DialogClient
+	inviteTx sip.ClientTransaction
+	ua       *DialogUA
+
+	// OnClose triggers when user calls Close
+	OnClose func()
+	// OnDialog triggers when SIP Dialog is only created after successful answer. Use it for caching dialog
+	OnDialog func(id string)
+}
+
+func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
+	s.setState(sip.DialogStateEnded)
+
+	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+	if err := tx.Respond(res); err != nil {
+		return err
+	}
+	defer s.Close()              // Delete our dialog always
+	defer s.inviteTx.Terminate() // Terminates Invite transaction
+
+	// select {
+	// case <-tx.Done():
+	// 	return tx.Err()
+	// }
+	return nil
+}
+
+func (s *DialogClientSession) ReadRefer(req *sip.Request, tx sip.ServerTransaction, referUri *sip.Uri) (*DialogClientSession, error) {
 	cseq := req.CSeq().SeqNo
-	if cseq <= dt.lastCSeqNo {
+	if cseq <= s.lastCSeqNo {
 		return nil, ErrDialogOutsideDialog
 	}
 
@@ -173,40 +212,34 @@ func (c *DialogClient) ReadRefer(req *sip.Request, tx sip.ServerTransaction, ref
 	// Now dialog should do invite
 	// And implicit subscription should be done
 	// invite := sip.NewRequest(sip.INVITE, *referUri)
-	// invite.SetBody(dt.InviteRequest.Body())
+	// invite.SetBody(s.InviteRequest.Body())
 	// invite
 
-	// // dt.TransactionRequest(context.TODO(), invite)
+	// // s.TransactionRequest(context.TODO(), invite)
 	// c.WriteInvite(context.TODO(), invite)
 
-	return dt, nil
+	return s, nil
 
-	// Dial until current dialog is canceled. Therefore we pass dt.Context
-	// ctx, cancel := context.WithTimeout(dt.Context(), 30*time.Second)
+	// Dial until current dialog is canceled. Therefore we pass s.Context
+	// ctx, cancel := context.WithTimeout(s.Context(), 30*time.Second)
 	// defer cancel()
 
 	// c.Invite(ctx, referUri)
 
-	// dt.setState(sip.DialogStateEnded)
+	// s.setState(sip.DialogStateEnded)
 
 	// res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 	// if err := tx.Respond(res); err != nil {
 	// 	return err
 	// }
-	// defer dt.Close()              // Delete our dialog always
-	// defer dt.inviteTx.Terminate() // Terminates Invite transaction
+	// defer s.Close()              // Delete our dialog always
+	// defer s.inviteTx.Terminate() // Terminates Invite transaction
 
 	// // select {
 	// // case <-tx.Done():
 	// // 	return tx.Err()
 	// // }
 	// return nil
-}
-
-type DialogClientSession struct {
-	Dialog
-	dc       *DialogClient
-	inviteTx sip.ClientTransaction
 }
 
 // TransactionRequest is doing client DIALOG request based on RFC
@@ -264,7 +297,7 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	// Passing option to avoid CSEQ apply
-	return s.dc.c.TransactionRequest(ctx, req, ClientRequestBuild)
+	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestBuild)
 }
 
 func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
@@ -275,13 +308,16 @@ func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 			req.SetDestination(rr.Address.HostPort())
 		}
 	}
-	return s.dc.c.WriteRequest(req)
+	return s.ua.Client.WriteRequest(req)
 }
 
 // Close must be always called in order to cleanup some internal resources
 // Consider that this will not send BYE or CANCEL or change dialog state
 func (s *DialogClientSession) Close() error {
-	s.dc.dialogs.Delete(s.ID)
+	if s.OnClose != nil {
+		s.OnClose()
+	}
+	// s.ua.dialogs.Delete(s.ID)
 	// s.setState(sip.DialogStateEnded)
 	// ctx, _ := context.WithTimeout(context.Background(), sip.Timer_B)
 	// return s.Bye(ctx)
@@ -407,7 +443,11 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	s.InviteResponse = r
 	s.ID = id
 	s.setState(sip.DialogStateEstablished)
-	s.dc.dialogs.Store(id, s)
+
+	if s.OnDialog != nil {
+		s.OnDialog(id)
+	}
+	// s.ua.dialogs.Store(id, s)
 	return nil
 }
 

@@ -120,7 +120,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 
 		connCloser = udpConn
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
+			v.(ListenReadyCtxValue) <- struct{}{}
 		}
 		return srv.tp.ServeUDP(udpConn)
 
@@ -137,7 +137,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 
 		connCloser = conn
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
+			v.(ListenReadyCtxValue) <- struct{}{}
 		}
 
 		return srv.tp.ServeTCP(conn)
@@ -155,7 +155,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 
 		connCloser = conn
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
+			v.(ListenReadyCtxValue) <- struct{}{}
 		}
 		// and uses listener to buffer
 		return srv.tp.ServeWS(conn)
@@ -201,7 +201,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 		connCloser = listener
 
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
+			v.(ListenReadyCtxValue) <- struct{}{} //
 		}
 		if network == "ws" || network == "wss" {
 			return srv.tp.ServeWSS(listener)

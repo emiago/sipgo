@@ -3,6 +3,7 @@ package sipgo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
@@ -15,6 +16,14 @@ var (
 	ErrDialogCanceled        = errors.New("Dialog canceled")
 	ErrDialogInvalidCseq     = errors.New("Invalid CSEQ number")
 )
+
+type ErrDialogResponse struct {
+	Res *sip.Response
+}
+
+func (e ErrDialogResponse) Error() string {
+	return fmt.Sprintf("Invite failed with response: %s", e.Res.StartLine())
+}
 
 type Dialog struct {
 	ID string
@@ -54,17 +63,25 @@ func (d *Dialog) setState(s sip.DialogState) {
 	}
 }
 
+func (d *Dialog) LoadState() sip.DialogState {
+	return sip.DialogState(d.state.Load())
+}
+
+// Deprecated:
+// Use StateRead
+//
+// Will be removed in future releases
 func (d *Dialog) State() <-chan sip.DialogState {
 	return d.stateCh
 }
 
-// Done is signaled when dialog state ended
-//
-// Deprecated:
-// It is wrapper on context, so better to use Context()
-func (d *Dialog) Done() <-chan struct{} {
-	return d.ctx.Done()
+func (d *Dialog) StateRead() <-chan sip.DialogState {
+	return d.stateCh
 }
+
+// func (d *Dialog) OnState(f func(s sip.DialogState)) {
+// 	d.onState = append(d.onState, f)
+// }
 
 func (d *Dialog) Context() context.Context {
 	return d.ctx
