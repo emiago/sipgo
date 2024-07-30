@@ -131,6 +131,9 @@ func (uri *Uri) Addr() string {
 
 // HostPort represents host:port part
 func (uri *Uri) HostPort() string {
+	if uri.Port == 0 {
+		return uri.Host
+	}
 	p := strconv.Itoa(uri.Port)
 	return uri.Host + ":" + p
 }
