@@ -31,6 +31,7 @@ func TestTransportLayerClosing(t *testing.T) {
 func TestTransportLayerClientConnectionReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	defer tp.Close()
 	require.True(t, tp.ConnectionReuse)
 
 	t.Run("Default", func(t *testing.T) {
@@ -76,6 +77,7 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	defer tp.Close()
 	tp.ConnectionReuse = false
 
 	t.Run("Default", func(t *testing.T) {
@@ -112,8 +114,8 @@ func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
 		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876, Params: NewParams()})
 		conn3, err := tp.ClientRequestConnection(context.TODO(), req)
-
 		require.NoError(t, err)
+
 		require.NotEqual(t, conn, conn3)
 	})
 }

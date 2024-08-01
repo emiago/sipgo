@@ -523,7 +523,7 @@ func (h *ToHeader) headerClone() Header {
 	// 	newTo.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newTo.Params = h.Params.Clone().(HeaderParams)
+		newTo.Params = h.Params.Clone()
 	}
 	return newTo
 }
@@ -590,7 +590,7 @@ func (h *FromHeader) headerClone() Header {
 	// 	newFrom.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newFrom.Params = h.Params.Clone().(HeaderParams)
+		newFrom.Params = h.Params.Clone()
 	}
 
 	return newFrom
@@ -674,7 +674,7 @@ func (h *ContactHeader) Clone() *ContactHeader {
 	}
 
 	if h.Params != nil {
-		newCnt.Params = h.Params.Clone().(HeaderParams)
+		newCnt.Params = h.Params.Clone()
 	}
 
 	return newCnt
