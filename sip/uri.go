@@ -67,7 +67,13 @@ func (uri *Uri) String() string {
 // StringWrite writes uri string to buffer
 func (uri *Uri) StringWrite(buffer io.StringWriter) {
 	// Compulsory protocol identifier.
-	buffer.WriteString(string(uri.Scheme))
+	if uri.Scheme != "" {
+		buffer.WriteString(string(uri.Scheme))
+	} else {
+		// In order to keep supporting invalid URI format without a scheme
+		// assuming sip: scheme by default
+		buffer.WriteString(string(SCHEME_SIP))
+	}
 	buffer.WriteString(":")
 
 	if uri.Scheme == SCHEME_TEL {
