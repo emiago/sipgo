@@ -187,6 +187,7 @@ func (req *Request) Source() string {
 	return fmt.Sprintf("%v:%v", host, port)
 }
 
+// TODO: return Addr instead string, to remove double string parsing
 func (req *Request) Destination() string {
 	if dest := req.MessageData.Destination(); dest != "" {
 		return dest

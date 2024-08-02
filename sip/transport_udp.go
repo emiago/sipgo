@@ -441,6 +441,10 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 			Port: port,
 		}
 
+		if raddr.Port == 0 {
+			raddr.Port = DefaultUdpPort
+		}
+
 		n, err = c.WriteTo(data, &raddr)
 		if err != nil {
 			return fmt.Errorf("udp conn %s err. %w", c.PacketConn.LocalAddr().String(), err)
