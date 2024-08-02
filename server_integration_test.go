@@ -92,11 +92,11 @@ func TestIntegrationClientServer(t *testing.T) {
 		serverAddr string
 		encrypted  bool
 	}{
-		{transport: "udp", serverAddr: "127.1.1.100:6060"},
-		{transport: "tcp", serverAddr: "127.1.1.100:6060"},
-		{transport: "ws", serverAddr: "127.1.1.100:6061"},
-		{transport: "tls", serverAddr: "127.1.1.100:6062", encrypted: true},
-		{transport: "wss", serverAddr: "127.1.1.100:6063", encrypted: true},
+		{transport: "udp", serverAddr: "127.1.1.100:16060"},
+		{transport: "tcp", serverAddr: "127.1.1.100:16060"},
+		{transport: "ws", serverAddr: "127.1.1.100:16061"},
+		{transport: "tls", serverAddr: "127.1.1.100:16062", encrypted: true},
+		{transport: "wss", serverAddr: "127.1.1.100:16063", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())

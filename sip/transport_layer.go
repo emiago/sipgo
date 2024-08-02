@@ -306,6 +306,12 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		Port:     port,
 		Hostname: host,
 	}
+
+	if raddr.Port == 0 {
+		// Use default port for transport
+		raddr.Port = DefaultPort(network)
+	}
+
 	if raddr.IP == nil {
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
 			return nil, err
