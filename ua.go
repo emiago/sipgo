@@ -85,7 +85,7 @@ func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := ua.setIP(v); err != nil {
+		if err := ua.SetIP(v); err != nil {
 			return nil, err
 		}
 	}
@@ -104,7 +104,7 @@ func (ua *UserAgent) Close() error {
 }
 
 // Listen adds listener for serve
-func (ua *UserAgent) setIP(ip net.IP) (err error) {
+func (ua *UserAgent) SetIP(ip net.IP) (err error) {
 	ua.ip = ip
 	return err
 }
