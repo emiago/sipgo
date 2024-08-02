@@ -134,6 +134,27 @@ func TestParseUri(t *testing.T) {
 		assert.Equal(t, "z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9", branch)
 
 	})
+
+	t.Run("tel scheme", func(t *testing.T) {
+		testCases := [][]string{
+			[]string{"tel:+1-(201) 555 0123", "+1-(201) 555 0123", ""},
+			[]string{"tel:7042;phone-context=example.com", "7042", "phone-context", "example.com"},
+		}
+		for _, testCase := range testCases {
+			err = ParseUri(testCase[0], &uri)
+			require.NoError(t, err)
+			assert.Equal(t, SCHEME_TEL, uri.Scheme)
+			assert.Equal(t, testCase[1], uri.Telephone)
+			if testCase[2] != "" {
+				assert.Less(t, 0, uri.UriParams.Length())
+				val, found := uri.UriParams.Get(testCase[2])
+				assert.Equal(t, true, found)
+				assert.Equal(t, testCase[3], val)
+				assert.Equal(t, testCase[0], uri.String())
+			}
+			assert.False(t, uri.Encrypted)
+		}
+	})
 }
 
 func TestParseUriBad(t *testing.T) {

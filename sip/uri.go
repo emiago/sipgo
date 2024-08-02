@@ -6,10 +6,21 @@ import (
 	"strings"
 )
 
+type Scheme string
+
+const (
+	SCHEME_SIP  Scheme = "sip"
+	SCHEME_SIPS Scheme = "sips"
+	SCHEME_TEL  Scheme = "tel"
+)
+
 // Uri is parsed form of
 // sip:user:password@host:port;uri-parameters?headers
 // In case of `sips:“ Encrypted is set to true
 type Uri struct {
+	// The scheme part of the URI
+	Scheme Scheme
+
 	// True if and only if the URI is a SIPS URI.
 	Encrypted bool
 	Wildcard  bool
@@ -29,6 +40,10 @@ type Uri struct {
 
 	// The port part of the URI. This is optional, and can be empty.
 	Port int
+
+	// The telephone-subscriber part of the tel: URI.
+	// https://datatracker.ietf.org/doc/html/rfc3966#section-3
+	Telephone string
 
 	// Any parameters associated with the URI.
 	// These are used to provide information about requests that may be constructed from the URI.
@@ -52,31 +67,30 @@ func (uri *Uri) String() string {
 // StringWrite writes uri string to buffer
 func (uri *Uri) StringWrite(buffer io.StringWriter) {
 	// Compulsory protocol identifier.
-	if uri.IsEncrypted() {
-		buffer.WriteString("sips")
-		buffer.WriteString(":")
+	buffer.WriteString(string(uri.Scheme))
+	buffer.WriteString(":")
+
+	if uri.Scheme == SCHEME_TEL {
+		buffer.WriteString(uri.Telephone)
 	} else {
-		buffer.WriteString("sip")
-		buffer.WriteString(":")
-	}
-
-	// Optional userinfo part.
-	if uri.User != "" {
-		buffer.WriteString(uri.User)
-		if uri.Password != "" {
-			buffer.WriteString(":")
-			buffer.WriteString(uri.Password)
+		// Optional userinfo part.
+		if uri.User != "" {
+			buffer.WriteString(uri.User)
+			if uri.Password != "" {
+				buffer.WriteString(":")
+				buffer.WriteString(uri.Password)
+			}
+			buffer.WriteString("@")
 		}
-		buffer.WriteString("@")
-	}
 
-	// Compulsory hostname.
-	buffer.WriteString(uri.Host)
+		// Compulsory hostname.
+		buffer.WriteString(uri.Host)
 
-	// Optional port number.
-	if uri.Port > 0 {
-		buffer.WriteString(":")
-		buffer.WriteString(strconv.Itoa(uri.Port))
+		// Optional port number.
+		if uri.Port > 0 {
+			buffer.WriteString(":")
+			buffer.WriteString(strconv.Itoa(uri.Port))
+		}
 	}
 
 	if (uri.UriParams != nil) && uri.UriParams.Length() > 0 {
@@ -109,6 +123,9 @@ func (uri *Uri) IsEncrypted() bool {
 
 // Endpoint is uri user identifier. user@host[:port]
 func (uri *Uri) Endpoint() string {
+	if uri.Scheme == SCHEME_TEL {
+		return ""
+	}
 	addr := uri.User + "@" + uri.Host
 	if uri.Port > 0 {
 		addr += ":" + strconv.Itoa(uri.Port)
@@ -118,6 +135,9 @@ func (uri *Uri) Endpoint() string {
 
 // Addr is uri part without headers and params. sip[s]:user@host[:port]
 func (uri *Uri) Addr() string {
+	if uri.Scheme == SCHEME_TEL {
+		return ""
+	}
 	addr := uri.User + "@" + uri.Host
 	if uri.Port > 0 {
 		addr += ":" + strconv.Itoa(uri.Port)
@@ -131,6 +151,9 @@ func (uri *Uri) Addr() string {
 
 // HostPort represents host:port part
 func (uri *Uri) HostPort() string {
+	if uri.Scheme == SCHEME_TEL {
+		return ""
+	}
 	p := strconv.Itoa(uri.Port)
 	return uri.Host + ":" + p
 }
