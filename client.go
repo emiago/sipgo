@@ -37,7 +37,6 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 
 // WithClientHost allows setting default route host or IP on Via
 // in case of IP it will enforce transport layer to create/reuse connection with this IP
-// default: user agent IP
 // This is useful when you need to act as client first and avoid creating server handle listeners.
 // NOTE: From header hostname is WithUserAgentHostname option on UA or modify request manually
 func WithClientHostname(hostname string) ClientOption {
@@ -86,7 +85,6 @@ func WithClientAddr(addr string) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
-		host:      ua.GetIP().String(),
 		log:       log.Logger.With().Str("caller", "Client").Logger(),
 	}
 
@@ -94,6 +92,16 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 		if err := o(c); err != nil {
 			return nil, err
 		}
+	}
+
+	if c.host == "" {
+		// IF we remove this, default would be IPV6 on new system
+		// We can go on net libraries and forcing this with udp4, tcp4
+		h, _, err := sip.ResolveInterfacesIP("ip4", nil)
+		if err != nil {
+			return nil, err
+		}
+		c.host = h.String()
 	}
 
 	return c, nil

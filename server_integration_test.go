@@ -162,7 +162,7 @@ func TestIntegrationClientServer(t *testing.T) {
 				proto = "sips"
 			}
 
-			req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+			req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.host)
 			tx, err := client.TransactionRequest(ctx, req)
 			require.NoError(t, err)
 
@@ -281,7 +281,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 					if maxInvitesPerSec != nil {
 						maxInvitesPerSec <- struct{}{}
 					}
-					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.host)
 					tx, err := client.TransactionRequest(ctx, req)
 					require.NoError(t, err)
 
