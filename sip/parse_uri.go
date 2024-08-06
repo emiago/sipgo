@@ -16,7 +16,8 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 	if len(uriStr) == 0 {
 		return errors.New("Empty URI")
 	}
-	state := uriStateSIP
+
+	state := uriStateStart
 	str := uriStr
 	for state != nil {
 		state, str, err = state(uri, str)
@@ -27,16 +28,7 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 	return
 }
 
-func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
-	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
-		return uriStateScheme, s[4:], nil
-	}
-
-	if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
-		uri.Encrypted = true
-		return uriStateScheme, s[5:], nil
-	}
-
+func uriStateStart(uri *Uri, s string) (uriFSM, string, error) {
 	if s == "*" {
 		// Normally this goes under url path, but we set on host
 		uri.Host = "*"
@@ -44,11 +36,33 @@ func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
 		return nil, "", nil
 	}
 
-	// return nil, "", errors.New("missing protocol scheme")
-	return uriStateUser, s, nil
+	return uriStateScheme(uri, s)
 }
 
-func uriStateScheme(_ *Uri, s string) (uriFSM, string, error) {
+func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
+	minLen := 4
+	if len(s) >= minLen {
+		if strings.EqualFold(s[:minLen], "sip:") {
+			uri.Scheme = SCHEME_SIP
+			s = s[minLen:]
+		} else if strings.EqualFold(s[:minLen], "tel:") {
+			uri.Scheme = SCHEME_TEL
+			s = s[minLen:]
+			return uriTelNumber, s, nil
+		}
+	}
+
+	minLen = 5
+	if len(s) >= minLen && strings.EqualFold(s[:minLen], "sips:") {
+		uri.Scheme = SCHEME_SIPS
+		uri.Encrypted = true
+		s = s[minLen:]
+	}
+
+	// if !foundScheme {
+	// 	return nil, "", errors.New("missing protocol scheme")
+	// }
+
 	// Check does uri contain slashes
 	// They are valid in uri but normally we cut them
 	s, _ = strings.CutPrefix(s, "//")
@@ -161,4 +175,16 @@ func uriStateHeaders(uri *Uri, s string) (uriFSM, string, error) {
 	uri.Headers = NewParams()
 	_, err = UnmarshalParams(s, '&', 0, uri.Headers)
 	return nil, s, err
+}
+
+func uriTelNumber(uri *Uri, s string) (uriFSM, string, error) {
+	for i, c := range s {
+		if c == ';' {
+			uri.Telephone = s[:i]
+			return uriStateUriParams, s[i+1:], nil
+		}
+	}
+
+	uri.Telephone = s
+	return nil, "", nil
 }
