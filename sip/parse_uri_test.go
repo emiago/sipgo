@@ -31,6 +31,7 @@ func TestParseUri(t *testing.T) {
 		str = "sip:alice@localhost:5060"
 		err = ParseUri(str, &uri)
 		require.NoError(t, err)
+		assert.Equal(t, "sip", uri.Scheme)
 		assert.Equal(t, "alice", uri.User)
 		assert.Equal(t, "localhost", uri.Host)
 		assert.Equal(t, 5060, uri.Port)
@@ -67,22 +68,33 @@ func TestParseUri(t *testing.T) {
 
 	})
 
-	t.Run("with sip scheme slashes", func(t *testing.T) {
-		// No scheme we currently allow
-		uri = Uri{}
-		str = "sip://alice@localhost:5060"
-		err = ParseUri(str, &uri)
-		require.NoError(t, err)
-		assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+	t.Run("hierarchical slashes are preserved", func(t *testing.T) {
+		testCases := []string{
+			"http://atlanta.com",
+			"file://atlanta.com/foo/bar.txt",
+			"sip://alice@localhost:5060",
+		}
+		for _, testCase := range testCases {
+			uri = Uri{}
+			err = ParseUri(testCase, &uri)
+			require.NoError(t, err)
+			assert.Equal(t, testCase, uri.String())
+		}
 	})
 
-	t.Run("no sip scheme", func(t *testing.T) {
-		// No scheme we currently allow
-		uri = Uri{}
-		str = "alice@localhost:5060"
-		err = ParseUri(str, &uri)
-		require.NoError(t, err)
-		assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+	t.Run("sip scheme", func(t *testing.T) {
+		// No scheme is not allowed
+		// URI relative references are not supported yet
+		testCases := []string{
+			"example.com;foo=bar",
+			"alice@localhost:5060",
+			"bad_scheme://example.com",
+		}
+		for _, testCase := range testCases {
+			uri = Uri{}
+			err = ParseUri(testCase, &uri)
+			require.Error(t, err)
+		}
 	})
 
 	t.Run("uri params parsed", func(t *testing.T) {
@@ -143,8 +155,8 @@ func TestParseUri(t *testing.T) {
 		for _, testCase := range testCases {
 			err = ParseUri(testCase[0], &uri)
 			require.NoError(t, err)
-			assert.Equal(t, SCHEME_TEL, uri.Scheme)
-			assert.Equal(t, testCase[1], uri.Telephone)
+			assert.Equal(t, "tel", uri.Scheme)
+			assert.Equal(t, testCase[1], uri.User)
 			if testCase[2] != "" {
 				assert.Less(t, 0, uri.UriParams.Length())
 				val, found := uri.UriParams.Get(testCase[2])

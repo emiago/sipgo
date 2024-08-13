@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type uriFSM func(uri *Uri, s string) (uriFSM, string, error)
@@ -40,32 +41,33 @@ func uriStateStart(uri *Uri, s string) (uriFSM, string, error) {
 }
 
 func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
-	minLen := 4
-	if len(s) >= minLen {
-		if strings.EqualFold(s[:minLen], "sip:") {
-			uri.Scheme = SCHEME_SIP
-			s = s[minLen:]
-		} else if strings.EqualFold(s[:minLen], "tel:") {
-			uri.Scheme = SCHEME_TEL
-			s = s[minLen:]
-			return uriTelNumber, s, nil
-		}
+	colInd := strings.Index(s, ":")
+	if colInd == -1 {
+		return nil, "", fmt.Errorf("missing protocol scheme")
 	}
 
-	minLen = 5
-	if len(s) >= minLen && strings.EqualFold(s[:minLen], "sips:") {
-		uri.Scheme = SCHEME_SIPS
+	uri.Scheme = strings.ToLower(s[:colInd])
+	s = s[colInd+1:]
+
+	if err := validateScheme(uri.Scheme); err != nil {
+		return nil, "", err
+	}
+
+	if uri.Scheme == "tel" {
+		return uriTelNumber, s, nil
+	}
+
+	// If hierarchical slashes are present after scheme, strip them out and take note
+	// so that they can be inserted back when serializing URI
+	if len(s) >= 2 && s[:2] == "//" {
+		uri.HierarhicalSlashes = true
+		s = s[2:]
+	}
+
+	if uri.Scheme == "sips" || uri.Scheme == "https" {
 		uri.Encrypted = true
-		s = s[minLen:]
 	}
 
-	// if !foundScheme {
-	// 	return nil, "", errors.New("missing protocol scheme")
-	// }
-
-	// Check does uri contain slashes
-	// They are valid in uri but normally we cut them
-	s, _ = strings.CutPrefix(s, "//")
 	return uriStateUser, s, nil
 }
 
@@ -177,14 +179,32 @@ func uriStateHeaders(uri *Uri, s string) (uriFSM, string, error) {
 	return nil, s, err
 }
 
+// validateScheme performs basic scheme validation to prevent cases where port delimited 
+// (or other naturally occuring colon) is mistakenly used as a scheme delimiter. 
+// This is NOT a fool-proof validation and URIs may still be incorrectly parsed 
+// unless more parsing validation effort is made.
+//
+// scheme        = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+func validateScheme(scheme string) error {
+	if len(scheme) == 0 {
+		return errors.New("no scheme found")
+	}
+	for _, c := range scheme {
+		if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != '+' && c != '-' && c != '.' {
+			return fmt.Errorf("invalid scheme: %q is not allowed", c)
+		}
+	}
+	return nil
+}
+
 func uriTelNumber(uri *Uri, s string) (uriFSM, string, error) {
 	for i, c := range s {
 		if c == ';' {
-			uri.Telephone = s[:i]
+			uri.User = s[:i]
 			return uriStateUriParams, s[i+1:], nil
 		}
 	}
 
-	uri.Telephone = s
+	uri.User = s
 	return nil, "", nil
 }
