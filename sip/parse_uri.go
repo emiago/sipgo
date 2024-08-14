@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 type uriFSM func(uri *Uri, s string) (uriFSM, string, error)
@@ -48,10 +47,6 @@ func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
 
 	uri.Scheme = strings.ToLower(s[:colInd])
 	s = s[colInd+1:]
-
-	if err := validateScheme(uri.Scheme); err != nil {
-		return nil, "", err
-	}
 
 	if uri.Scheme == "tel" {
 		return uriTelNumber, s, nil
@@ -177,24 +172,6 @@ func uriStateHeaders(uri *Uri, s string) (uriFSM, string, error) {
 	uri.Headers = NewParams()
 	_, err = UnmarshalParams(s, '&', 0, uri.Headers)
 	return nil, s, err
-}
-
-// validateScheme performs basic scheme validation to prevent cases where port delimited 
-// (or other naturally occuring colon) is mistakenly used as a scheme delimiter. 
-// This is NOT a fool-proof validation and URIs may still be incorrectly parsed 
-// unless more parsing validation effort is made.
-//
-// scheme        = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
-func validateScheme(scheme string) error {
-	if len(scheme) == 0 {
-		return errors.New("no scheme found")
-	}
-	for _, c := range scheme {
-		if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != '+' && c != '-' && c != '.' {
-			return fmt.Errorf("invalid scheme: %q is not allowed", c)
-		}
-	}
-	return nil
 }
 
 func uriTelNumber(uri *Uri, s string) (uriFSM, string, error) {

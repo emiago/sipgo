@@ -82,18 +82,19 @@ func TestParseUri(t *testing.T) {
 		}
 	})
 
-	t.Run("sip scheme", func(t *testing.T) {
-		// No scheme is not allowed
-		// URI relative references are not supported yet
-		testCases := []string{
-			"example.com;foo=bar",
-			"alice@localhost:5060",
-			"bad_scheme://example.com",
+	t.Run("bad/missing sip scheme", func(t *testing.T) {
+		// URI must always have a scheme. URI relative references are not supported yet
+		// Supplying URIs without a scheme will lead to incorrectly parsed URIs
+		testCases := [][]string{
+			[]string{"example.com:5060;foo=bar", "example.com"},
+			[]string{"alice@localhost:5060", "alice@localhost"},
+			[]string{"bad_scheme://example.com", "bad_scheme"}, // underscores are not allowed in scheme
 		}
 		for _, testCase := range testCases {
 			uri = Uri{}
-			err = ParseUri(testCase, &uri)
-			require.Error(t, err)
+			err = ParseUri(testCase[0], &uri)
+			require.NoError(t, err)
+			assert.Equal(t, testCase[1], uri.Scheme)
 		}
 	})
 
