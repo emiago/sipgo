@@ -245,7 +245,6 @@ func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
 	srv.handleRequest(req, tx)
 }
 
-// handleRequest must be run in seperate goroutine
 func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	for _, mid := range srv.requestMiddlewares {
 		mid(req)
