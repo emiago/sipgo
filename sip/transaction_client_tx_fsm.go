@@ -64,7 +64,7 @@ func (tx *ClientTx) inviteStateCompleted(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
 	case client_input_300_plus:
-		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actAck
+		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actAckResend
 	case client_input_transport_err:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actTransErr
 	case client_input_timer_d:
@@ -331,9 +331,19 @@ func (tx *ClientTx) actCancelTimeout() fsmInput {
 	return FsmInputNone
 }
 
-func (tx *ClientTx) actAck() fsmInput {
-	// tx.Log().Debug("actAck")
-
+func (tx *ClientTx) actAckResend() fsmInput {
+	// Detect ACK loop.
+	// Case ACK sent and response is received
+	if tx.fsmAck != nil {
+		// ACK was sent. Now delay to prevent infinite loop as temporarly fix
+		// This is not clear per RFC, but client could generate a lot requests in this case
+		tx.log.Error().Msg("ACK loop retransimission. Resending after T2")
+		select {
+		case <-tx.done:
+			return FsmInputNone
+		case <-time.After(T2):
+		}
+	}
 	tx.ack()
 
 	return FsmInputNone
