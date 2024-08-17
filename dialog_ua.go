@@ -3,7 +3,6 @@ package sipgo
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
 	uuid "github.com/satori/go.uuid"
@@ -32,20 +31,16 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			ID:            id, // this id has already prebuilt tag
 			InviteRequest: inviteReq,
-			lastCSeqNo:    inviteReq.CSeq().SeqNo,
-			state:         atomic.Int32{},
-			stateCh:       make(chan sip.DialogState, 3),
-			ctx:           ctx,
-			cancel:        cancel,
 		},
 		inviteTx: tx,
 		ua:       c,
 	}
+	dtx.Init()
+
 	return dtx, nil
 }
 
@@ -61,33 +56,27 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 	return ua.WriteInvite(ctx, req)
 }
 
-func (c *DialogUA) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request) (*DialogClientSession, error) {
 	cli := c.Client
 
-	if inviteRequest.Contact() == nil {
+	if inviteReq.Contact() == nil {
 		// Set contact only if not exists
-		inviteRequest.AppendHeader(&c.ContactHDR)
+		inviteReq.AppendHeader(&c.ContactHDR)
 	}
 
-	tx, err := cli.TransactionRequest(ctx, inviteRequest)
+	tx, err := cli.TransactionRequest(ctx, inviteReq)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	dtx := &DialogClientSession{
 		Dialog: Dialog{
-			InviteRequest: inviteRequest,
-			lastCSeqNo:    inviteRequest.CSeq().SeqNo,
-			state:         atomic.Int32{},
-			stateCh:       make(chan sip.DialogState, 3),
-			ctx:           ctx,
-			cancel:        cancel,
+			InviteRequest: inviteReq,
 		},
-		// dc:       c,
 		ua:       c,
 		inviteTx: tx,
 	}
+	dtx.Init()
 
 	return dtx, nil
 }

@@ -191,7 +191,7 @@ func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 
 func (s *DialogClientSession) ReadRefer(req *sip.Request, tx sip.ServerTransaction, referUri *sip.Uri) (*DialogClientSession, error) {
 	cseq := req.CSeq().SeqNo
-	if cseq <= s.lastCSeqNo {
+	if cseq <= s.lastCSeqNo.Load() {
 		return nil, ErrDialogOutsideDialog
 	}
 
@@ -256,11 +256,11 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	// For safety make sure we are starting with our last dialog cseq num
-	cseq.SeqNo = s.lastCSeqNo
+	cseq.SeqNo = s.lastCSeqNo.Load()
 
 	if !req.IsAck() && !req.IsCancel() {
 		// Do cseq increment within dialog
-		cseq.SeqNo = s.lastCSeqNo + 1
+		cseq.SeqNo++
 	}
 
 	// Check record route header
@@ -281,8 +281,7 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 		}
 	}
 
-	s.lastCSeqNo = cseq.SeqNo
-
+	s.lastCSeqNo.Store(cseq.SeqNo)
 	// Keep any request inside dialog
 	if h, invH := req.From(), s.InviteRequest.From(); h == nil {
 		req.AppendHeader(sip.HeaderClone(invH))

@@ -120,7 +120,7 @@ type DialogServerSession struct {
 // ReadAck changes dialog state to confiremed
 func (s *DialogServerSession) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
 	// cseq must match to our last dialog cseq
-	if req.CSeq().SeqNo != s.lastCSeqNo {
+	if req.CSeq().SeqNo != s.lastCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
 	s.setState(sip.DialogStateConfirmed)
@@ -145,6 +145,14 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	return nil
 }
 
+func (s *DialogServerSession) ReadInvite(req *sip.Request, tx sip.ServerTransaction) error {
+	if err := s.validateRequest(req); err != nil {
+		return err
+	}
+	s.lastCSeqNo.Store(req.CSeq().SeqNo)
+	return nil
+}
+
 // TransactionRequest is doing client DIALOG request based on RFC
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
 // This ensures that you have proper request done within dialog
@@ -159,11 +167,11 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	// For safety make sure we are starting with our last dialog cseq num
-	cseq.SeqNo = s.lastCSeqNo
+	cseq.SeqNo = s.lastCSeqNo.Load()
 
 	if !req.IsAck() && !req.IsCancel() {
 		// Do cseq increment within dialog
-		cseq.SeqNo = s.lastCSeqNo + 1
+		cseq.SeqNo++
 	}
 
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
@@ -197,7 +205,7 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	// 	}
 	// }
 
-	s.lastCSeqNo = cseq.SeqNo
+	s.lastCSeqNo.Store(cseq.SeqNo)
 	// Passing option to avoid CSEQ apply
 	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestBuild)
 }
@@ -416,7 +424,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 
 func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo != (dt.lastCSeqNo + 1) {
+	if req.CSeq().SeqNo != (dt.lastCSeqNo.Load() + 1) {
 		return ErrDialogInvalidCseq
 	}
 	return nil

@@ -33,7 +33,7 @@ type Dialog struct {
 	InviteRequest *sip.Request
 
 	// lastCSeqNo is set for every request within dialog except ACK CANCEL
-	lastCSeqNo uint32
+	lastCSeqNo atomic.Uint32
 
 	// InviteResponse is last response received or sent. It is not thread safe!
 	// Use it only as read only and do not change values
@@ -44,6 +44,20 @@ type Dialog struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+// Init setups dialog state
+func (d *Dialog) Init() {
+	d.ctx, d.cancel = context.WithCancel(context.Background())
+	d.state = atomic.Int32{}
+	d.stateCh = make(chan sip.DialogState, 3)
+	d.lastCSeqNo = atomic.Uint32{}
+	d.lastCSeqNo.Store(d.InviteRequest.CSeq().SeqNo)
+}
+
+func (d *Dialog) InitWithState(s sip.DialogState) {
+	d.Init()
+	d.state.Store(int32(s))
 }
 
 func (d *Dialog) setState(s sip.DialogState) {
