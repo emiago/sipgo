@@ -172,6 +172,14 @@ type DialogClientSession struct {
 	OnDialog func(id string)
 }
 
+func (dt *DialogClientSession) validateRequest(req *sip.Request) (err error) {
+	// Make sure this is bye for this dialog
+	if req.CSeq().SeqNo != (dt.lastCSeqNo.Load() + 1) {
+		return ErrDialogInvalidCseq
+	}
+	return nil
+}
+
 func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
 	s.setState(sip.DialogStateEnded)
 
@@ -240,6 +248,42 @@ func (s *DialogClientSession) ReadRefer(req *sip.Request, tx sip.ServerTransacti
 	// // 	return tx.Err()
 	// // }
 	// return nil
+}
+
+// ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
+func (s *DialogClientSession) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
+	if err := s.validateRequest(req); err != nil {
+		return err
+	}
+
+	s.lastCSeqNo.Store(req.CSeq().SeqNo)
+	return nil
+}
+
+// Do sends request and waits final response using Dialog rules
+// For more control use TransactionRequest
+func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
+	tx, err := s.TransactionRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Terminate()
+	for {
+		select {
+		case res := <-tx.Responses():
+			if res.IsProvisional() {
+				continue
+			}
+			return res, nil
+
+		case <-tx.Done():
+			return nil, tx.Err()
+
+		case <-ctx.Done():
+			err := tx.Cancel()
+			return nil, errors.Join(ctx.Err(), err)
+		}
+	}
 }
 
 // TransactionRequest is doing client DIALOG request based on RFC

@@ -32,13 +32,12 @@ func TestDialogServerByeRequest(t *testing.T) {
 	res := sip.NewResponseFromRequest(invite, sip.StatusOK, "OK", nil)
 	res.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uac", Port: 9876}})
 
-	bye := newByeRequestUAS(invite, res)
-	require.Equal(t, invite.CallID(), bye.CallID())
-
+	bye := sip.NewRequest(sip.BYE, invite.Contact().Address)
 	ctxCanceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	// No execution
 	dialog.TransactionRequest(ctxCanceled, bye)
+	require.Equal(t, invite.CallID(), bye.CallID())
 
 	routes := bye.GetHeaders("Route")
 	assert.Equal(t, "<sip:P3:5060>", routes[0].Value())

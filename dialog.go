@@ -93,6 +93,10 @@ func (d *Dialog) StateRead() <-chan sip.DialogState {
 	return d.stateCh
 }
 
+func (d *Dialog) CSEQ() uint32 {
+	return d.lastCSeqNo.Load()
+}
+
 // func (d *Dialog) OnState(f func(s sip.DialogState)) {
 // 	d.onState = append(d.onState, f)
 // }

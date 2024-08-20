@@ -145,12 +145,38 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	return nil
 }
 
-func (s *DialogServerSession) ReadInvite(req *sip.Request, tx sip.ServerTransaction) error {
+// ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
+func (s *DialogServerSession) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
 	if err := s.validateRequest(req); err != nil {
 		return err
 	}
+
 	s.lastCSeqNo.Store(req.CSeq().SeqNo)
 	return nil
+}
+
+func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
+	tx, err := s.TransactionRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Terminate()
+	for {
+		select {
+		case res := <-tx.Responses():
+			if res.IsProvisional() {
+				continue
+			}
+			return res, nil
+
+		case <-tx.Done():
+			return nil, tx.Err()
+
+		case <-ctx.Done():
+			err := tx.Cancel()
+			return nil, errors.Join(ctx.Err(), err)
+		}
+	}
 }
 
 // TransactionRequest is doing client DIALOG request based on RFC
@@ -206,6 +232,22 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	// }
 
 	s.lastCSeqNo.Store(cseq.SeqNo)
+
+	// Keep any request inside dialog
+	if h, invH := req.From(), s.InviteResponse; h == nil && invH != nil {
+		hh := invH.To().AsFrom()
+		req.AppendHeader(&hh)
+	}
+
+	if h, invH := req.To(), s.InviteRequest.From(); h == nil {
+		hh := invH.AsTo()
+		req.AppendHeader(&hh)
+	}
+
+	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
+		req.AppendHeader(sip.HeaderClone(invH))
+	}
+
 	// Passing option to avoid CSEQ apply
 	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestBuild)
 }
@@ -390,16 +432,10 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		break
 	}
 
-	bye := newByeRequestUAS(req, res)
-
-	// Check that we have still match same dialog
-	callidHDR := bye.CallID()
-	newFrom := bye.From()
-	newTo := bye.To()
-	byeID := sip.MakeDialogID(callidHDR.Value(), newFrom.Params["tag"], newTo.Params["tag"])
-	if s.ID != byeID {
-		return fmt.Errorf("non matching ID %q %q", s.ID, byeID)
-	}
+	// We must check record route header
+	// https://datatracker.ietf.org/doc/html/rfc2543#section-6.13
+	cont := req.Contact()
+	bye := sip.NewRequest(sip.BYE, cont.Address)
 
 	tx, err := s.TransactionRequest(ctx, bye)
 	if err != nil {
@@ -428,36 +464,4 @@ func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 		return ErrDialogInvalidCseq
 	}
 	return nil
-}
-
-// newByeRequestUAS generates request for UAS within dialog
-// it does not add VIA header, as this must be handled by transport layer
-func newByeRequestUAS(req *sip.Request, res *sip.Response) *sip.Request {
-	// We must check record route header
-	// https://datatracker.ietf.org/doc/html/rfc2543#section-6.13
-	cont := req.Contact()
-	bye := sip.NewRequest(sip.BYE, cont.Address)
-
-	// Reverse from and to
-	from := res.From()
-	to := res.To()
-	callid := res.CallID()
-
-	newFrom := &sip.FromHeader{
-		DisplayName: to.DisplayName,
-		Address:     to.Address,
-		Params:      to.Params,
-	}
-
-	newTo := &sip.ToHeader{
-		DisplayName: from.DisplayName,
-		Address:     from.Address,
-		Params:      from.Params,
-	}
-
-	bye.AppendHeader(newFrom)
-	bye.AppendHeader(newTo)
-	bye.AppendHeader(callid)
-
-	return bye
 }
