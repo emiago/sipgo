@@ -468,6 +468,12 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 		return fmt.Errorf("lookup ip addr did not return any ip addr")
 	}
 
+	for _, ip := range ips {
+		if len(ip.IP) == net.IPv4len {
+			addr.IP = ip.IP
+			return nil
+		}
+	}
 	addr.IP = ips[0].IP
 	return nil
 }
