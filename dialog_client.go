@@ -309,10 +309,10 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 
 	// Check record route header
 	if s.InviteResponse != nil {
-		cont := s.InviteResponse.Contact()
-		if cont != nil {
-			req.Recipient = cont.Address
-		}
+		// cont := s.InviteResponse.Contact()
+		// if cont != nil {
+		// 	req.Recipient = cont.Address
+		// }
 
 		if rr := s.InviteResponse.RecordRoute(); rr != nil {
 			if rr.Address.UriParams.Has("lr") {
