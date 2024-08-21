@@ -248,6 +248,18 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 		req.AppendHeader(sip.HeaderClone(invH))
 	}
 
+	if h := req.Contact(); h == nil {
+		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
+	}
+
+	if sip.IsReliable(req.Transport()) {
+		// Avoid NAT
+		req.SetDestination(s.InviteRequest.Source())
+	}
+
+	// TODO check is contact header routable
+	// If not then we should force destination as source address
+
 	// Passing option to avoid CSEQ apply
 	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestBuild)
 }
@@ -435,6 +447,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	// We must check record route header
 	// https://datatracker.ietf.org/doc/html/rfc2543#section-6.13
 	cont := req.Contact()
+	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
 	bye := sip.NewRequest(sip.BYE, cont.Address)
 
 	tx, err := s.TransactionRequest(ctx, bye)

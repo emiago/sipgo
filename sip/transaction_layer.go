@@ -161,9 +161,6 @@ func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*Client
 
 	// TODO
 	tx := NewClientTx(key, req, conn, txl.log)
-	if err != nil {
-		return nil, err
-	}
 
 	// Avoid allocations of anonymous functions
 	tx.OnTerminate(txl.clientTxTerminate)
