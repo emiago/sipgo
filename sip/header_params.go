@@ -5,21 +5,6 @@ import (
 	"strings"
 )
 
-type Params interface {
-	Get(key string) (string, bool)
-	Add(key string, val string) Params
-	Remove(key string) Params
-	Clone() Params
-	Equals(params interface{}) bool
-	ToString(sep uint8) string
-	ToStringWrite(sep uint8, buffer io.StringWriter)
-	String() string
-	Length() int
-	Items() map[string]string
-	Keys() []string
-	Has(key string) bool
-}
-
 type HeaderKV struct {
 	K string
 	V string
@@ -59,13 +44,13 @@ func (hp HeaderParams) Get(key string) (string, bool) {
 }
 
 // Add will add new key:val. If key exists it will be overwriten
-func (hp HeaderParams) Add(key string, val string) Params {
+func (hp HeaderParams) Add(key string, val string) HeaderParams {
 	hp[key] = val
 	return hp
 }
 
 // Remove removes param with exact key
-func (hp HeaderParams) Remove(key string) Params {
+func (hp HeaderParams) Remove(key string) HeaderParams {
 	delete(hp, key)
 	return hp
 }
@@ -77,7 +62,7 @@ func (hp HeaderParams) Has(key string) bool {
 }
 
 // Clone returns underneath map copied
-func (hp HeaderParams) Clone() Params {
+func (hp HeaderParams) Clone() HeaderParams {
 	return hp.clone()
 }
 

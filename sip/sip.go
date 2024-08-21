@@ -6,17 +6,6 @@ import (
 )
 
 const (
-	MTU uint = 1500
-
-	DefaultHost     = "127.0.0.1"
-	DefaultProtocol = "UDP"
-
-	DefaultUdpPort int = 5060
-	DefaultTcpPort int = 5060
-	DefaultTlsPort int = 5061
-	DefaultWsPort  int = 80
-	DefaultWssPort int = 443
-
 	RFC3261BranchMagicCookie = "z9hG4bK"
 )
 
@@ -43,24 +32,6 @@ func GenerateTagN(n int) string {
 	sb := &strings.Builder{}
 	RandStringBytesMask(sb, n)
 	return sb.String()
-}
-
-// DefaultPort returns transport default port by network.
-func DefaultPort(transport string) int {
-	switch ASCIIToLower(transport) {
-	case "tls":
-		return DefaultTlsPort
-	case "tcp":
-		return DefaultTcpPort
-	case "udp":
-		return DefaultUdpPort
-	case "ws":
-		return DefaultWsPort
-	case "wss":
-		return DefaultWssPort
-	default:
-		return DefaultTcpPort
-	}
 }
 
 // MakeDialogIDFromMessage creates dialog ID of message.

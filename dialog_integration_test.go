@@ -69,7 +69,7 @@ func TestIntegrationDialog(t *testing.T) {
 		require.NoError(t, err)
 
 		// ctx, _ := context.WithTimeout(ctx, 3*time.Second)
-		for state := range dlg.State() {
+		for state := range dlg.StateRead() {
 			if state == sip.DialogStateEnded {
 				return
 			}
@@ -220,7 +220,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
 		require.Nil(t, err)
 
-		<-dlg.Done()
+		<-dlg.Context().Done()
 	})
 
 	srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {

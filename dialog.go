@@ -3,6 +3,7 @@ package sipgo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
@@ -16,6 +17,14 @@ var (
 	ErrDialogInvalidCseq     = errors.New("Invalid CSEQ number")
 )
 
+type ErrDialogResponse struct {
+	Res *sip.Response
+}
+
+func (e ErrDialogResponse) Error() string {
+	return fmt.Sprintf("Invite failed with response: %s", e.Res.StartLine())
+}
+
 type Dialog struct {
 	ID string
 
@@ -24,7 +33,7 @@ type Dialog struct {
 	InviteRequest *sip.Request
 
 	// lastCSeqNo is set for every request within dialog except ACK CANCEL
-	lastCSeqNo uint32
+	lastCSeqNo atomic.Uint32
 
 	// InviteResponse is last response received or sent. It is not thread safe!
 	// Use it only as read only and do not change values
@@ -37,8 +46,18 @@ type Dialog struct {
 	cancel context.CancelFunc
 }
 
-func (d *Dialog) Body() []byte {
-	return d.InviteResponse.Body()
+// Init setups dialog state
+func (d *Dialog) Init() {
+	d.ctx, d.cancel = context.WithCancel(context.Background())
+	d.state = atomic.Int32{}
+	d.stateCh = make(chan sip.DialogState, 3)
+	d.lastCSeqNo = atomic.Uint32{}
+	d.lastCSeqNo.Store(d.InviteRequest.CSeq().SeqNo)
+}
+
+func (d *Dialog) InitWithState(s sip.DialogState) {
+	d.Init()
+	d.state.Store(int32(s))
 }
 
 func (d *Dialog) setState(s sip.DialogState) {
@@ -58,17 +77,29 @@ func (d *Dialog) setState(s sip.DialogState) {
 	}
 }
 
+func (d *Dialog) LoadState() sip.DialogState {
+	return sip.DialogState(d.state.Load())
+}
+
+// Deprecated:
+// Use StateRead
+//
+// Will be removed in future releases
 func (d *Dialog) State() <-chan sip.DialogState {
 	return d.stateCh
 }
 
-// Done is signaled when dialog state ended
-//
-// Deprecated:
-// It is wrapper on context, so better to use Context()
-func (d *Dialog) Done() <-chan struct{} {
-	return d.ctx.Done()
+func (d *Dialog) StateRead() <-chan sip.DialogState {
+	return d.stateCh
 }
+
+func (d *Dialog) CSEQ() uint32 {
+	return d.lastCSeqNo.Load()
+}
+
+// func (d *Dialog) OnState(f func(s sip.DialogState)) {
+// 	d.onState = append(d.onState, f)
+// }
 
 func (d *Dialog) Context() context.Context {
 	return d.ctx

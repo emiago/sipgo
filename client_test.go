@@ -88,7 +88,9 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 
 func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 	// ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
-	ua, err := NewUA()
+	ua, err := NewUA(
+		WithUserAgentHostname("sip.myserver.com"),
+	)
 	require.Nil(t, err)
 
 	c, err := NewClient(ua,

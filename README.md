@@ -10,7 +10,7 @@
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)) optimized for fast parsing.
 
 For extra functionality checkout also   
-- [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality
+- [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality like fast building SIP phone
 - [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (*sdp, rtp, rtcp*)
 
 Fetch lib with:
@@ -323,8 +323,6 @@ Content-Length:  0
 
 If you find this project interesting for bigger support or consulting, you can contact me on
 [mail](emirfreelance91@gmail.com)
-
-*You can buy me a coffee in meantime on* [ko-fi.com/emiasupport](https://ko-fi.com/emiasupport) 
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
 

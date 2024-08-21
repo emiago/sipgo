@@ -504,8 +504,12 @@ func (h *ToHeader) ValueStringWrite(buffer io.StringWriter) {
 	}
 }
 
-func (header *ToHeader) Next() Header {
-	return nil
+func (h *ToHeader) AsFrom() FromHeader {
+	return FromHeader{
+		Address:     *h.Address.Clone(),
+		Params:      h.Params.Clone(),
+		DisplayName: h.DisplayName,
+	}
 }
 
 // Copy the header.
@@ -523,7 +527,7 @@ func (h *ToHeader) headerClone() Header {
 	// 	newTo.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newTo.Params = h.Params.Clone().(HeaderParams)
+		newTo.Params = h.Params.Clone()
 	}
 	return newTo
 }
@@ -590,14 +594,18 @@ func (h *FromHeader) headerClone() Header {
 	// 	newFrom.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newFrom.Params = h.Params.Clone().(HeaderParams)
+		newFrom.Params = h.Params.Clone()
 	}
 
 	return newFrom
 }
 
-func (header *FromHeader) Next() Header {
-	return nil
+func (h *FromHeader) AsTo() ToHeader {
+	return ToHeader{
+		Address:     *h.Address.Clone(),
+		Params:      h.Params.Clone(),
+		DisplayName: h.DisplayName,
+	}
 }
 
 // ContactHeader is Contact header representation
@@ -674,7 +682,7 @@ func (h *ContactHeader) Clone() *ContactHeader {
 	}
 
 	if h.Params != nil {
-		newCnt.Params = h.Params.Clone().(HeaderParams)
+		newCnt.Params = h.Params.Clone()
 	}
 
 	return newCnt

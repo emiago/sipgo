@@ -151,6 +151,8 @@ func (tx *ClientTx) ack() {
 	}
 
 	ack := newAckRequestNon2xx(tx.origin, resp, nil)
+	tx.fsmAck = ack // NOTE: this could be incorect property to use but it helps preventing loops in some cases
+
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().

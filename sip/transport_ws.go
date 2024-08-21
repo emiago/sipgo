@@ -98,6 +98,9 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 		_, err = u.Upgrade(conn)
 		if err != nil {
 			t.log.Error().Err(err).Msg("Fail to upgrade")
+			if err := conn.Close(); err != nil {
+				t.log.Error().Err(err).Msg("Closing connection failed")
+			}
 			continue
 		}
 
