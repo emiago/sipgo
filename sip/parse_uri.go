@@ -14,7 +14,7 @@ type uriFSM func(uri *Uri, s string) (uriFSM, string, error)
 // sip:user:password@host:port;uri-parameters?headers
 func ParseUri(uriStr string, uri *Uri) (err error) {
 	if len(uriStr) == 0 {
-		return errors.New("Empty URI")
+		return errors.New("empty URI")
 	}
 	state := uriStateScheme
 	str := uriStr
@@ -28,15 +28,6 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 }
 
 func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
-	// if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
-	// 	return uriStateScheme, s[4:], nil
-	// }
-
-	// if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
-	// 	uri.IsEncrypted() = true
-	// 	return uriStateScheme, s[5:], nil
-	// }
-
 	// Do fast checks. Minimum uri
 	if len(s) < 3 {
 		if s == "*" {
@@ -88,17 +79,6 @@ func uriStateUser(uri *Uri, s string) (uriFSM, string, error) {
 	}
 
 	return uriStateHost, s, nil
-}
-
-func uriStatePassword(uri *Uri, s string) (uriFSM, string, error) {
-	for i, c := range s {
-		if c == '@' {
-			uri.Password = s[:i]
-			return uriStateHost, s[i+1:], nil
-		}
-	}
-
-	return nil, "", fmt.Errorf("missing @")
 }
 
 func uriStateHost(uri *Uri, s string) (uriFSM, string, error) {

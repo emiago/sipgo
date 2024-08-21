@@ -73,9 +73,23 @@ func isASCII(c rune) bool {
 
 // ASCIIToLower is faster than go version. It avoids one more loop
 func ASCIIToLower(s string) string {
+	// first check is ascii already low to avoid alloc
+	nonLowInd := 0
+	for i, c := range s {
+		if 'a' <= c && c <= 'z' {
+			continue
+		}
+		nonLowInd = i
+		break
+	}
+	if nonLowInd == 0 {
+		return s
+	}
+
 	var b strings.Builder
 	b.Grow(len(s))
-	for i := 0; i < len(s); i++ {
+	b.WriteString(s[:nonLowInd])
+	for i := nonLowInd; i < len(s); i++ {
 		c := s[i]
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
