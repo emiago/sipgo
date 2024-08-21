@@ -16,7 +16,7 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 	if len(uriStr) == 0 {
 		return errors.New("Empty URI")
 	}
-	state := uriStateSIP
+	state := uriStateScheme
 	str := uriStr
 	for state != nil {
 		state, str, err = state(uri, str)
@@ -27,31 +27,45 @@ func ParseUri(uriStr string, uri *Uri) (err error) {
 	return
 }
 
-func uriStateSIP(uri *Uri, s string) (uriFSM, string, error) {
-	if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
-		return uriStateScheme, s[4:], nil
+func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
+	// if len(s) >= 4 && strings.EqualFold(s[:4], "sip:") {
+	// 	return uriStateScheme, s[4:], nil
+	// }
+
+	// if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
+	// 	uri.IsEncrypted() = true
+	// 	return uriStateScheme, s[5:], nil
+	// }
+
+	// Do fast checks. Minimum uri
+	if len(s) < 3 {
+		if s == "*" {
+			// Normally this goes under url path, but we set on host
+			uri.Host = "*"
+			uri.Wildcard = true
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("not valid sip uri")
 	}
 
-	if len(s) >= 5 && strings.EqualFold(s[:5], "sips:") {
-		uri.Encrypted = true
-		return uriStateScheme, s[5:], nil
+	for i, c := range s {
+		if c == ':' {
+			uri.Scheme = ASCIIToLower(s[:i])
+			return uriStateSlashes, s[i+1:], nil
+		}
+		// Check is c still ASCII
+		if !isASCII(c) {
+			return nil, "", fmt.Errorf("invalid uri scheme")
+		}
 	}
 
-	if s == "*" {
-		// Normally this goes under url path, but we set on host
-		uri.Host = "*"
-		uri.Wildcard = true
-		return nil, "", nil
-	}
-
-	// return nil, "", errors.New("missing protocol scheme")
-	return uriStateUser, s, nil
+	return nil, "", fmt.Errorf("missing protocol scheme")
 }
 
-func uriStateScheme(_ *Uri, s string) (uriFSM, string, error) {
+func uriStateSlashes(uri *Uri, s string) (uriFSM, string, error) {
 	// Check does uri contain slashes
 	// They are valid in uri but normally we cut them
-	s, _ = strings.CutPrefix(s, "//")
+	s, uri.HierarhicalSlashes = strings.CutPrefix(s, "//")
 	return uriStateUser, s, nil
 }
 

@@ -254,6 +254,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		from := sip.FromHeader{
 			DisplayName: c.UserAgent.name,
 			Address: sip.Uri{
+				Scheme:    req.Recipient.Scheme,
 				User:      c.UserAgent.name,
 				Host:      c.UserAgent.hostname,
 				UriParams: sip.NewParams(),
@@ -274,7 +275,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	if v := req.To(); v == nil {
 		to := sip.ToHeader{
 			Address: sip.Uri{
-				Encrypted: req.Recipient.Encrypted,
+				Scheme:    req.Recipient.Scheme,
 				User:      req.Recipient.User,
 				Host:      req.Recipient.Host,
 				UriParams: sip.NewParams(),

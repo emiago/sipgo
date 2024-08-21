@@ -67,6 +67,10 @@ func RandStringBytesMask(sb *strings.Builder, n int) string {
 	return sb.String()
 }
 
+func isASCII(c rune) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
+}
+
 // ASCIIToLower is faster than go version. It avoids one more loop
 func ASCIIToLower(s string) string {
 	var b strings.Builder
