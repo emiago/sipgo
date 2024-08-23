@@ -242,9 +242,7 @@ func getBodyLength(data []byte) int {
 	return len(data) - bodyStart
 }
 
-// Heuristic to determine if the given transmission looks like a SIP request.
-// It is guaranteed that any RFC3261-compliant request will pass this test,
-// but invalid messages may not necessarily be rejected.
+// detet is request by spaces
 func isRequest(startLine string) bool {
 	// SIP request lines contain precisely two spaces.
 	ind := strings.IndexRune(startLine, ' ')
@@ -271,9 +269,7 @@ func isRequest(startLine string) bool {
 	return UriIsSIP(part2[:3])
 }
 
-// Heuristic to determine if the given transmission looks like a SIP response.
-// It is guaranteed that any RFC3261-compliant response will pass this test,
-// but invalid messages may not necessarily be rejected.
+// Detect is response by spaces
 func isResponse(startLine string) bool {
 	// SIP status lines contain at least two spaces.
 	ind := strings.IndexRune(startLine, ' ')

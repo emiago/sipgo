@@ -74,7 +74,7 @@ func isASCII(c rune) bool {
 // ASCIIToLower is faster than go version. It avoids one more loop
 func ASCIIToLower(s string) string {
 	// first check is ascii already low to avoid alloc
-	nonLowInd := 0
+	nonLowInd := -1
 	for i, c := range s {
 		if 'a' <= c && c <= 'z' {
 			continue
@@ -82,7 +82,7 @@ func ASCIIToLower(s string) string {
 		nonLowInd = i
 		break
 	}
-	if nonLowInd == 0 {
+	if nonLowInd < 0 {
 		return s
 	}
 
@@ -123,7 +123,7 @@ func HeaderToLower(s string) string {
 		return "call-id"
 	case "Contact", "contact":
 		return "contact"
-	case "Cseq", "CSEQ", "cseq":
+	case "CSeq", "CSEQ", "cseq":
 		return "cseq"
 	case "Content-Type", "content-type":
 		return "content-type"
@@ -131,11 +131,13 @@ func HeaderToLower(s string) string {
 		return "route"
 	case "Record-Route", "record-route":
 		return "record-route"
+	case "Max-Forwards":
+		return "max-forwards"
 	case "Timestamp", "timestamp":
 		return "timestamp"
 	}
 
-	// This creates one allocation
+	// This creates one allocation if we really need to lower
 	return ASCIIToLower(s)
 }
 

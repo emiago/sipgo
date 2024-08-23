@@ -52,7 +52,9 @@ func (d *Dialog) Init() {
 	d.state = atomic.Int32{}
 	d.stateCh = make(chan sip.DialogState, 3)
 	d.lastCSeqNo = atomic.Uint32{}
-	d.lastCSeqNo.Store(d.InviteRequest.CSeq().SeqNo)
+
+	cseq := d.InviteRequest.CSeq().SeqNo
+	d.lastCSeqNo.Store(cseq)
 }
 
 func (d *Dialog) InitWithState(s sip.DialogState) {
