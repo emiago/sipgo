@@ -322,7 +322,7 @@ Content-Length:  0
 ## Support
 
 If you find this project interesting for bigger support or consulting, you can contact me on
-[mail](emirfreelance91@gmail.com)
+[mail](mailto:emirfreelance91@gmail.com)
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
 
