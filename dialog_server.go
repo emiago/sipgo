@@ -449,6 +449,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	cont := req.Contact()
 	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
 	bye := sip.NewRequest(sip.BYE, cont.Address)
+	bye.SetTransport(req.Transport())
 
 	tx, err := s.TransactionRequest(ctx, bye)
 	if err != nil {
