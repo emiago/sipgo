@@ -49,6 +49,7 @@ type headers struct {
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 	maxForwards   *MaxForwardsHeader
+	userAgent     *UserAgentHeader
 }
 
 func (hs *headers) String() string {
@@ -94,6 +95,8 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentType = m
 	case *MaxForwardsHeader:
 		hs.maxForwards = m
+	case *UserAgentHeader:
+		hs.userAgent = m
 	}
 }
 
@@ -121,6 +124,8 @@ func (hs *headers) unref(header Header) {
 		hs.contentType = nil
 	case *MaxForwardsHeader:
 		hs.maxForwards = nil
+	case *UserAgentHeader:
+		hs.userAgent = nil
 	}
 }
 
@@ -292,6 +297,17 @@ func (hs *headers) CallID() *CallIDHeader {
 		}
 	}
 	return hs.callid
+}
+
+// UserAgent returns UserAgent parsed header or nil if not exists
+func (hs *headers) UserAgent() *UserAgentHeader {
+	if hs.userAgent == nil {
+		var h UserAgentHeader
+		if parseHeaderLazy(hs, parseUserAgentHeader, []string{"user-agent", "i"}, &h) {
+			hs.userAgent = &h
+		}
+	}
+	return hs.userAgent
 }
 
 // Via returns Via parsed header or nil if not exists
@@ -700,6 +716,29 @@ func (h *CallIDHeader) Name() string { return "Call-ID" }
 func (h *CallIDHeader) Value() string { return string(*h) }
 
 func (h *CallIDHeader) headerClone() Header {
+	return h
+}
+
+// UserAgentHeader is a User-Agent header presentation
+type UserAgentHeader string
+
+func (h *UserAgentHeader) String() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *UserAgentHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
+func (h *UserAgentHeader) Name() string { return "User-Agent" }
+
+func (h *UserAgentHeader) Value() string { return string(*h) }
+
+func (h *UserAgentHeader) headerClone() Header {
 	return h
 }
 

@@ -56,6 +56,7 @@ var headersParsers = mapHeadersParser{
 	"l":              headerParserContentLength,
 	"route":          headerParserRoute,
 	"record-route":   headerParserRecordRoute,
+	"user-agent":     headerParserUserAgent,
 }
 
 // DefaultHeadersParser returns minimal version header parser.
@@ -143,6 +144,21 @@ func parseCallIdHeader(headerText string, callId *CallIDHeader) error {
 	}
 
 	*callId = CallIDHeader(headerText)
+	return nil
+}
+
+func headerParserUserAgent(headerName string, headerText string) (header Header, err error) {
+	var userAgent UserAgentHeader
+	return &userAgent, parseUserAgentHeader(headerText, &userAgent)
+}
+
+func parseUserAgentHeader(headerText string, userAgent *UserAgentHeader) error {
+	headerText = strings.TrimSpace(headerText)
+	if len(headerText) == 0 {
+		return fmt.Errorf("empty User-Agent body")
+	}
+
+	*userAgent = UserAgentHeader(headerText)
 	return nil
 }
 
