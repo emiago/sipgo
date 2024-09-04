@@ -3,6 +3,8 @@ package sip
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -179,7 +181,9 @@ func (tx *baseTx) initFSM(fsmState fsmContextState) {
 func (tx *baseTx) spinFsmUnsafe(in fsmInput) {
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
-			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
+			fname = fname[strings.LastIndex(fname, ".")+1:]
+			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
 		}
 		i = tx.fsmState(i)
 	}
@@ -190,7 +194,9 @@ func (tx *baseTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
-			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
+			fname = fname[strings.LastIndex(fname, ".")+1:]
+			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
 		}
 		i = tx.fsmState(i)
 	}
