@@ -81,10 +81,10 @@ func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byt
 		return nil, err
 	}
 
-	dt.OnClose = func() {
+	dt.onClose = func() {
 		c.dialogs.Delete(dt.ID)
 	}
-	dt.OnDialog = func(id string) {
+	dt.onDialog = func(id string) {
 		c.dialogs.Store(id, dt)
 	}
 	// req := sip.NewRequest(sip.INVITE, recipient)
@@ -105,10 +105,10 @@ func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Reque
 		return nil, err
 	}
 
-	dt.OnClose = func() {
+	dt.onClose = func() {
 		c.dialogs.Delete(dt.ID)
 	}
-	dt.OnDialog = func(id string) {
+	dt.onDialog = func(id string) {
 		c.dialogs.Store(id, dt)
 	}
 	// cli := c.c
@@ -166,15 +166,15 @@ type DialogClientSession struct {
 	inviteTx sip.ClientTransaction
 	ua       *DialogUA
 
-	// OnClose triggers when user calls Close
-	OnClose func()
-	// OnDialog triggers when SIP Dialog is only created after successful answer. Use it for caching dialog
-	OnDialog func(id string)
+	// onClose triggers when user calls Close
+	onClose func()
+	// onDialog triggers when SIP Dialog is only created after successful answer. Use it for caching dialog
+	onDialog func(id string)
 }
 
 func (dt *DialogClientSession) validateRequest(req *sip.Request) (err error) {
 	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo != (dt.lastCSeqNo.Load() + 1) {
+	if req.CSeq().SeqNo < dt.lastCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
 	return nil
@@ -357,8 +357,8 @@ func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 // Close must be always called in order to cleanup some internal resources
 // Consider that this will not send BYE or CANCEL or change dialog state
 func (s *DialogClientSession) Close() error {
-	if s.OnClose != nil {
-		s.OnClose()
+	if s.onClose != nil {
+		s.onClose()
 	}
 	// s.ua.dialogs.Delete(s.ID)
 	// s.setState(sip.DialogStateEnded)
@@ -487,8 +487,8 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	s.ID = id
 	s.setState(sip.DialogStateEstablished)
 
-	if s.OnDialog != nil {
-		s.OnDialog(id)
+	if s.onDialog != nil {
+		s.onDialog(id)
 	}
 	// s.ua.dialogs.Store(id, s)
 	return nil

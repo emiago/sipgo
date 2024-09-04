@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ErrDialogOutsideDialog   = errors.New("Call/Transaction outside dialog")
+	ErrDialogOutsideDialog   = errors.New("Call/Transaction Outside Dialog")
 	ErrDialogDoesNotExists   = errors.New("Call/Transaction Does Not Exist")
 	ErrDialogInviteNoContact = errors.New("No Contact header")
 	ErrDialogCanceled        = errors.New("Dialog canceled")

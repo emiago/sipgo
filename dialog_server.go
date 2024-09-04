@@ -134,7 +134,7 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	}
 
 	defer s.Close()
-	defer s.inviteTx.Terminate() // Terminates Invite transaction
+	defer s.inviteTx.Terminate() // Terminat`es Invite transaction
 
 	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 	if err := tx.Respond(res); err != nil {
@@ -473,7 +473,12 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 
 func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo != (dt.lastCSeqNo.Load() + 1) {
+
+	// UAS SHOULD be
+	// prepared to receive and process requests with CSeq values more than
+	// one higher than the previous received request.
+
+	if req.CSeq().SeqNo < dt.lastCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
 	return nil
