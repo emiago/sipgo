@@ -102,23 +102,26 @@ type ServerTransaction interface {
 	Respond(res *Response) error
 	Acks() <-chan *Request
 	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
-	Cancels() <-chan *Request
+	// Cancels() <-chan *Request
+
+	OnCancel(f func(r *Request))
 }
 
 type ClientTransaction interface {
 	Transaction
 	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
+
 	// Cancel sends cancel request
-	// TODO: Do we need context passing here?
-	Cancel() error
+	// Deprecated: Cancel must be new transaction and only works for INVITE
+	// Cancel() error
 }
 
 type baseTx struct {
-	key string
+	mu sync.Mutex
 
+	key    string
 	origin *Request
-	// tpl    *transport.Layer
 
 	conn Connection
 	done chan struct{}
@@ -160,6 +163,16 @@ func (tx *baseTx) Done() <-chan struct{} {
 }
 
 func (tx *baseTx) OnTerminate(f FnTxTerminate) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if tx.onTerminate != nil {
+		prev := tx.onTerminate
+		tx.onTerminate = func(key string) {
+			prev(key)
+			f(key)
+		}
+		return
+	}
 	tx.onTerminate = f
 }
 
@@ -239,8 +252,20 @@ func (tx *baseTx) Err() error {
 
 type FnTxTerminate func(key string)
 
+func isRFC3261(branch string) bool {
+	return branch != "" &&
+		strings.HasPrefix(branch, RFC3261BranchMagicCookie) &&
+		strings.TrimPrefix(branch, RFC3261BranchMagicCookie) != ""
+}
+
 // MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
 func MakeServerTxKey(msg Message) (string, error) {
+	return makeServerTxKey(msg, "")
+}
+
+// MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
+// https://datatracker.ietf.org/doc/html/rfc3261#section-17.2.3
+func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
 		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
@@ -251,8 +276,12 @@ func MakeServerTxKey(msg Message) (string, error) {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
 	}
 	method := cseq.MethodName
-	if method == ACK || method == CANCEL {
+	if method == ACK {
 		method = INVITE
+	}
+
+	if asMethod != "" {
+		method = asMethod
 	}
 
 	var isRFC3261 bool
@@ -318,13 +347,21 @@ func MakeServerTxKey(msg Message) (string, error) {
 
 // MakeClientTxKey creates client key for matching responses - RFC 3261 17.1.3.
 func MakeClientTxKey(msg Message) (string, error) {
+	return makeClientTxKey(msg, "")
+}
+
+func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	cseq := msg.CSeq()
 	if cseq == nil {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
 	}
 	method := cseq.MethodName
-	if method == ACK || method == CANCEL {
+	if method == ACK {
 		method = INVITE
+	}
+
+	if asMethod != "" {
+		method = asMethod
 	}
 
 	firstViaHop := msg.Via()

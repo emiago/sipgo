@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 		log.Logger = log.Level(lvl)
 	}
 	sip.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
-
+	sip.TransactionFSMDebug = os.Getenv("TRANSACTION_DEBUG") == "true"
 	m.Run()
 }
 

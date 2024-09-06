@@ -280,8 +280,7 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			err := tx.Cancel()
-			return nil, errors.Join(ctx.Err(), err)
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -376,7 +375,8 @@ type AnswerOptions struct {
 }
 
 // WaitAnswer waits for success response or returns ErrDialogResponse in case non 2xx
-// Canceling context while waiting 2xx will send Cancel request
+// Canceling context while waiting 2xx will send Cancel request. It will block until 1xx provisional is not received
+// If Canceling succesfull context.Canceled error is returned
 // Returns errors:
 // - ErrDialogResponse in case non 2xx response
 // - any internal in case waiting answer failed for different reasons
@@ -388,15 +388,53 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	for {
 		select {
 		case r = <-tx.Responses():
+			s.InviteResponse = r
 			// just pass
 		case <-ctx.Done():
 			// Send cancel
+			// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
+			// Cancel can only be sent when provisional is received
+			// We will wait until transaction timeous out (TimerB)
 			defer tx.Terminate()
-			if err := tx.Cancel(); err != nil {
-				return errors.Join(err, ctx.Err())
-			}
-			return ctx.Err()
 
+			if s.InviteResponse == nil {
+				select {
+				case r = <-tx.Responses():
+					s.InviteResponse = r
+					if !r.IsProvisional() {
+						// Maybe consider sending BYE
+						return fmt.Errorf("non provisional response received during CANCEL. resp=%s", r.String())
+					}
+				case <-tx.Done():
+					return errors.Join(fmt.Errorf("transaction terminated"), tx.Err())
+				}
+			}
+
+			cancelReq := newCancelRequest(s.InviteRequest)
+			res, err := s.Do(context.Background(), cancelReq) // Cancel should grab same connection underhood
+			if err != nil {
+				return err
+			}
+			if res.StatusCode != 200 {
+				return fmt.Errorf("cancel failed with non 200. code=%d", res.StatusCode)
+			}
+
+			// Wait for 487 or just timeout per TimerB (tx.Done)
+		loop_487:
+			for {
+				select {
+				case r = <-tx.Responses():
+					if r.IsProvisional() {
+						continue
+					}
+					s.InviteResponse = r
+					break loop_487
+				case <-tx.Done():
+					return tx.Err()
+				}
+			}
+
+			return ctx.Err()
 		case <-tx.Done():
 			// tx.Err() can be empty
 			return errors.Join(fmt.Errorf("transaction terminated"), tx.Err())
@@ -407,8 +445,6 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				return err
 			}
 		}
-
-		s.InviteResponse = r
 
 		if r.IsSuccess() {
 			break
@@ -598,4 +634,16 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	byeRequest.SetTransport(inviteRequest.Transport())
 	byeRequest.SetSource(inviteRequest.Source())
 	return byeRequest
+}
+
+func newCancelRequest(inviteRequest *sip.Request) *sip.Request {
+	cancelReq := sip.NewRequest(sip.CANCEL, inviteRequest.Recipient)
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.Via())) // Cancel request must match invite TOP via and only have that Via
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.From()))
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.To()))
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.CallID()))
+	sip.CopyHeaders("Route", inviteRequest, cancelReq)
+	cancelReq.SetSource(inviteRequest.Source())
+	cancelReq.SetDestination(inviteRequest.Destination())
+	return cancelReq
 }

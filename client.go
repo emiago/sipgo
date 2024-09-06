@@ -2,7 +2,6 @@ package sipgo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 
@@ -117,6 +116,7 @@ func (c *Client) GetHostname() string {
 }
 
 // TransactionRequest uses transaction layer to send request and returns transaction
+// For more correct behavior use client.Do instead which acts same like HTTP req/response
 //
 // By default request will not be cloned and it will populate request with missing headers unless options are used
 // In most cases you want this as you will retry with additional headers
@@ -153,7 +153,7 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 
 // Do request is HTTP client like Do request/response.
 // It returns on final response.
-// Canceling ctx sends Cancel Request but it still returns ctx error
+// NOTE: Canceling ctx WILL not send Cancel Request which is needed for INVITE. Use dialog API for dealing with dialogs
 // For more lower API use TransactionRequest directly
 func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := c.TransactionRequest(ctx, req)
@@ -174,8 +174,7 @@ func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			err := tx.Cancel()
-			return nil, errors.Join(ctx.Err(), err)
+			return nil, ctx.Err()
 		}
 	}
 }

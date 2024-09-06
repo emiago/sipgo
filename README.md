@@ -83,7 +83,6 @@ srv, _ := sipgo.NewServer(ua) // Creating server handle for ua
 client, _ := sipgo.NewClient(ua) // Creating client handle for ua
 srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
-srv.OnCancel(cancelHandler)
 srv.OnBye(byeHandler)
 
 // For registrars
@@ -137,8 +136,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     tx.Respond(res)
 
     select {
-        case m := <-tx.Acks(): // Handle ACK . ACKs on 2xx are send as different request
-        case m := <-tx.Cancels(): // Handle Cancel 
+        case m := <-tx.Acks(): // Handle ACK for response . ACKs on 2xx are send as different request
         case <-tx.Done():
             // Signal transaction is done. 
             // Check any errors with tx.Err() to have more info why terminated
@@ -215,6 +213,14 @@ client.WriteRequest(req)
 They are seperated based on your **request context**, but they act more like `peer`.
 They both need `client` **handle** to be able send request and `server` **handle** to accept request.
 
+---
+
+**NOTE**: 
+
+`DialogClient` and `DialogServer` are wrappers for `DialogUA` with **cache layer **and may be moved to seperate package.
+Use `DialogUA` for building dialog control and extend with your own Cache layer. Matching dialog by ID are exposed functions.
+
+---
 
 **UAC**:
 ```go

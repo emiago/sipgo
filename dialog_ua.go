@@ -41,6 +41,20 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	}
 	dtx.Init()
 
+	// Temporarly fix
+	if stx, ok := tx.(*sip.ServerTx); ok {
+		stx.OnTerminate(func(key string) {
+			state := dtx.LoadState()
+			if state < sip.DialogStateEstablished {
+				// It is canceled
+				dtx.setState(sip.DialogStateEnded)
+			}
+		})
+		// stx.OnCancel(func(r *sip.Request) {
+		// 	dtx.setState(sip.DialogStateEnded)
+		// })
+	}
+
 	return dtx, nil
 }
 

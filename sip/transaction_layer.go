@@ -73,7 +73,38 @@ func (txl *TransactionLayer) handleMessage(msg Message) {
 }
 
 func (txl *TransactionLayer) handleRequest(req *Request) {
-	key, err := MakeServerTxKey(req)
+	if req.IsCancel() {
+		// Match transaction https://datatracker.ietf.org/doc/html/rfc3261#section-9.2
+		// 	The CANCEL method requests that the TU at the server side cancel a
+		//    pending transaction.  The TU determines the transaction to be
+		//    cancelled by taking the CANCEL request, and then assuming that the
+		//    request method is anything but CANCEL or AC
+
+		// For now we only match INVITE
+		key, err := makeServerTxKey(req, INVITE)
+		if err != nil {
+			txl.log.Error().Err(err).Msg("Server tx make key failed")
+			return
+		}
+
+		tx, exists := txl.getServerTx(key)
+		if exists {
+			// If ok this should terminate this transaction
+			if err := tx.Receive(req); err != nil {
+				txl.log.Error().Err(err).Msg("Server tx failed to receive req")
+				return
+			}
+
+			// Reuse connection and send 200 for CANCEL
+			if err := tx.conn.WriteMsg(NewResponseFromRequest(req, StatusOK, "OK", nil)); err != nil {
+				txl.log.Error().Err(err).Msg("Failed to respond 200 for CANCEL")
+			}
+			return
+		}
+		// Now proceed as normal transaction, and let developer decide what todo with this CANCEL
+	}
+
+	key, err := makeServerTxKey(req, "")
 	if err != nil {
 		txl.log.Error().Err(err).Msg("Server tx make key failed")
 		return
@@ -84,15 +115,6 @@ func (txl *TransactionLayer) handleRequest(req *Request) {
 		if err := tx.Receive(req); err != nil {
 			txl.log.Error().Err(err).Msg("Server tx failed to receive req")
 		}
-		return
-	}
-
-	if req.IsCancel() {
-		// transaction for CANCEL already completed and terminated
-
-		// If the UAS did not find a matching transaction for the CANCEL
-		// according to the procedure above, it SHOULD respond to the CANCEL
-		// with a 481 (Call Leg/Transaction Does Not Exist).
 		return
 	}
 

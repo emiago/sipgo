@@ -80,7 +80,7 @@ func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*
 	}
 
 	id := dtx.ID
-	dtx.OnClose = func() {
+	dtx.onClose = func() {
 		s.dialogs.Delete(id)
 	}
 	s.dialogs.Store(id, dtx)
@@ -111,10 +111,10 @@ type DialogServerSession struct {
 	// s        *DialogServer
 	ua *DialogUA
 
-	// OnClose is temporarly fix to handle dialog Closing.
+	// onClose is temporarly fix to handle dialog Closing.
 	// Normally you want to have cleanup after dialog terminating or caller calling Close()
 	// In future this could be only subscribing to dialog state
-	OnClose func()
+	onClose func()
 }
 
 // ReadAck changes dialog state to confiremed
@@ -173,8 +173,7 @@ func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			err := tx.Cancel()
-			return nil, errors.Join(ctx.Err(), err)
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -270,8 +269,8 @@ func (s *DialogServerSession) WriteRequest(req *sip.Request) error {
 
 // Close is always good to call for cleanup or terminating dialog state
 func (s *DialogServerSession) Close() error {
-	if s.OnClose != nil {
-		s.OnClose()
+	if s.onClose != nil {
+		s.onClose()
 	}
 	return nil
 }
@@ -354,9 +353,6 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 
 	// Do we have cancel in meantime
 	select {
-	case req := <-tx.Cancels():
-		tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
-		return ErrDialogCanceled
 	case <-tx.Done():
 		// There must be some error
 		return tx.Err()

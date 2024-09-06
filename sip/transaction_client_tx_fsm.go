@@ -17,10 +17,15 @@ func (tx *ClientTx) inviteStateCalling(s fsmInput) fsmInput {
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAccept
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actInviteFinal
-	case client_input_cancel:
-		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actCancel
-	case client_input_canceled:
-		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteCanceled
+
+		// NOTE
+		// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
+		// defines that no cancel should be sent unless we are in proceeding state
+		// problematic part is wait
+	// case client_input_cancel:
+	// 	tx.fsmState, spinfn = tx.inviteStateCalling, tx.actCancel
+	// case client_input_canceled:
+	// 	tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteCanceled
 	case client_input_timer_a:
 		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteResend
 	case client_input_timer_b:
@@ -44,10 +49,10 @@ func (tx *ClientTx) inviteStateProcceeding(s fsmInput) fsmInput {
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAccept
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actInviteFinal
-	case client_input_cancel:
-		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancelTimeout
-	case client_input_canceled:
-		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actInviteCanceled
+	// case client_input_cancel:
+	// 	tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancelTimeout
+	// case client_input_canceled:
+	// 	tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actInviteCanceled
 	case client_input_timer_b:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actTimeout
 	case client_input_transport_err:
@@ -304,32 +309,32 @@ func (tx *ClientTx) actFinal() fsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actCancel() fsmInput {
-	// tx.Log().Debug("actCancel")
+// func (tx *ClientTx) actCancel() fsmInput {
+// 	// tx.Log().Debug("actCancel")
 
-	tx.cancel()
+// 	tx.cancel()
 
-	return FsmInputNone
-}
+// 	return FsmInputNone
+// }
 
-func (tx *ClientTx) actCancelTimeout() fsmInput {
-	// tx.Log().Debug("actCancel")
+// func (tx *ClientTx) actCancelTimeout() fsmInput {
+// 	// tx.Log().Debug("actCancel")
 
-	tx.cancel()
+// 	tx.cancel()
 
-	// tx.Log().Tracef("timer_b set to %v", Timer_B)
+// 	// tx.Log().Tracef("timer_b set to %v", Timer_B)
 
-	tx.mu.Lock()
-	if tx.timer_b != nil {
-		tx.timer_b.Stop()
-	}
-	tx.timer_b = time.AfterFunc(Timer_B, func() {
-		tx.spinFsm(client_input_timer_b)
-	})
-	tx.mu.Unlock()
+// 	tx.mu.Lock()
+// 	if tx.timer_b != nil {
+// 		tx.timer_b.Stop()
+// 	}
+// 	tx.timer_b = time.AfterFunc(Timer_B, func() {
+// 		tx.spinFsm(client_input_timer_b)
+// 	})
+// 	tx.mu.Unlock()
 
-	return FsmInputNone
-}
+// 	return FsmInputNone
+// }
 
 func (tx *ClientTx) actAckResend() fsmInput {
 	// Detect ACK loop.

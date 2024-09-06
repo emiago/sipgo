@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -306,6 +308,88 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 	}
 
+}
+
+func TestIntegrationDialogCancel(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
+	ua, _ := NewUA()
+	defer ua.Close()
+	srv, _ := NewServer(ua)
+	cli, _ := NewClient(ua)
+	sip.SetTimers(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	uasContact := sip.ContactHeader{
+		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+	}
+
+	dialogSrv := NewDialogServer(cli, uasContact)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+		defer wg.Done()
+		dlg, err := dialogSrv.ReadInvite(req, tx)
+		require.NoError(t, err)
+
+		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
+		require.NoError(t, err)
+
+		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
+		require.NoError(t, err)
+
+		<-dlg.Context().Done()
+	})
+
+	srv.OnCancel(func(req *sip.Request, tx sip.ServerTransaction) {
+		t.Log("Cancel received")
+	})
+
+	srv.ServeRequest(func(r *sip.Request) {
+		t.Log("UAS server: ", r.StartLine())
+	})
+
+	startTestServer(ctx, srv, uasContact.Address.HostPort())
+
+	// Client
+	{
+		ua, _ := NewUA()
+		defer ua.Close()
+
+		srv, _ := NewServer(ua)
+		cli, _ := NewClient(ua)
+
+		contactHDR := sip.ContactHeader{
+			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
+		}
+		dialogCli := NewDialogClient(cli, contactHDR)
+
+		srv.ServeRequest(func(r *sip.Request) {
+			t.Log("UAC server: ", r.StartLine())
+		})
+
+		startTestServer(ctx, srv, contactHDR.Address.HostPort())
+
+		// INVITE
+		t.Log("UAC: INVITE")
+		sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
+		require.NoError(t, err)
+		defer sess.Close()
+
+		// Cancel a call
+		ctx, cancel := context.WithCancel(sess.Context())
+		cancel()
+		err = sess.WaitAnswer(ctx, AnswerOptions{})
+		require.ErrorIs(t, err, context.Canceled)
+		assert.EqualValues(t, 487, sess.InviteResponse.StatusCode)
+	}
+
+	wg.Wait()
 }
 
 func startTestServer(ctx context.Context, srv *Server, hostPort string) {
