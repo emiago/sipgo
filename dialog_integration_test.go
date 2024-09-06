@@ -383,8 +383,12 @@ func TestIntegrationDialogCancel(t *testing.T) {
 
 		// Cancel a call
 		ctx, cancel := context.WithCancel(sess.Context())
-		cancel()
-		err = sess.WaitAnswer(ctx, AnswerOptions{})
+		err = sess.WaitAnswer(ctx, AnswerOptions{OnResponse: func(res *sip.Response) error {
+			if res.StatusCode == sip.StatusRinging {
+				cancel()
+			}
+			return nil
+		}})
 		require.ErrorIs(t, err, context.Canceled)
 		assert.EqualValues(t, 487, sess.InviteResponse.StatusCode)
 	}

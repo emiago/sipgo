@@ -44,9 +44,10 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	// Temporarly fix
 	if stx, ok := tx.(*sip.ServerTx); ok {
 		stx.OnTerminate(func(key string) {
+			// TODO use transaction error for better checking why it terminated
 			state := dtx.LoadState()
 			if state < sip.DialogStateEstablished {
-				// It is canceled
+				// It is canceled if transaction died before answer
 				dtx.setState(sip.DialogStateEnded)
 			}
 		})
