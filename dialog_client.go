@@ -262,6 +262,10 @@ func (s *DialogClientSession) ReadRequest(req *sip.Request, tx sip.ServerTransac
 
 // Do sends request and waits final response using Dialog rules
 // For more control use TransactionRequest
+//
+// NOTE:
+// It does not provide INVITE CANCEL as it could be REINVITE
+// Use WaitAnswer when creating initial INVITE to have CANCEL sending.
 func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := s.TransactionRequest(ctx, req)
 	if err != nil {
