@@ -17,9 +17,10 @@ import (
 )
 
 func main() {
-	inter := flag.String("h", "localhost", "My interface ip or hostname")
+	inter := flag.String("h", "127.0.0.1", "My interface ip or hostname")
 	dst := flag.String("srv", "127.0.0.1:5060", "Destination")
 	tran := flag.String("t", "udp", "Transport")
+	user := flag.String("ua", "alice", "SIP Username")
 	username := flag.String("u", "alice", "SIP Username")
 	password := flag.String("p", "alice", "Password")
 	flag.Parse()
@@ -39,7 +40,7 @@ func main() {
 
 	// Setup UAC
 	ua, err := sipgo.NewUA(
-		sipgo.WithUserAgent(*username),
+		sipgo.WithUserAgent(*user),
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to setup user agent")
@@ -53,7 +54,7 @@ func main() {
 
 	// Create basic REGISTER request structure
 	recipient := sip.Uri{}
-	sip.ParseUri(fmt.Sprintf("sip:%s@%s", *username, *dst), &recipient)
+	sip.ParseUri(fmt.Sprintf("sip:%s@%s", *user, *dst), &recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
 		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", *username, *inter)),
