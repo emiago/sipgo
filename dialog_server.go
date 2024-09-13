@@ -64,16 +64,6 @@ func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer
 // You need to use DialogServerSession for all further responses
 // Do not forget to add ReadAck and ReadBye for confirming dialog and terminating
 func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
-	// In case dialog exists this will return non nil error
-	// id, err := sip.UASReadRequestDialogID(req)
-	// if err == nil {
-	// 	// Check is our dialog (REINVITE)
-	// 	if d, exists := s.dialogs.Load(id); exists {
-	// 		return d.(*DialogServerSession), nil
-	// 	}
-	// 	return nil, err
-	// }
-
 	dtx, err := s.ua.ReadInvite(req, tx)
 	if err != nil {
 		return nil, err

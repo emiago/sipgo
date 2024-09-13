@@ -263,6 +263,10 @@ dialogSrv := sipgo.NewDialogServer(client, uasContact)
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
+    if err != nil {
+        return err
+    }
+    defer dlg.Close() // Close for cleanup from cache
     // handle error
     dlg.Respond(sip.StatusTrying, "Trying", nil)
     dlg.Respond(sip.StatusOK, "OK", nil)
