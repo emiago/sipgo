@@ -9,23 +9,22 @@
 **SIPGO** is library for writing fast SIP services in GO language.  
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)) optimized for fast parsing.
 
-For extra functionality checkout also   
-- [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality like fast building SIP phone
-- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (*sdp, rtp, rtcp*)
+**Libs on top of sipgo:**
+- ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack 
+- ***sipgox*** [github.com/emiago/sipgox](https://github.com/emiago/sipgox): Fast building SIP phone or SIP helpers (It is recomended to switch to **Diago**)
 
 Fetch lib with:
 
 `go get github.com/emiago/sipgo`
 
-**NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
-*If you like/use project currently or need additional help/support checkout [Support section](#support) 
-
+If you like/use project currently and looking for support/sponsoring  checkout [Support section](#support)  
 
 You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
 
-
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
+
+**NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
 ## Supported protocols
 
