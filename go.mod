@@ -6,7 +6,7 @@ require (
 	github.com/gobwas/ws v1.3.2
 	github.com/google/uuid v1.6.0
 	github.com/icholy/digest v0.1.22
-	github.com/rs/zerolog v1.32.0
+	github.com/rs/zerolog v1.33.0
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b
 	github.com/stretchr/testify v1.9.0
 )
