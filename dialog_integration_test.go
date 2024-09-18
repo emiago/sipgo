@@ -32,7 +32,7 @@ func TestIntegrationDialog(t *testing.T) {
 		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 	}
 
-	dialogSrv := NewDialogServer(cli, uasContact)
+	dialogSrv := NewDialogServerCache(cli, uasContact)
 	// digestChal := digest.Challenge{
 	// 	Username: "alice",
 	// 	Password: "alice123",
@@ -123,7 +123,7 @@ func TestIntegrationDialog(t *testing.T) {
 		contactHDR := sip.ContactHeader{
 			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 		}
-		dialogCli := NewDialogClient(cli, contactHDR)
+		dialogCli := NewDialogClientCache(cli, contactHDR)
 
 		// Setup server side
 		srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -206,7 +206,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		Address: sip.Uri{User: "test", Host: "127.0.0.201", Port: 5099},
 	}
 
-	dialogSrv := NewDialogServer(cli, uasContact)
+	dialogSrv := NewDialogServerCache(cli, uasContact)
 
 	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
 		dlg, err := dialogSrv.ReadInvite(req, tx)
@@ -246,7 +246,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		contactHDR := sip.ContactHeader{
 			Address: sip.Uri{User: "test", Host: "127.0.0.201", Port: 5088},
 		}
-		dialogCli := NewDialogClient(cli, contactHDR)
+		dialogCli := NewDialogClientCache(cli, contactHDR)
 
 		// Setup server side
 		srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -329,7 +329,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 	}
 
-	dialogSrv := NewDialogServer(cli, uasContact)
+	dialogSrv := NewDialogServerCache(cli, uasContact)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -367,7 +367,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 		contactHDR := sip.ContactHeader{
 			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 		}
-		dialogCli := NewDialogClient(cli, contactHDR)
+		dialogCli := NewDialogClientCache(cli, contactHDR)
 
 		srv.ServeRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())

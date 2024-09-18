@@ -10,156 +10,6 @@ import (
 	"github.com/icholy/digest"
 )
 
-type DialogClient struct {
-	c          *Client
-	dialogs    sync.Map // TODO replace with typed version
-	contactHDR sip.ContactHeader
-
-	ua DialogUA
-}
-
-// NewDialogClient provides handle for managing UAC dialog
-// Contact hdr is default to be provided for correct invite. It is not used if you provided hdr as part of request,
-// but contact hdr must be present so this makes sure correct dialog is established.
-// In case handling different transports you should have multiple instances per transport
-func NewDialogClient(client *Client, contactHDR sip.ContactHeader) *DialogClient {
-	s := &DialogClient{
-		c:          client,
-		dialogs:    sync.Map{},
-		contactHDR: contactHDR,
-		ua: DialogUA{
-			Client:     client,
-			ContactHDR: contactHDR,
-		},
-	}
-	return s
-}
-
-func (s *DialogClient) dialogsLen() int {
-	leftItems := 0
-	s.dialogs.Range(func(key, value any) bool {
-		leftItems++
-		return true
-	})
-	return leftItems
-}
-
-func (s *DialogClient) loadDialog(id string) *DialogClientSession {
-	val, ok := s.dialogs.Load(id)
-	if !ok || val == nil {
-		return nil
-	}
-
-	t := val.(*DialogClientSession)
-	return t
-}
-
-func (s *DialogClient) MatchRequestDialog(req *sip.Request) (*DialogClientSession, error) {
-	return s.matchDialogRequest(req)
-}
-
-func (s *DialogClient) matchDialogRequest(req *sip.Request) (*DialogClientSession, error) {
-	id, err := sip.UACReadRequestDialogID(req)
-	if err != nil {
-		return nil, errors.Join(err, ErrDialogOutsideDialog)
-	}
-
-	dt := s.loadDialog(id)
-	if dt == nil {
-		return nil, ErrDialogDoesNotExists
-	}
-	return dt, nil
-}
-
-// Invite sends INVITE request and creates early dialog session.
-// This is actually not yet dialog (ID is empty)
-// You need to call WaitAnswer after for establishing dialog
-// For passing custom Invite request use WriteInvite
-func (c *DialogClient) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
-	dt, err := c.ua.Invite(ctx, recipient, body, headers...)
-	if err != nil {
-		return nil, err
-	}
-
-	dt.onClose = func() {
-		c.dialogs.Delete(dt.ID)
-	}
-	dt.onDialog = func(id string) {
-		c.dialogs.Store(id, dt)
-	}
-	// req := sip.NewRequest(sip.INVITE, recipient)
-	// if body != nil {
-	// 	req.SetBody(body)
-	// }
-
-	// for _, h := range headers {
-	// 	req.AppendHeader(h)
-	// }
-	// return c.WriteInvite(ctx, req)
-	return dt, err
-}
-
-func (c *DialogClient) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
-	dt, err := c.ua.WriteInvite(ctx, inviteRequest)
-	if err != nil {
-		return nil, err
-	}
-
-	dt.onClose = func() {
-		c.dialogs.Delete(dt.ID)
-	}
-	dt.onDialog = func(id string) {
-		c.dialogs.Store(id, dt)
-	}
-	// cli := c.c
-
-	// if inviteRequest.Contact() == nil {
-	// 	// Set contact only if not exists
-	// 	inviteRequest.AppendHeader(&c.contactHDR)
-	// }
-
-	// tx, err := cli.TransactionRequest(ctx, inviteRequest)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// ctx, cancel := context.WithCancel(context.Background())
-	// dtx := &DialogClientSession{
-	// 	Dialog: Dialog{
-	// 		InviteRequest: inviteRequest,
-	// 		lastCSeqNo:    inviteRequest.CSeq().SeqNo,
-	// 		state:         atomic.Int32{},
-	// 		stateCh:       make(chan sip.DialogState, 3),
-	// 		ctx:           ctx,
-	// 		cancel:        cancel,
-	// 	},
-	// 	dc:       c,
-	// 	inviteTx: tx,
-	// }
-
-	// return dtx, nil
-	return dt, err
-}
-
-func (c *DialogClient) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := c.matchDialogRequest(req)
-	if err != nil {
-		return err
-	}
-	return dt.ReadBye(req, tx)
-}
-
-// Experiment
-// ReadRefer reads REFER (Transfer action) and parses referURI if dialog exists.
-// Returned dialog you should use to pass NOTIFY and BYE if your new INVITE dialog is successful
-func (c *DialogClient) ReadRefer(req *sip.Request, tx sip.ServerTransaction, referUri *sip.Uri) (*DialogClientSession, error) {
-	dt, err := c.matchDialogRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	return dt.ReadRefer(req, tx, referUri)
-}
-
 type DialogClientSession struct {
 	Dialog
 	// dc       *DialogClient
@@ -168,8 +18,6 @@ type DialogClientSession struct {
 
 	// onClose triggers when user calls Close
 	onClose func()
-	// onDialog triggers when SIP Dialog is only created after successful answer. Use it for caching dialog
-	onDialog func(id string)
 }
 
 func (dt *DialogClientSession) validateRequest(req *sip.Request) (err error) {
@@ -195,59 +43,6 @@ func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	// 	return tx.Err()
 	// }
 	return nil
-}
-
-func (s *DialogClientSession) ReadRefer(req *sip.Request, tx sip.ServerTransaction, referUri *sip.Uri) (*DialogClientSession, error) {
-	cseq := req.CSeq().SeqNo
-	if cseq <= s.lastCSeqNo.Load() {
-		return nil, ErrDialogOutsideDialog
-	}
-
-	referToHdr := req.GetHeader("Refer-to")
-	if referToHdr == nil {
-		return nil, fmt.Errorf("no Refer-to header present")
-	}
-
-	if err := sip.ParseUri(referToHdr.Value(), referUri); err != nil {
-		return nil, err
-	}
-
-	res := sip.NewResponseFromRequest(req, 202, "Accepted", nil)
-	if err := tx.Respond(res); err != nil {
-		return nil, err
-	}
-
-	// Now dialog should do invite
-	// And implicit subscription should be done
-	// invite := sip.NewRequest(sip.INVITE, *referUri)
-	// invite.SetBody(s.InviteRequest.Body())
-	// invite
-
-	// // s.TransactionRequest(context.TODO(), invite)
-	// c.WriteInvite(context.TODO(), invite)
-
-	return s, nil
-
-	// Dial until current dialog is canceled. Therefore we pass s.Context
-	// ctx, cancel := context.WithTimeout(s.Context(), 30*time.Second)
-	// defer cancel()
-
-	// c.Invite(ctx, referUri)
-
-	// s.setState(sip.DialogStateEnded)
-
-	// res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-	// if err := tx.Respond(res); err != nil {
-	// 	return err
-	// }
-	// defer s.Close()              // Delete our dialog always
-	// defer s.inviteTx.Terminate() // Terminates Invite transaction
-
-	// // select {
-	// // case <-tx.Done():
-	// // 	return tx.Err()
-	// // }
-	// return nil
 }
 
 // ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
@@ -526,11 +321,6 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	s.InviteResponse = r
 	s.ID = id
 	s.setState(sip.DialogStateEstablished)
-
-	if s.onDialog != nil {
-		s.onDialog(id)
-	}
-	// s.ua.dialogs.Store(id, s)
 	return nil
 }
 
@@ -650,4 +440,115 @@ func newCancelRequest(inviteRequest *sip.Request) *sip.Request {
 	cancelReq.SetSource(inviteRequest.Source())
 	cancelReq.SetDestination(inviteRequest.Destination())
 	return cancelReq
+}
+
+type DialogClientCache struct {
+	c       *Client
+	dialogs sync.Map // TODO replace with typed version
+	ua      DialogUA
+}
+
+// NewDialogClientCache provides simple cache layer for managing UAC dialogs.
+// It is generally recomended to build your own cache layer
+// Contact hdr is default to be provided for correct invite. It is not used if you provided hdr as part of request,
+// but contact hdr must be present so this makes sure correct dialog is established.
+// In case handling different transports you should have multiple instances per transport
+func NewDialogClientCache(client *Client, contactHDR sip.ContactHeader) *DialogClientCache {
+	s := &DialogClientCache{
+		c:       client,
+		dialogs: sync.Map{},
+		ua: DialogUA{
+			Client:     client,
+			ContactHDR: contactHDR,
+		},
+	}
+	return s
+}
+
+func (s *DialogClientCache) dialogsLen() int {
+	leftItems := 0
+	s.dialogs.Range(func(key, value any) bool {
+		leftItems++
+		return true
+	})
+	return leftItems
+}
+
+func (s *DialogClientCache) loadDialog(id string) *DialogClientSession {
+	val, ok := s.dialogs.Load(id)
+	if !ok || val == nil {
+		return nil
+	}
+
+	t := val.(*DialogClientSession)
+	return t
+}
+
+func (s *DialogClientCache) MatchRequestDialog(req *sip.Request) (*DialogClientSession, error) {
+	id, err := sip.UACReadRequestDialogID(req)
+	if err != nil {
+		return nil, errors.Join(err, ErrDialogOutsideDialog)
+	}
+
+	dt := s.loadDialog(id)
+	if dt == nil {
+		return nil, ErrDialogDoesNotExists
+	}
+	return dt, nil
+}
+
+// Invite sends INVITE request and creates early dialog session.
+// This is actually not yet dialog (ID is empty)
+// You need to call WaitAnswer after for establishing dialog
+// For passing custom Invite request use WriteInvite
+func (c *DialogClientCache) Invite(ctx context.Context, recipient sip.Uri, body []byte, headers ...sip.Header) (*DialogClientSession, error) {
+	dt, err := c.ua.Invite(ctx, recipient, body, headers...)
+	if err != nil {
+		return nil, err
+	}
+
+	dt.onClose = func() {
+		c.dialogs.Delete(dt.ID)
+	}
+
+	dt.OnState(func(s sip.DialogState) {
+		if s == sip.DialogStateEstablished {
+			// Change of state is called after populating ID
+			if dt.ID == "" {
+				panic("id of dialog is empty")
+			}
+			c.dialogs.Store(dt.ID, dt)
+		}
+	})
+	return dt, err
+}
+
+func (c *DialogClientCache) WriteInvite(ctx context.Context, inviteRequest *sip.Request) (*DialogClientSession, error) {
+	dt, err := c.ua.WriteInvite(ctx, inviteRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	dt.onClose = func() {
+		c.dialogs.Delete(dt.ID)
+	}
+
+	dt.OnState(func(s sip.DialogState) {
+		if s == sip.DialogStateEstablished {
+			// Change of state is called after populating ID
+			if dt.ID == "" {
+				panic("id of dialog is empty")
+			}
+			c.dialogs.Store(dt.ID, dt)
+		}
+	})
+	return dt, err
+}
+
+func (c *DialogClientCache) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
+	dt, err := c.MatchRequestDialog(req)
+	if err != nil {
+		return err
+	}
+	return dt.ReadBye(req, tx)
 }

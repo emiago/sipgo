@@ -11,90 +11,6 @@ import (
 	"github.com/icholy/digest"
 )
 
-// DialogServer
-//
-// Deprecated. Will be moved as example of caching dialog
-type DialogServer struct {
-	dialogs sync.Map // TODO replace with typed version
-	ua      DialogUA
-}
-
-func (s *DialogServer) loadDialog(id string) *DialogServerSession {
-	val, ok := s.dialogs.Load(id)
-	if !ok || val == nil {
-		return nil
-	}
-
-	t := val.(*DialogServerSession)
-	return t
-}
-
-func (s *DialogServer) matchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
-	id, err := sip.UASReadRequestDialogID(req)
-	if err != nil {
-		return nil, errors.Join(ErrDialogOutsideDialog, err)
-	}
-
-	dt := s.loadDialog(id)
-	if dt == nil {
-		return nil, ErrDialogDoesNotExists
-	}
-	return dt, nil
-}
-
-// NewDialogServer provides handle for managing UAS dialog
-// Contact hdr is default that is provided for responses.
-// Client is needed for termination dialog session
-// In case handling different transports you should have multiple instances per transport
-//
-// Deprecated: DialogServer cached dialogs, which is mostly something you want todo as caller
-// Using DialogUA is now better way for genereting dialogs without caching and giving you as caller whole control of dialog
-func NewDialogServer(client *Client, contactHDR sip.ContactHeader) *DialogServer {
-	s := &DialogServer{
-		dialogs: sync.Map{},
-		ua: DialogUA{
-			Client:     client,
-			ContactHDR: contactHDR,
-		},
-	}
-	return s
-}
-
-// ReadInvite should read from your OnInvite handler for which it creates dialog context
-// You need to use DialogServerSession for all further responses
-// Do not forget to add ReadAck and ReadBye for confirming dialog and terminating
-func (s *DialogServer) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
-	dtx, err := s.ua.ReadInvite(req, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	id := dtx.ID
-	dtx.onClose = func() {
-		s.dialogs.Delete(id)
-	}
-	s.dialogs.Store(id, dtx)
-	return dtx, nil
-}
-
-// ReadAck should read from your OnAck handler
-func (s *DialogServer) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.matchDialogRequest(req)
-	if err != nil {
-		return err
-	}
-	return dt.ReadAck(req, tx)
-}
-
-// ReadBye should read from your OnBye handler. Returns error if it fails
-func (s *DialogServer) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.matchDialogRequest(req)
-	if err != nil {
-		return err
-	}
-	return dt.ReadBye(req, tx)
-}
-
 type DialogServerSession struct {
 	Dialog
 	inviteTx sip.ServerTransaction
@@ -469,4 +385,86 @@ func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 		return ErrDialogInvalidCseq
 	}
 	return nil
+}
+
+// DialogServerCache serves as quick way to start building dialog server
+// It is not optimized version and it is recomended that you build own dialog caching
+type DialogServerCache struct {
+	dialogs sync.Map // TODO replace with typed version
+	ua      DialogUA
+}
+
+func (s *DialogServerCache) loadDialog(id string) *DialogServerSession {
+	val, ok := s.dialogs.Load(id)
+	if !ok || val == nil {
+		return nil
+	}
+
+	t := val.(*DialogServerSession)
+	return t
+}
+
+func (s *DialogServerCache) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
+	id, err := sip.UASReadRequestDialogID(req)
+	if err != nil {
+		return nil, errors.Join(ErrDialogOutsideDialog, err)
+	}
+
+	dt := s.loadDialog(id)
+	if dt == nil {
+		return nil, ErrDialogDoesNotExists
+	}
+	return dt, nil
+}
+
+// NewDialogServerCache provides simple cache layer for managing UAS dialog
+// Contact hdr is default that is provided for responses.
+// Client is needed for termination dialog session
+// In case handling different transports you should have multiple instances per transport
+//
+// Using DialogUA is now better way for genereting dialogs without caching and giving you as caller whole control of dialog
+func NewDialogServerCache(client *Client, contactHDR sip.ContactHeader) *DialogServerCache {
+	s := &DialogServerCache{
+		dialogs: sync.Map{},
+		ua: DialogUA{
+			Client:     client,
+			ContactHDR: contactHDR,
+		},
+	}
+	return s
+}
+
+// ReadInvite should read from your OnInvite handler for which it creates dialog context
+// You need to use DialogServerSession for all further responses
+// Do not forget to add ReadAck and ReadBye for confirming dialog and terminating
+func (s *DialogServerCache) ReadInvite(req *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
+	dtx, err := s.ua.ReadInvite(req, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	id := dtx.ID
+	dtx.onClose = func() {
+		s.dialogs.Delete(id)
+	}
+	s.dialogs.Store(id, dtx)
+	return dtx, nil
+}
+
+// ReadAck should read from your OnAck handler
+func (s *DialogServerCache) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
+	dt, err := s.MatchDialogRequest(req)
+	if err != nil {
+		return err
+	}
+	return dt.ReadAck(req, tx)
+}
+
+// ReadBye should read from your OnBye handler. Returns error if it fails
+func (s *DialogServerCache) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
+	dt, err := s.MatchDialogRequest(req)
+	if err != nil {
+		return err
+	}
+	return dt.ReadBye(req, tx)
 }

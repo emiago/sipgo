@@ -230,7 +230,7 @@ client, _ := sipgo.NewClient(ua) // Creating client handle
 contactHDR := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 }
-dialogCli := sipgo.NewDialogClient(client, contactHDR)
+dialogCli := sipgo.NewDialogClientCache(client, contactHDR)
 
 // Attach Bye handling for dialog
 srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -258,7 +258,7 @@ client, _ := sipgo.NewClient(ua) // Creating client handle
 uasContact := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 }
-dialogSrv := sipgo.NewDialogServer(client, uasContact)
+dialogSrv := sipgo.NewDialogServerCache(client, uasContact)
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
