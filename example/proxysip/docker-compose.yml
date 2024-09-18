@@ -30,7 +30,7 @@ services:
 
   uas:
     image: ctaloi/sipp
-    command: -sn uas -f 30 -i 10.5.0.30
+    command: -sn uas -f 5 -i 10.5.0.30
     # network_mode: "host"
     cpuset: "4"
     networks:
@@ -39,7 +39,7 @@ services:
 
   uac:
     image: ctaloi/sipp
-    command: -sn uac -r 1 -rp 1000 -rate_increase 50 -rate_interval 1 -rate_max 1000 -no_rate_quit -m 100000 -fd 1 -i 10.5.0.10 10.5.0.20:5060
+    command: -sn uac -r 1 -rp 1000 -rate_increase 25 -rate_interval 1 -rate_max 2000 -no_rate_quit -m 1000000 -fd 1 -i 10.5.0.10 10.5.0.20:5060
     # network_mode: "host"
     cpuset: "5"
     networks:
