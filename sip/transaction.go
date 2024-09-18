@@ -75,6 +75,7 @@ var (
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.3.1
 	ErrTransactionTimeout   = errors.New("transaction timeout")
 	ErrTransactionTransport = errors.New("transaction transport error")
+	ErrTransactionCanceled  = errors.New("transaction canceled")
 )
 
 func wrapTransportError(err error) error {

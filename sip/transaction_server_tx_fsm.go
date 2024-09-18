@@ -314,7 +314,7 @@ func (tx *ServerTx) actCancel() fsmInput {
 	}
 	tx.log.Debug().Msg("Passing 487 on CANCEL")
 	tx.fsmResp = NewResponseFromRequest(tx.origin, StatusRequestTerminated, "Request Terminated", nil)
-	tx.fsmErr = fmt.Errorf("Transaction canceled") // For now only informative
+	tx.fsmErr = ErrTransactionCanceled // For now only informative
 	return server_input_user_300_plus
 }
 
