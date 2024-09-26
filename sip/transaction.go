@@ -104,7 +104,7 @@ type ServerTransaction interface {
 	Acks() <-chan *Request
 	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
 	// Cancels() <-chan *Request
-	// OnCancel(f func(r *Request))
+	OnCancel(f func(r *Request))
 }
 
 type ClientTransaction interface {
