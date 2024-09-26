@@ -23,6 +23,79 @@ type DialogServerSession struct {
 	onClose func()
 }
 
+func (s *DialogServerSession) ReInvite(ctx context.Context, body []byte, headers ...sip.Header) error {
+	if s.state.Load() != int32(sip.DialogStateConfirmed) || s.InviteResponse == nil {
+		return ErrDialogOutsideDialog
+	}
+	f := s.InviteResponse.From()
+	t := s.InviteResponse.To()
+	via := s.InviteRequest.Via()
+	mf := sip.MaxForwardsHeader(70)
+	recipient := sip.Uri{
+		User:      f.Address.User,
+		Host:      via.Host,
+		Port:      via.Port,
+		UriParams: sip.HeaderParams{"transport": via.Transport},
+	}
+	req := sip.NewRequest(sip.INVITE, recipient)
+	req.SipVersion = s.InviteRequest.SipVersion
+	req.AppendHeader(sip.HeaderClone(s.InviteResponse.CallID()))
+	req.AppendHeader(&mf)
+	req.AppendHeader(&sip.FromHeader{
+		DisplayName: t.DisplayName,
+		Address:     t.Address,
+		Params:      t.Params})
+	req.AppendHeader(&sip.ToHeader{
+		DisplayName: f.DisplayName,
+		Address:     f.Address,
+		Params:      f.Params})
+	req.AppendHeader(&sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            s.ua.ContactHDR.Address.Host,
+		Port:            s.ua.ContactHDR.Address.Port,
+		Params:          sip.HeaderParams{"branch": sip.GenerateBranch()},
+	})
+	req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
+	req.SetBody(body)
+	for _, h := range headers {
+		req.AppendHeader(h)
+	}
+	// Check Route Header
+	if rr := req.Route(); rr != nil {
+		req.SetDestination(rr.Address.HostPort())
+	}
+	res, err := s.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	// only update body
+	s.InviteRequest.SetBody(req.Body())
+	s.InviteResponse.SetBody(res.Body())
+	s.lastCSeqNo.Store(res.CSeq().SeqNo)
+	return nil
+}
+
+// Read Re-INVITE from UAC
+func (s *DialogServerSession) ReadReInvite(req *sip.Request, tx sip.ServerTransaction) error {
+	// Make sure this is Re-INVITE for this dialog
+	// 某些客户端端没有没有更新UAS发送的Re-INVETE CSEQ
+	// if err := s.validateRequest(req); err != nil {
+	// 	return err
+	// }
+	state := s.state.Load()
+	if sip.DialogState(state) < sip.DialogStateConfirmed {
+		return ErrDialogOutsideDialog
+	}
+	s.InviteRequest.SetBody(req.Body())
+	s.InviteRequest.ReplaceHeader(req.CSeq())
+	s.InviteResponse.ReplaceHeader(req.CSeq())
+	s.lastCSeqNo.Store(req.CSeq().SeqNo)
+	s.inviteTx = tx
+	return nil
+}
+
 // ReadAck changes dialog state to confiremed
 func (s *DialogServerSession) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
 	// cseq must match to our last dialog cseq
@@ -49,6 +122,59 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 
 	s.setState(sip.DialogStateEnded)
 	return nil
+}
+
+// Ack for Re-INVITE
+func (s *DialogServerSession) Ack(ctx context.Context) error {
+	f := s.InviteResponse.From()
+	t := s.InviteResponse.To()
+	via := s.InviteRequest.Via()
+	recipient := sip.Uri{
+		User:      f.Address.User,
+		Host:      via.Host,
+		Port:      via.Port,
+		UriParams: sip.HeaderParams{"transport": via.Transport},
+	}
+	cseq := sip.CSeqHeader{
+		SeqNo:      s.lastCSeqNo.Load(),
+		MethodName: sip.ACK,
+	}
+	maxForwardsHeader := sip.MaxForwardsHeader(70)
+
+	req := sip.NewRequest(sip.ACK, recipient)
+	req.AppendHeader(sip.HeaderClone(s.InviteResponse.CallID()))
+	req.AppendHeader(&cseq)
+	req.AppendHeader(&maxForwardsHeader)
+	req.AppendHeader(&sip.FromHeader{
+		DisplayName: t.DisplayName,
+		Address:     t.Address,
+		Params:      t.Params})
+	req.AppendHeader(&sip.ToHeader{
+		DisplayName: f.DisplayName,
+		Address:     f.Address,
+		Params:      f.Params})
+	req.AppendHeader(&sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            s.ua.ContactHDR.Address.Host,
+		Port:            s.ua.ContactHDR.Address.Port,
+		Params:          sip.HeaderParams{"branch": sip.GenerateBranch()},
+	})
+	req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
+	hdrs := s.InviteRequest.GetHeaders("Record-Route")
+	for i := len(hdrs) - 1; i >= 0; i-- {
+		recordRoute := hdrs[i]
+		req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
+	}
+
+	// Check Route Header
+	// Should be handled by transport layer but here we are making this explicit
+	if rr := req.Route(); rr != nil {
+		req.SetDestination(rr.Address.HostPort())
+	}
+	return s.WriteRequest(req)
 }
 
 // ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
@@ -404,7 +530,7 @@ func (s *DialogServerCache) LoadDialog(id string) *DialogServerSession {
 	return t
 }
 
-func (s *DialogServerCache) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
+func (s *DialogServerCache) MatchRequestDialog(req *sip.Request) (*DialogServerSession, error) {
 	id, err := sip.UASReadRequestDialogID(req)
 	if err != nil {
 		return nil, errors.Join(ErrDialogOutsideDialog, err)
@@ -453,7 +579,7 @@ func (s *DialogServerCache) ReadInvite(req *sip.Request, tx sip.ServerTransactio
 
 // ReadAck should read from your OnAck handler
 func (s *DialogServerCache) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.MatchDialogRequest(req)
+	dt, err := s.MatchRequestDialog(req)
 	if err != nil {
 		return err
 	}
@@ -462,7 +588,7 @@ func (s *DialogServerCache) ReadAck(req *sip.Request, tx sip.ServerTransaction) 
 
 // ReadBye should read from your OnBye handler. Returns error if it fails
 func (s *DialogServerCache) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
-	dt, err := s.MatchDialogRequest(req)
+	dt, err := s.MatchRequestDialog(req)
 	if err != nil {
 		return err
 	}

@@ -20,11 +20,53 @@ type DialogClientSession struct {
 	onClose func()
 }
 
-func (dt *DialogClientSession) validateRequest(req *sip.Request) (err error) {
+func (s *DialogClientSession) validateRequest(req *sip.Request) (err error) {
 	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo < dt.lastCSeqNo.Load() {
+	if req.CSeq().SeqNo < s.lastCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
+	return nil
+}
+
+// ReInvite update dialog session
+func (s *DialogClientSession) ReInvite(ctx context.Context, body []byte, headers ...sip.Header) error {
+	if s.state.Load() != int32(sip.DialogStateConfirmed) || s.InviteResponse == nil {
+		return ErrDialogOutsideDialog
+	}
+	req := s.InviteRequest.Clone()
+	req.ReplaceHeader(s.InviteResponse.To())
+	req.Via().Params = sip.HeaderParams{"branch": sip.GenerateBranch()}
+	req.SetTransport(s.InviteRequest.Transport())
+	req.SetSource(s.InviteRequest.Source())
+	req.SetDestination(s.InviteRequest.Destination())
+	req.SetBody(body)
+	for _, h := range headers {
+		req.ReplaceHeader(h)
+	}
+	res, err := s.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	s.InviteRequest.SetBody(req.Body())
+	s.InviteResponse.SetBody(res.Body())
+	s.InviteRequest.ReplaceHeader(req.CSeq())
+	s.InviteResponse.ReplaceHeader(res.CSeq())
+	s.lastCSeqNo.Store(res.CSeq().SeqNo)
+	return nil
+}
+
+// ReadReInvite read Re-INVITE from UAS
+func (s *DialogClientSession) ReadReInvite(req *sip.Request, tx sip.ServerTransaction) error {
+	// Make sure this is Re-INVITE for this dialog
+	if err := s.validateRequest(req); err != nil {
+		return err
+	}
+	state := s.state.Load()
+	if sip.DialogState(state) < sip.DialogStateConfirmed {
+		return ErrDialogOutsideDialog
+	}
+	s.lastCSeqNo.Store(req.CSeq().SeqNo)
+	s.InviteRequest.SetBody(req.Body())
 	return nil
 }
 
@@ -42,6 +84,15 @@ func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	// case <-tx.Done():
 	// 	return tx.Err()
 	// }
+	return nil
+}
+
+func (s *DialogClientSession) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
+	// cseq must match to our last dialog cseq
+	if req.CSeq().SeqNo != s.lastCSeqNo.Load() {
+		return ErrDialogInvalidCseq
+	}
+	s.setState(sip.DialogStateConfirmed)
 	return nil
 }
 
