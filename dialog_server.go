@@ -394,7 +394,7 @@ type DialogServerCache struct {
 	ua      DialogUA
 }
 
-func (s *DialogServerCache) loadDialog(id string) *DialogServerSession {
+func (s *DialogServerCache) LoadDialog(id string) *DialogServerSession {
 	val, ok := s.dialogs.Load(id)
 	if !ok || val == nil {
 		return nil
@@ -410,7 +410,7 @@ func (s *DialogServerCache) MatchDialogRequest(req *sip.Request) (*DialogServerS
 		return nil, errors.Join(ErrDialogOutsideDialog, err)
 	}
 
-	dt := s.loadDialog(id)
+	dt := s.LoadDialog(id)
 	if dt == nil {
 		return nil, ErrDialogDoesNotExists
 	}

@@ -474,7 +474,7 @@ func (s *DialogClientCache) dialogsLen() int {
 	return leftItems
 }
 
-func (s *DialogClientCache) loadDialog(id string) *DialogClientSession {
+func (s *DialogClientCache) LoadDialog(id string) *DialogClientSession {
 	val, ok := s.dialogs.Load(id)
 	if !ok || val == nil {
 		return nil
@@ -490,7 +490,7 @@ func (s *DialogClientCache) MatchRequestDialog(req *sip.Request) (*DialogClientS
 		return nil, errors.Join(err, ErrDialogOutsideDialog)
 	}
 
-	dt := s.loadDialog(id)
+	dt := s.LoadDialog(id)
 	if dt == nil {
 		return nil, ErrDialogDoesNotExists
 	}
