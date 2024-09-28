@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/emiago/sipgo)](https://goreportcard.com/report/github.com/emiago/sipgo)
 ![Used By](https://sourcegraph.com/github.com/emiago/sipgo/-/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-45.9%25-blue)
+![Coverage](https://img.shields.io/badge/coverage-47.0%25-blue)
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/emiago/sipgo/LICENCE) 
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/emiago/sipgo)
 
