@@ -101,20 +101,14 @@ type ServerTransaction interface {
 	// Respond sends response. It is expected that is prebuilt with correct headers
 	// Use NewResponseFromRequest to build response
 	Respond(res *Response) error
+	// Acks returns ACK during transaction.
 	Acks() <-chan *Request
-	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
-	// Cancels() <-chan *Request
-	// OnCancel(f func(r *Request))
 }
 
 type ClientTransaction interface {
 	Transaction
 	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
-
-	// Cancel sends cancel request
-	// Deprecated: Cancel must be new transaction and only works for INVITE
-	// Cancel() error
 }
 
 type baseTx struct {

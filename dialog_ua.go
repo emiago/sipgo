@@ -9,8 +9,12 @@ import (
 )
 
 // DialogUA defines UserAgent that will be used in controling your dialog.
+// It needs client handle for cancelation or sending more subsequent request during dialog
 type DialogUA struct {
-	Client     *Client
+	// Client (required) is used to build and send subsequent request (CANCEL, BYE)
+	Client *Client
+	// ContactHDR (required) is used as default one to build request/response.
+	// You can pass custom on each request, but in dialog it is required to be present
 	ContactHDR sip.ContactHeader
 }
 
@@ -44,16 +48,12 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	// Temporarly fix
 	if stx, ok := tx.(*sip.ServerTx); ok {
 		stx.OnTerminate(func(key string) {
-			// TODO use transaction error for better checking why it terminated
 			state := dtx.LoadState()
 			if state < sip.DialogStateEstablished {
 				// It is canceled if transaction died before answer
 				dtx.setState(sip.DialogStateEnded)
 			}
 		})
-		// stx.OnCancel(func(r *sip.Request) {
-		// 	dtx.setState(sip.DialogStateEnded)
-		// })
 	}
 
 	return dtx, nil

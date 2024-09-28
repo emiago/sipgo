@@ -213,18 +213,19 @@ client.WriteRequest(req)
 
 ## Dialog handling
 
-`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions. 
+`DialogUA` is helper struct to create `Dialog`. 
+**Dialog** can be **as server** or **as client** created. Later on this provides you RFC way of sending request within dialog `Do` or `TransactionRequest` functions.
+
+For basic usage `DialogClientCache` and `DialogServerCache` are created to be part of library to manage and cache dialog accross multiple request.
 They are seperated based on your **request context**, but they act more like `peer`.
-They both need `client` **handle** to be able send request and `server` **handle** to accept request.
+
+---
+**NOTE**: **It is recomended that you build your OWN Dialog Server/Client Cache mechanism for dialogs.**
 
 ---
 
-**NOTE**: 
+For basic control some handling request wrappers like `Ack`, `Bye`, `ReadAck`, `ReadBye` is provided. Sending  any other request should be done with `Do` or receiving can be validated with `ReadRequest`
 
-`DialogClient` and `DialogServer` are wrappers for `DialogUA` with **cache layer **and may be moved to seperate package.
-Use `DialogUA` for building dialog control and extend with your own Cache layer. Matching dialog by ID are exposed functions.
-
----
 
 **UAC**:
 ```go
