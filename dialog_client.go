@@ -107,18 +107,19 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 
 	// Check record route header
 	if s.InviteResponse != nil {
-		// cont := s.InviteResponse.Contact()
-		// if cont != nil {
-		// 	req.Recipient = cont.Address
-		// }
+		hdrs := s.InviteResponse.GetHeaders("record-route")
+		if len(hdrs) > 0 {
+			for i := len(hdrs) - 1; i >= 0; i-- {
+				// We need to put record-route as recipient in case of strict routing
+				recordRoute := hdrs[i]
+				req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
+			}
 
-		if rr := s.InviteResponse.RecordRoute(); rr != nil {
-			if rr.Address.UriParams.Has("lr") {
-				req.AppendHeader(&sip.RouteHeader{
-					Address: rr.Address,
-				})
-			} else {
-				req.SetDestination(rr.Address.HostPort())
+			// Now check top most route header with lazy header parsing
+			rh := req.Route()
+			if !rh.Address.UriParams.Has("lr") {
+				// this is strict routing
+				req.Recipient = rh.Address
 			}
 		}
 	}

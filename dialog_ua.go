@@ -35,6 +35,15 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 		return nil, err
 	}
 
+	// do some minimal validation
+	if inviteReq.CSeq() == nil {
+		return nil, fmt.Errorf("no CSEQ header present")
+	}
+
+	if inviteReq.Contact() == nil {
+		return nil, fmt.Errorf("no Contact header present")
+	}
+
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			ID:            id, // this id has already prebuilt tag
