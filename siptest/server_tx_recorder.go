@@ -6,6 +6,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ServerTxRecorder wraps server transactions
+type ServerTxRecorder struct {
+	*sip.ServerTx
+	c *connRecorder
+}
+
 func NewServerTxRecorder(req *sip.Request) *ServerTxRecorder {
 	// stx := transaction.NewServerTx()
 
@@ -22,12 +28,6 @@ func NewServerTxRecorder(req *sip.Request) *ServerTxRecorder {
 		stx,
 		conn,
 	}
-}
-
-// ServerTxRecorder wraps server transactions
-type ServerTxRecorder struct {
-	*sip.ServerTx
-	c *connRecorder
 }
 
 // Result returns sip response. Can be nil if none was processed

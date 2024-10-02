@@ -16,12 +16,22 @@ func Init() {
 	uuid.EnableRandPool()
 }
 
+type ClientTransactionRequester interface {
+	Request(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error)
+}
+
 type Client struct {
 	*UserAgent
 	host  string
 	port  int
 	rport bool
 	log   zerolog.Logger
+
+	// TxRequester allows you to use your transaction requester instead default from transaction layer
+	// Useful only for testing
+	//
+	// Experimental
+	TxRequester ClientTransactionRequester
 }
 
 type ClientOption func(c *Client) error
@@ -140,13 +150,20 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 
 		clientRequestBuildReq(c, req)
-		return c.tx.Request(ctx, req)
+		return c.requestTransaction(ctx, req)
 	}
 
 	for _, o := range options {
 		if err := o(c, req); err != nil {
 			return nil, err
 		}
+	}
+	return c.requestTransaction(ctx, req)
+}
+
+func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	if c.TxRequester != nil {
+		return c.TxRequester.Request(ctx, req)
 	}
 	return c.tx.Request(ctx, req)
 }
@@ -160,6 +177,7 @@ func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error
 	if err != nil {
 		return nil, err
 	}
+
 	defer tx.Terminate()
 
 	for {

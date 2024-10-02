@@ -71,7 +71,7 @@ func NewTransportLayer(
 	if tlsConfig == nil {
 		// Use empty tls config
 		tlsConfig = &tlsEmptyConf
-	}
+	}	
 	// TODO consider this transports are configurable from outside
 	// Make some default transports available.
 	l.udp = newUDPTransport(sipparser)
