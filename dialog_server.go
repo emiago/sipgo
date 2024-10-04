@@ -305,6 +305,16 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 }
 
 func (s *DialogServerSession) Bye(ctx context.Context) error {
+	req := s.Dialog.InviteRequest
+	cont := s.Dialog.InviteRequest.Contact()
+	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
+	bye := sip.NewRequest(sip.BYE, cont.Address)
+	bye.SetTransport(req.Transport())
+
+	return s.WriteBye(ctx, bye)
+}
+
+func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) error {
 	state := s.state.Load()
 	// In case dialog terminated
 	if sip.DialogState(state) == sip.DialogStateEnded {
@@ -315,7 +325,6 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		return nil
 	}
 
-	req := s.Dialog.InviteRequest
 	res := s.Dialog.InviteResponse
 
 	if !res.IsSuccess() {
@@ -345,13 +354,6 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 
 		break
 	}
-
-	// We must check record route header
-	// https://datatracker.ietf.org/doc/html/rfc2543#section-6.13
-	cont := req.Contact()
-	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
-	bye := sip.NewRequest(sip.BYE, cont.Address)
-	bye.SetTransport(req.Transport())
 
 	tx, err := s.TransactionRequest(ctx, bye)
 	if err != nil {
