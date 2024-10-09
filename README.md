@@ -61,7 +61,7 @@ As example you can find `example/proxysip` as simple version of statefull proxy.
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
-## Used By
+## Trusted By
 
 <a href="https://www.babelforce.com">
 <img src="icons/babelforce-logo.png" width="300" alt="babelforce">
