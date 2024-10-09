@@ -64,7 +64,7 @@ To find out more about performance check the latest results:
 ## Trusted By
 
 <a href="https://www.babelforce.com">
-<img src="icons/babelforce-logo.png" width="300" alt="babelforce">
+<img width=200 src="icons/babelforce-logo.png" width="300" alt="babelforce">
 </a>
 
 
