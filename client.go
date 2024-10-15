@@ -121,7 +121,13 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// Deprecated use Hostname
 func (c *Client) GetHostname() string {
+	return c.host
+}
+
+// Hostname returns default hostname or what is set WithHostname option
+func (c *Client) Hostname() string {
 	return c.host
 }
 

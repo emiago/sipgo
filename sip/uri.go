@@ -19,7 +19,6 @@ type Uri struct {
 	HierarhicalSlashes bool
 
 	// The user part of the URI: the 'joe' in sip:joe@bloggs.com
-	// This is a pointer, so that URIs without a user part can have 'nil'.
 	User string
 
 	// The password field of the URI. This is represented in the URI as joe:hunter2@bloggs.com.
