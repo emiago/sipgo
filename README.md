@@ -64,9 +64,11 @@ To find out more about performance check the latest results:
 ## Trusted By
 
 <a href="https://www.babelforce.com">
-<img width=200 src="icons/babelforce-logo.png" width="300" alt="babelforce">
+<img src="icons/babelforce-logo.png" width="200" alt="babelforce">
+</a>&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://www.babelforce.com">
+<img src="icons/avero.png" width="100" alt="avero">
 </a>
-
 
 ---
 *If you are using in company, your logo can be here.*
