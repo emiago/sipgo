@@ -30,7 +30,7 @@ type transportWS struct {
 	log       zerolog.Logger
 	transport string
 
-	pool   ConnectionPool
+	pool   *ConnectionPool
 	dialer ws.Dialer
 }
 
