@@ -26,7 +26,7 @@ type transportUDP struct {
 	// listener *net.UDPConn
 	parser *Parser
 
-	pool ConnectionPool
+	pool *ConnectionPool
 	log  zerolog.Logger
 }
 
