@@ -109,6 +109,33 @@ func ASCIIToLowerInPlace(s []byte) {
 	}
 }
 
+func ASCIIToUpper(s string) string {
+	// first check is ascii already up to avoid alloc
+	nonLowInd := -1
+	for i, c := range s {
+		if 'A' <= c && c <= 'Z' {
+			continue
+		}
+		nonLowInd = i
+		break
+	}
+	if nonLowInd < 0 {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s))
+	b.WriteString(s[:nonLowInd])
+	for i := nonLowInd; i < len(s); i++ {
+		c := s[i]
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
 // HeaderToLower is fast ASCII lower string
 func HeaderToLower(s string) string {
 	// Avoid allocations

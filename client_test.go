@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/icholy/digest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -202,3 +203,17 @@ func TestClientRequestOptions(t *testing.T) {
 	conn, err := tp.ClientRequestConnection(context.TODO(), req)
 }
 */
+
+func TestDigestAuthLowerCase(t *testing.T) {
+	challenge := `Digest username="user", realm="asterisk", nonce="662d65a084b88c6d2a745a9de086fa91", uri="sip:+user@example.com", algorithm=sha-256, response="3681b63e5d9c3bb80e5350e2783d7b88"`
+	chal, err := digest.ParseChallenge(challenge)
+	require.NoError(t, err)
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
+
+	_, err = digest.Digest(chal, digest.Options{
+		Method:   "INVITE",
+		Username: "user",
+		URI:      "sip:+user@example.com",
+	})
+	require.NoError(t, err)
+}
