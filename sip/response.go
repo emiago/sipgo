@@ -218,6 +218,13 @@ func NewResponseFromRequest(
 		res.AppendHeader(h.headerClone())
 	}
 
+	// RFC 3261 - 20.5
+	CopyHeaders("Allow", req, res)
+	// RFC 3261 - 20.37
+	CopyHeaders("Supported", req, res)
+	// RFC 3265 -  3.3.7
+	CopyHeaders("Allow-Events", req, res)
+
 	// 8.2.6.2 Headers and Tags
 	// the response (with the exception of the 100 (Trying) response, in
 	// which a tag MAY be present). This serves to identify the UAS that is
