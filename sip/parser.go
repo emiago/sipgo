@@ -7,7 +7,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,15 +29,6 @@ var (
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 	ErrParseMoreMessages       = errors.New("Stream has more message")
 )
-
-var bufReader = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return new(bytes.Buffer)
-	},
-}
 
 func ParseMessage(msgData []byte) (Message, error) {
 	parser := NewParser()
@@ -90,10 +80,7 @@ func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
 
 // ParseSIP converts data to sip message. Buffer must contain full sip message
 func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
-	reader := bufReader.Get().(*bytes.Buffer)
-	defer bufReader.Put(reader)
-	reader.Reset()
-	reader.Write(data)
+	reader := bytes.NewBuffer(data)
 
 	startLine, err := nextLine(reader)
 	if err != nil {
