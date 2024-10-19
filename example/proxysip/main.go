@@ -5,24 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
-	"time"
 
 	"github.com/arl/statsviz"
-	"github.com/emiago/sipgo/sip"
 
-	_ "net/http/pprof"
+	"github.com/emiago/sipgo/sip"
 
 	"github.com/emiago/sipgo"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	// _ "go.uber.org/automaxprocs"
 )
 
@@ -45,21 +43,17 @@ func main() {
 		runtime.MemProfileRate = 64
 	}
 
-	lev := zerolog.InfoLevel
+	lev := slog.LevelInfo
 	debuglev := os.Getenv("LOGDEBUG")
 	if *debflag || debuglev != "" {
-		lev = zerolog.DebugLevel
+		lev = slog.LevelDebug
 		sip.SIPDebug = true
 	}
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: time.StampMicro,
-	}).With().Timestamp().Logger().Level(lev)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lev})))
 
-	log.Info().Int("cpus", runtime.NumCPU()).Msg("Runtime")
-	log.Info().Msg("Server routes setuped")
+	slog.Info("Runtime", "cpus", runtime.NumCPU())
+	slog.Info("Server routes setuped")
 	go httpServer(":8080")
 
 	srv := setupSipProxy(*dst, *extIP)
@@ -68,7 +62,7 @@ func main() {
 	defer stop()
 
 	if err := srv.ListenAndServe(ctx, *transportType, *extIP); err != nil {
-		log.Error().Err(err).Msg("Fail to start sip server")
+		slog.Error("Fail to start sip server", "error", err)
 		return
 	}
 }
@@ -90,7 +84,7 @@ func httpServer(address string) {
 	})
 	statsviz.Register(http.DefaultServeMux)
 
-	log.Info().Msgf("Http server started address=%s", address)
+	slog.Info("Http server started address=%s", address)
 	http.ListenAndServe(address, nil)
 }
 
@@ -99,19 +93,22 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	host, port, _ := sip.ParseAddr(ip)
 	ua, err := sipgo.NewUA()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup user agent")
+		slog.Error("Fail to setup user agent", "error", err)
+		os.Exit(1)
 	}
 
 	srv, err := sipgo.NewServer(ua)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup server handle")
+		slog.Error("Fail to setup server handle", "error", err)
+		os.Exit(1)
 	}
 
 	client, err := sipgo.NewClient(ua, sipgo.WithClientAddr(
 		ip,
 	))
 	if err != nil {
-		log.Fatal().Err(err).Msg("Fail to setup client handle")
+		slog.Error("Fail to setup client handle", "error", err)
+		os.Exit(1)
 	}
 
 	registry := NewRegistry()
@@ -130,7 +127,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		resp := sip.NewResponseFromRequest(req, code, reason, nil)
 		resp.SetDestination(req.Source()) //This is optional, but can make sure not wrong via is read
 		if err := tx.Respond(resp); err != nil {
-			log.Error().Err(err).Msg("Fail to respond on transaction")
+			slog.Error("Fail to respond on transaction", "error", err)
 		}
 	}
 
@@ -150,14 +147,14 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		// Start client transaction and relay our request
 		clTx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia, sipgo.ClientRequestAddRecordRoute)
 		if err != nil {
-			log.Error().Err(err).Msg("RequestWithContext  failed")
+			slog.Error("RequestWithContext  failed", "error", err)
 			reply(tx, req, 500, "")
 			return
 		}
 		defer clTx.Terminate()
 
 		// Keep monitoring transactions, and proxy client responses to server transaction
-		log.Debug().Str("req", req.Method.String()).Msg("Starting transaction")
+		slog.Debug("Starting transaction", "req", req.Method.String())
 		for {
 			select {
 
@@ -174,7 +171,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				// Removes top most header
 				res.RemoveHeader("Via")
 				if err := tx.Respond(res); err != nil {
-					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
+					slog.Error("ResponseHandler transaction respond failed", "error", err)
 				}
 
 			// Early terminate
@@ -184,13 +181,13 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			// }
 			case <-clTx.Done():
 				if err := tx.Err(); err != nil {
-					log.Error().Err(err).Str("req", req.Method.String()).Msg("Client Transaction done with error")
+					slog.Error("Client Transaction done with error", "error", err, "req", req.Method.String())
 				}
 				return
 
 			case m := <-tx.Acks():
 				// Acks can not be send directly trough destination
-				log.Info().Str("m", m.StartLine()).Str("dst", dst).Msg("Proxing ACK")
+				slog.Info("Proxing ACK", "m", m.StartLine(), "dst", dst)
 				m.SetDestination(dst)
 				client.WriteRequest(m)
 
@@ -203,21 +200,21 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 							r := newCancelRequest(req)
 							res, err := client.Do(ctx, r)
 							if err != nil {
-								log.Error().Err(err).Str("req", req.Method.String()).Msg("Canceling transaction failed")
+								slog.Error("Canceling transaction failed", "err", err, "req", req.Method.String())
 								return
 							}
 							if res.StatusCode != 200 {
-								log.Error().Err(err).Str("req", req.Method.String()).Msg("Canceling transaction failed with non 200 code")
+								slog.Error("Canceling transaction failed with non 200 code", "err", err, "req", req.Method.String())
 								return
 							}
 							return
 						}
 					}
 
-					log.Error().Err(err).Str("req", req.Method.String()).Msg("Transaction done with error")
+					slog.Error("Transaction done with error", "err", err, "req", req.Method.String())
 					return
 				}
-				log.Debug().Str("req", req.Method.String()).Msg("Transaction done")
+				slog.Debug("Transaction done", "req", req.Method.String())
 				return
 			}
 		}
@@ -241,17 +238,17 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		addr := uri.Host + ":" + strconv.Itoa(uri.Port)
 
 		registry.Add(uri.User, addr)
-		log.Debug().Msgf("Contact added %s -> %s", uri.User, addr)
+		slog.Debug("Contact added %s -> %s", "src", uri.User, "dst", addr)
 
 		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
-		// log.Debug().Msgf("Sending response: \n%s", res.String())
+		// slog.Debug().Msgf("Sending response: \n%s", res.String())
 
 		// URI params must be reset or this should be regenetad
 		cont.Address.UriParams = sip.NewParams()
 		cont.Address.UriParams.Add("transport", req.Transport())
 
 		if err := tx.Respond(res); err != nil {
-			log.Error().Err(err).Msg("Sending REGISTER OK failed")
+			slog.Error("Sending REGISTER OK failed", "error", err)
 			return
 		}
 	}
@@ -267,7 +264,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		}
 		req.SetDestination(dst)
 		if err := client.WriteRequest(req, sipgo.ClientRequestAddVia); err != nil {
-			log.Error().Err(err).Msg("Send failed")
+			slog.Error("Send failed", "error", err)
 			reply(tx, req, 500, "")
 		}
 	}

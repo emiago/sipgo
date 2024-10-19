@@ -5,13 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -41,7 +39,7 @@ type TransportLayer struct {
 
 	handlers []MessageHandler
 
-	log zerolog.Logger
+	log *slog.Logger
 
 	// ConnectionReuse will force connection reuse when passing request
 	ConnectionReuse bool
@@ -66,21 +64,22 @@ func NewTransportLayer(
 		ConnectionReuse: true,
 	}
 
-	l.log = log.Logger.With().Str("caller", "transportlayer").Logger()
+	logger := slog.Default()
+	l.log = logger.With("caller", "transportlayer")
 
 	if tlsConfig == nil {
 		// Use empty tls config
 		tlsConfig = &tlsEmptyConf
-	}	
+	}
 	// TODO consider this transports are configurable from outside
 	// Make some default transports available.
-	l.udp = newUDPTransport(sipparser)
-	l.tcp = newTCPTransport(sipparser)
+	l.udp = newUDPTransport(sipparser, logger)
+	l.tcp = newTCPTransport(sipparser, logger)
 	// TODO. Using default dial tls, but it needs to configurable via client
-	l.tls = newTLSTransport(sipparser, tlsConfig)
-	l.ws = newWSTransport(sipparser)
+	l.tls = newTLSTransport(sipparser, tlsConfig, logger)
+	l.ws = newWSTransport(sipparser, logger)
 	// TODO. Using default dial tls, but it needs to configurable via client
-	l.wss = newWSSTransport(sipparser, tlsConfig)
+	l.wss = newWSSTransport(sipparser, tlsConfig, logger)
 
 	// Fill map for fast access
 	l.transports["udp"] = l.udp
@@ -387,16 +386,16 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 				// DO NOT USE unspecified IP with client handle
 				// switch {
 				// case laddr.IP.IsUnspecified():
-				// 	l.log.Warn().Msg("External Via IP address is unspecified for UDP. Using 127.0.0.1")
+				// 	l.log.Warn("External Via IP address is unspecified for UDP. Using 127.0.0.1")
 				// 	viaHop.Host = "127.0.0.1" // TODO use resolve IP
 				// }
 				return c, nil
 			}
 		} */
-		l.log.Debug().Str("addr", addr).Str("raddr", raddr.String()).Msg("Active connection not found")
+		l.log.Debug("Active connection not found", "addr", addr, "raddr", raddr)
 	}
 
-	l.log.Debug().Str("host", viaHop.Host).Int("port", viaHop.Port).Str("network", network).Msg("Via header used for creating connection")
+	l.log.Debug("Via header used for creating connection", "host", viaHop.Host, "port", viaHop.Port, "network", network)
 
 	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 	if err != nil {
@@ -433,7 +432,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
 	defer func(start time.Time) {
 		if dur := time.Since(start); dur > 50*time.Millisecond {
-			l.log.Warn().Dur("dur", dur).Msg("DNS resolution is slow")
+			l.log.Warn("DNS resolution is slow", "dur", dur)
 		}
 	}(time.Now())
 
@@ -442,7 +441,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		if err == nil {
 			return nil
 		}
-		log.Warn().Str("host", host).Err(err).Msg("Doing SRV lookup failed.")
+		l.log.Warn("Doing SRV lookup failed", "host", host, "error", err)
 		return l.resolveAddrIP(ctx, host, addr)
 	}
 
@@ -451,12 +450,12 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		return nil
 	}
 
-	log.Info().Err(err).Msg("IP addr resolving failed, doing via dns SRV resolver...")
+	l.log.Info("IP addr resolving failed, doing via dns SRV resolver...", "error", err)
 	return l.resolveAddrSRV(ctx, network, host, addr)
 }
 
 func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, addr *Addr) error {
-	l.log.Debug().Str("host", hostname).Msg("DNS Resolving")
+	l.log.Debug("DNS Resolving", "host", hostname)
 
 	// Do local resolving
 	ips, err := l.dnsResolver.LookupIPAddr(ctx, hostname)
@@ -479,7 +478,7 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 }
 
 func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hostname string, addr *Addr) error {
-	log := &l.log
+	log := l.log
 	var proto string
 	switch network {
 	case "udp", "udp4", "udp6":
@@ -490,7 +489,7 @@ func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hos
 		proto = "tcp"
 	}
 
-	log.Debug().Str("proto", proto).Str("host", hostname).Msg("Doing SRV lookup")
+	log.Debug("Doing SRV lookup", "proto", proto, "host", hostname)
 
 	// The returned records are sorted by priority and randomized
 	// by weight within a priority.
@@ -499,7 +498,7 @@ func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hos
 		return fmt.Errorf("fail to lookup SRV for %q: %w", hostname, err)
 	}
 
-	log.Debug().Interface("addrs", addrs).Msg("SRV resolved")
+	log.Debug("SRV resolved", "addrs", addrs)
 	record := addrs[0]
 
 	ips, err := l.dnsResolver.LookupIP(ctx, "ip", record.Target)
@@ -507,7 +506,7 @@ func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hos
 		return err
 	}
 
-	log.Debug().Interface("ips", ips).Str("target", record.Target).Msg("SRV resolved IPS")
+	log.Debug("SRV resolved IPS", "ips", ips, "target", record.Target)
 	addr.IP = ips[0]
 	addr.Port = int(record.Port)
 
@@ -530,7 +529,7 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
-	l.log.Debug().Str("network", network).Str("addr", addr).Msg("getting connection")
+	l.log.Debug("getting connection", "network", network, "addr", addr)
 	c, err := transport.GetConnection(addr)
 	if err == nil && c == nil {
 		return nil, fmt.Errorf("connection %q does not exist", addr)
@@ -540,7 +539,7 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 }
 
 func (l *TransportLayer) Close() error {
-	l.log.Debug().Msg("Layer is closing")
+	l.log.Debug("Layer is closing")
 	var werr error
 	for _, t := range l.transports {
 		if err := t.Close(); err != nil {

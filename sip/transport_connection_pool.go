@@ -2,10 +2,9 @@ package sip
 
 import (
 	"bytes"
+	"log/slog"
 	"net"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 type Connection interface {
@@ -33,14 +32,19 @@ var bufPool = sync.Pool{
 }
 
 type ConnectionPool struct {
+	log *slog.Logger
 	// TODO consider sync.Map way with atomic checks to reduce mutex contention
 	sync.RWMutex
 	m map[string]Connection
 }
 
-func NewConnectionPool() *ConnectionPool {
+func NewConnectionPool(logger *slog.Logger) *ConnectionPool {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &ConnectionPool{
-		m: make(map[string]Connection),
+		log: logger,
+		m:   make(map[string]Connection),
 	}
 }
 
@@ -99,7 +103,7 @@ func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
 	ref, _ := c.TryClose() // Be nice. Saves from double closing
 	if ref > 0 {
 		if err := c.Close(); err != nil {
-			log.Warn().Err(err).Msg("Closing conection return error")
+			p.log.Warn("Closing connection return error", "error", err)
 		}
 	}
 	delete(p.m, addr)
@@ -128,7 +132,7 @@ func (p *ConnectionPool) Clear() {
 			continue
 		}
 		if err := c.Close(); err != nil {
-			log.Warn().Err(err).Msg("Closing conection return error")
+			p.log.Warn("Closing connection return error", "error", err)
 		}
 	}
 	// Remove all

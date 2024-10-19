@@ -2,10 +2,9 @@ package sip
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog"
 )
 
 type ClientTx struct {
@@ -21,7 +20,7 @@ type ClientTx struct {
 	closeOnce sync.Once
 }
 
-func NewClientTx(key string, origin *Request, conn Connection, logger zerolog.Logger) *ClientTx {
+func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logger) *ClientTx {
 	tx := &ClientTx{}
 	tx.key = key
 	// tx.conn = tpl
@@ -30,6 +29,7 @@ func NewClientTx(key string, origin *Request, conn Connection, logger zerolog.Lo
 	tx.responses = make(chan *Response)
 	tx.done = make(chan struct{})
 	tx.log = logger
+	tx.log = tx.log.With("tx", key)
 
 	tx.origin = origin
 	return tx
@@ -39,7 +39,7 @@ func (tx *ClientTx) Init() error {
 	tx.initFSM()
 
 	if err := tx.conn.WriteMsg(tx.origin); err != nil {
-		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to write request on init")
+		tx.log.Debug("Fail to write request on init", "req", tx.origin.StartLine(), "error", err)
 		return wrapTransportError(err)
 	}
 
@@ -72,7 +72,7 @@ func (tx *ClientTx) Init() error {
 		tx.spinFsmWithError(client_input_timer_b, fmt.Errorf("Timer_B timed out. %w", ErrTransactionTimeout))
 	})
 	tx.mu.Unlock()
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Client transaction initialized")
+	tx.log.Debug("Client transaction initialized")
 	return nil
 }
 
@@ -157,11 +157,11 @@ func (tx *ClientTx) ack() {
 
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
-		tx.log.Error().
-			Str("invite_request", tx.origin.Short()).
-			Str("invite_response", resp.Short()).
-			Str("cancel_request", ack.Short()).
-			Msgf("send ACK request failed: %s", err)
+		tx.log.Error("send ACK request failed",
+			"invite_request", tx.origin.Short(),
+			"invite_response", resp.Short(),
+			"cancel_request", ack.Short(),
+			"error", err)
 
 		err := wrapTransportError(err)
 		go tx.spinFsmWithError(client_input_transport_err, err)
@@ -179,7 +179,7 @@ func (tx *ClientTx) resend() {
 
 	err := tx.conn.WriteMsg(tx.origin)
 	if err != nil {
-		tx.log.Debug().Err(err).Str("req", tx.origin.StartLine()).Msg("Fail to resend request")
+		tx.log.Debug("Fail to resend request", "req", tx.origin.StartLine(), "error", err)
 		err := wrapTransportError(err)
 		go tx.spinFsmWithError(client_input_transport_err, err)
 	}
@@ -199,7 +199,7 @@ func (tx *ClientTx) delete() {
 		}
 
 		if _, err := tx.conn.TryClose(); err != nil {
-			tx.log.Info().Err(err).Msg("Closing connection returned error")
+			tx.log.Info("Closing connection returned error", "error", err)
 		}
 	})
 
@@ -217,5 +217,5 @@ func (tx *ClientTx) delete() {
 		tx.timer_d = nil
 	}
 	tx.mu.Unlock()
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Client transaction destroyed")
+	tx.log.Debug("Client transaction destroyed")
 }

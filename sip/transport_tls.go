@@ -4,9 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
-
-	"github.com/rs/zerolog/log"
 )
 
 var ()
@@ -22,9 +21,8 @@ type transportTLS struct {
 
 // newTLSTransport needs dialTLSConf for creating connections when dialing
 // tls.Config must not be nil
-func newTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
-	tcptrans := newTCPTransport(par)
-	tcptrans.transport = TransportTLS //Override transport
+func newTLSTransport(par *Parser, dialTLSConf *tls.Config, logger *slog.Logger) *transportTLS {
+	tcptrans := newTCPTransport(par, logger)
 	p := &transportTLS{
 		transportTCP: tcptrans,
 	}
@@ -40,12 +38,16 @@ func newTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
 		}
 		return tls.Client(conn, config)
 	}
-	p.log = log.Logger.With().Str("caller", "transport<TLS>").Logger()
+	p.log = logger.With("caller", "transport<TLS>", "transport", "tls")
 	return p
 }
 
 func (t *transportTLS) String() string {
 	return "transport<TLS>"
+}
+
+func (*transportTLS) Network() string {
+	return TransportTLS
 }
 
 // CreateConnection creates TLS connection for TCP transport
@@ -73,7 +75,7 @@ func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	}
 
 	addr := traddr.String()
-	log.Debug().Str("raddr", addr).Msg("Dialing new connection")
+	t.log.Debug("Dialing new connection", "raddr", addr)
 	// No resolving should happen here
 	conn, err := netDialer.DialContext(ctx, "tcp", addr)
 	if err != nil {

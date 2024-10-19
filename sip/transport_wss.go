@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 // TLS transport implementation
@@ -21,8 +20,8 @@ type transportWSS struct {
 
 // newWSSTransport needs dialTLSConf for creating connections when dialing
 // tls.Config must not be nil
-func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
-	tcptrans := newWSTransport(par)
+func newWSSTransport(par *Parser, dialTLSConf *tls.Config, logger *slog.Logger) *transportWSS {
+	tcptrans := newWSTransport(par, logger)
 	tcptrans.transport = TransportWSS
 	// Set our TLS config
 	p := &transportWSS{
@@ -42,7 +41,7 @@ func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
 	}
 
 	// p.tlsConf = dialTLSConf
-	p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
+	p.log = logger.With("caller", "transport<WSS>", "transport", "wss")
 	return p
 }
 
@@ -53,7 +52,7 @@ func (t *transportWSS) String() string {
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
 func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	log := &t.log
+	log := t.log
 
 	// Must have IP resolved
 	if raddr.IP == nil {
@@ -91,13 +90,13 @@ func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		LocalAddr: tladdr,
 	}
 
-	log.Debug().Str("raddr", traddr.String()).Msg("Dialing new connection")
+	log.Debug("Dialing new connection", "raddr", traddr.String())
 	conn, err := netDialer.DialContext(ctx, "tcp", traddr.String())
 	if err != nil {
 		return nil, fmt.Errorf("dial TCP error: %w", err)
 	}
 
-	log.Debug().Str("hostname", hostname).Msg("Setuping TLS connection")
+	log.Debug("Setting up TLS connection", "hostname", hostname)
 	tlsConn := t.dialer.TLSClient(conn, hostname)
 
 	u, err := url.ParseRequestURI("wss://" + addr)
