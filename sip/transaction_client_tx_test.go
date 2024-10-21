@@ -3,13 +3,14 @@ package sip
 import (
 	"bytes"
 	"io"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/emiago/sipgo/fakes"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
+
+	"github.com/emiago/sipgo/fakes"
 )
 
 func TestClientTransactionInviteFSM(t *testing.T) {
@@ -24,8 +25,9 @@ func TestClientTransactionInviteFSM(t *testing.T) {
 			Reader:  incoming,
 			Writers: map[string]io.Writer{"127.0.0.99:5060": outgoing},
 		},
+		log: slog.Default(),
 	}
-	tx := NewClientTx("123", req, conn, log.Logger)
+	tx := NewClientTx("123", req, conn, slog.Default())
 
 	// CALLING STATE
 	err := tx.Init()
@@ -70,8 +72,9 @@ func TestClientTransactionFSM(t *testing.T) {
 				Reader:  incoming,
 				Writers: map[string]io.Writer{"127.0.0.99:5060": outgoing},
 			},
+			log: slog.Default(),
 		}
-		tx := NewClientTx("123", req, conn, log.Logger)
+		tx := NewClientTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
@@ -97,8 +100,9 @@ func TestClientTransactionFSM(t *testing.T) {
 				Reader:  incoming,
 				Writers: map[string]io.Writer{"127.0.0.99:5060": outgoing},
 			},
+			log: slog.Default(),
 		}
-		tx := NewClientTx("123", req, conn, log.Logger)
+		tx := NewClientTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 

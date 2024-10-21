@@ -2,9 +2,8 @@ package sip
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -25,20 +24,20 @@ func SIPDebugTracer(t SIPTracer) {
 	siptracer = t
 }
 
-func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
+func logSIPRead(log *slog.Logger, transport string, laddr string, raddr string, sipmsg []byte) {
 	if siptracer != nil {
 		siptracer.SIPTraceRead(transport, laddr, raddr, sipmsg)
 		return
 	}
-	log.Debug().Msgf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+	log.Debug("read from", "local", laddr, "remote", raddr, "msg", sipmsg)
 }
 
-func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
+func logSIPWrite(log *slog.Logger, transport string, laddr string, raddr string, sipmsg []byte) {
 	if siptracer != nil {
 		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
 		return
 	}
-	log.Debug().Msgf("%s write to %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+	log.Debug("write to", "local", laddr, "remote", raddr, "msg", sipmsg)
 }
 
 // GenerateBranch returns random unique branch ID.

@@ -3,10 +3,9 @@ package sip
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 const ()
@@ -1035,7 +1034,7 @@ func parseHeaderLazy[T any, HP headerPointerReceiver[T]](hs *headers, f func(hea
 		}
 
 		if err := f(hdr.Value(), h); err != nil {
-			log.Debug().Err(err).Msgf("Lazy header parsing of %s failed", hdr.Name())
+			slog.Debug("Lazy header parsing failed", "header", hdr.Name(), "error", err)
 			return false
 		}
 		return true

@@ -3,14 +3,13 @@ package sip
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog"
 )
 
 var (
@@ -132,7 +131,7 @@ type baseTx struct {
 	fsmAck    *Request
 	fsmCancel *Request
 
-	log         zerolog.Logger
+	log         *slog.Logger
 	onTerminate FnTxTerminate
 }
 
@@ -190,7 +189,7 @@ func (tx *baseTx) spinFsmUnsafe(in fsmInput) {
 		if TransactionFSMDebug {
 			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
 			fname = fname[strings.LastIndex(fname, ".")+1:]
-			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
+			tx.log.Debug("Changing transaction state", "key", tx.key, "input", fsmString(i), "state", fname)
 		}
 		i = tx.fsmState(i)
 	}
@@ -203,7 +202,7 @@ func (tx *baseTx) spinFsm(in fsmInput) {
 		if TransactionFSMDebug {
 			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
 			fname = fname[strings.LastIndex(fname, ".")+1:]
-			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
+			tx.log.Debug("Changing transaction state", "key", tx.key, "input", fsmString(i), "state", fname)
 		}
 		i = tx.fsmState(i)
 	}

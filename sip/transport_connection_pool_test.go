@@ -1,16 +1,16 @@
 package sip
 
 import (
+	"log/slog"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/emiago/sipgo/fakes"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestConnectionPool(t *testing.T) {
-	pool := NewConnectionPool()
+	pool := NewConnectionPool(slog.Default())
 
 	fakeConn := &fakes.TCPConn{
 		LAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060},
@@ -18,7 +18,7 @@ func TestConnectionPool(t *testing.T) {
 		Reader: nil,
 		Writer: nil,
 	}
-	conn := &TCPConnection{Conn: fakeConn}
+	conn := &TCPConnection{Conn: fakeConn, log: slog.Default()}
 
 	pool.Add(fakeConn.RAddr.String(), conn)
 
@@ -29,8 +29,8 @@ func TestConnectionPool(t *testing.T) {
 }
 
 func BenchmarkConnectionPool(b *testing.B) {
-	log.Logger = log.Logger.Level(zerolog.WarnLevel)
-	pool := NewConnectionPool()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	pool := NewConnectionPool(logger)
 
 	for i := 0; i < b.N; i++ {
 		conn := &TCPConnection{Conn: &fakes.TCPConn{
@@ -38,7 +38,7 @@ func BenchmarkConnectionPool(b *testing.B) {
 			RAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
 			Reader: nil,
 			Writer: nil,
-		}}
+		}, log: slog.Default()}
 		a := &net.TCPAddr{
 			IP:   net.IPv4('1', '2', '3', byte(i)),
 			Port: 1000,

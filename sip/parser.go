@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // The whitespace characters recognised by the Augmented Backus-Naur Form syntax
@@ -38,7 +36,7 @@ func ParseMessage(msgData []byte) (Message, error) {
 // Parser is implementation of SIPParser
 // It is optimized with faster header parsing
 type Parser struct {
-	log zerolog.Logger
+	log *slog.Logger
 	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
 	headersParsers mapHeadersParser
 }
@@ -49,7 +47,7 @@ type ParserOption func(p *Parser)
 // Create a new Parser.
 func NewParser(options ...ParserOption) *Parser {
 	p := &Parser{
-		log:            log.Logger,
+		log:            slog.Default(),
 		headersParsers: headersParsers,
 	}
 
@@ -61,7 +59,7 @@ func NewParser(options ...ParserOption) *Parser {
 }
 
 // WithServerLogger allows customizing parser logger
-func WithParserLogger(logger zerolog.Logger) ParserOption {
+func WithParserLogger(logger *slog.Logger) ParserOption {
 	return func(p *Parser) {
 		p.log = logger
 	}
