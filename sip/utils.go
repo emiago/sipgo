@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"time"
 )
 
 const (
@@ -19,10 +18,6 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // https://github.com/kpbird/golang_random_string
 func RandString(n int) string {

@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -20,10 +19,6 @@ var (
 	// Errors
 	ErrTransportNotSuported = errors.New("protocol not supported")
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // TransportLayer implementation.
 type TransportLayer struct {
@@ -71,7 +66,7 @@ func NewTransportLayer(
 	if tlsConfig == nil {
 		// Use empty tls config
 		tlsConfig = &tlsEmptyConf
-	}	
+	}
 	// TODO consider this transports are configurable from outside
 	// Make some default transports available.
 	l.udp = newUDPTransport(sipparser)
