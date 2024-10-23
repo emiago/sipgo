@@ -61,17 +61,7 @@ As example you can find `example/proxysip` as simple version of statefull proxy.
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
-## Trusted By
 
-<a href="https://www.babelforce.com">
-<img src="icons/babelforce-logo.png" width="200" alt="babelforce">
-</a>&nbsp;&nbsp;&nbsp;&nbsp;
-<a href="https://www.babelforce.com">
-<img src="icons/avero.png" width="100" alt="avero">
-</a>
-
----
-*If you are using in company, your logo can be here.*
 
 # Usage
 
@@ -342,6 +332,19 @@ If you find this project interesting for bigger support or consulting, you can c
 [mail](mailto:emirfreelance91@gmail.com)
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
+
+## Trusted By
+
+<a href="https://www.babelforce.com">
+<img src="icons/babelforce-logo.png" width="200" alt="babelforce">
+</a>&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://www.babelforce.com">
+<img src="icons/avero.png" width="100" alt="avero">
+</a>
+
+---
+*If you are using in company, your logo can be here.*
+
 
 
 ## Extra
