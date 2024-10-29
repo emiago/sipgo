@@ -253,14 +253,6 @@ func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
 	return -1
 }
 
-// ResolveSelfIP returns first non loopback IP
-//
-// Deprecated use ResolveInterfacesIP
-func ResolveSelfIP() (net.IP, error) {
-	ip, _, err := ResolveInterfacesIP("ip4", nil)
-	return ip, err
-}
-
 // ResolveInterfaceIP will check current interfaces and resolve to IP
 // Using targetIP it will try to match interface with same subnet
 // network can be "ip" "ip4" "ip6"
