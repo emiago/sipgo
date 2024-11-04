@@ -144,13 +144,6 @@ func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.R
 }
 
 func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
-	// Check Record-Route Header
-	if s.InviteResponse != nil {
-		// Record Route handling
-		if rr := s.InviteResponse.RecordRoute(); rr != nil {
-			req.SetDestination(rr.Address.HostPort())
-		}
-	}
 	return s.ua.Client.WriteRequest(req)
 }
 

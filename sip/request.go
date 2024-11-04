@@ -230,14 +230,21 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	)
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
+	destination := inviteRequest.Destination()
 	if len(inviteRequest.GetHeaders("Route")) > 0 {
 		CopyHeaders("Route", inviteRequest, ackRequest)
 	} else {
 		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
-		hdrs := inviteResponse.GetHeaders("Record-Route")
-		for i := len(hdrs) - 1; i >= 0; i-- {
-			recordRoute := hdrs[i]
-			ackRequest.AppendHeader(NewHeader("Route", recordRoute.Value()))
+		recordRoutes := inviteResponse.GetHeaders("Record-Route")
+		for i := len(recordRoutes) - 1; i >= 0; i-- {
+			ackRequest.AppendHeader(NewHeader("Route", recordRoutes[i].Value()))
+			// we need to set destination to last record-route
+			if i == len(recordRoutes)-1 {
+				destinationUri := &Uri{}
+				if err := parseRouteAddress(recordRoutes[i].Value(), destinationUri); err == nil {
+					destination = destinationUri.HostPort()
+				}
+			}
 		}
 	}
 
@@ -280,7 +287,7 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
-	ackRequest.SetDestination(inviteRequest.Destination())
+	ackRequest.SetDestination(destination)
 
 	return ackRequest
 }
