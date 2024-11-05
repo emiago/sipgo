@@ -290,8 +290,8 @@ func (tx *ServerTx) actConfirm() fsmInput {
 		tx.timer_h = nil
 	}
 
-	tx.timer_i = time.AfterFunc(Timer_I, func() {
-		// tx.Log().Trace("timer_i fired")
+	// If transport is reliable this will be 0 and fire imediately
+	tx.timer_i = time.AfterFunc(tx.timer_i_time, func() {
 		tx.spinFsm(server_input_timer_i)
 	})
 
