@@ -280,7 +280,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
-	ackRequest.SetDestination(inviteRequest.Destination())
+	// NOTE forcing here destination will be wrong if we have custom Route handling by proxies
+	// ackRequest.SetDestination(inviteRequest.Destination())
 
 	return ackRequest
 }
