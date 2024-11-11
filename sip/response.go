@@ -210,6 +210,10 @@ func NewResponseFromRequest(
 		res.AppendHeader(h.headerClone())
 	}
 
+	if h := req.Contact(); h != nil {
+		res.AppendHeader(h.headerClone())
+	}
+
 	if h := req.CallID(); h != nil {
 		res.AppendHeader(h.headerClone())
 	}
