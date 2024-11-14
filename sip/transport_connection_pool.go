@@ -38,8 +38,8 @@ type ConnectionPool struct {
 	m map[string]Connection
 }
 
-func NewConnectionPool() ConnectionPool {
-	return ConnectionPool{
+func NewConnectionPool() *ConnectionPool {
+	return &ConnectionPool{
 		m: make(map[string]Connection),
 	}
 }

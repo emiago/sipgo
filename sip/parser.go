@@ -7,7 +7,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,15 +29,6 @@ var (
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 	ErrParseMoreMessages       = errors.New("Stream has more message")
 )
-
-var bufReader = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return new(bytes.Buffer)
-	},
-}
 
 func ParseMessage(msgData []byte) (Message, error) {
 	parser := NewParser()
@@ -90,10 +80,7 @@ func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
 
 // ParseSIP converts data to sip message. Buffer must contain full sip message
 func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
-	reader := bufReader.Get().(*bytes.Buffer)
-	defer bufReader.Put(reader)
-	reader.Reset()
-	reader.Write(data)
+	reader := bytes.NewBuffer(data)
 
 	startLine, err := nextLine(reader)
 	if err != nil {
@@ -242,9 +229,7 @@ func getBodyLength(data []byte) int {
 	return len(data) - bodyStart
 }
 
-// Heuristic to determine if the given transmission looks like a SIP request.
-// It is guaranteed that any RFC3261-compliant request will pass this test,
-// but invalid messages may not necessarily be rejected.
+// detet is request by spaces
 func isRequest(startLine string) bool {
 	// SIP request lines contain precisely two spaces.
 	ind := strings.IndexRune(startLine, ' ')
@@ -271,9 +256,7 @@ func isRequest(startLine string) bool {
 	return UriIsSIP(part2[:3])
 }
 
-// Heuristic to determine if the given transmission looks like a SIP response.
-// It is guaranteed that any RFC3261-compliant response will pass this test,
-// but invalid messages may not necessarily be rejected.
+// Detect is response by spaces
 func isResponse(startLine string) bool {
 	// SIP status lines contain at least two spaces.
 	ind := strings.IndexRune(startLine, ' ')

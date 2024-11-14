@@ -15,7 +15,7 @@ import (
 func TestClientTransactionInviteFSM(t *testing.T) {
 	// make things fast
 	SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
-	req, _, _ := testCreateInvite(t, "127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
 
 	incoming := bytes.NewBuffer([]byte{})
 	outgoing := bytes.NewBuffer([]byte{})
@@ -59,7 +59,7 @@ func TestClientTransactionInviteFSM(t *testing.T) {
 
 func TestClientTransactionFSM(t *testing.T) {
 	// SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
-	req, _, _ := testCreateInvite(t, "127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
 
 	incoming := bytes.NewBuffer([]byte{})
 	outgoing := bytes.NewBuffer([]byte{})

@@ -10,8 +10,9 @@ import (
 
 type ServerTx struct {
 	baseTx
-	acks         chan *Request
-	cancels      chan *Request
+	acks chan *Request
+	// cancels chan *Request
+	onCancel     func(r *Request)
 	timer_g      *time.Timer
 	timer_g_time time.Duration
 	timer_h      *time.Timer
@@ -21,8 +22,6 @@ type ServerTx struct {
 	timer_1xx    *time.Timer
 	timer_l      *time.Timer
 	reliable     bool
-
-	mu sync.RWMutex
 
 	closeOnce sync.Once
 }
@@ -34,7 +33,7 @@ func NewServerTx(key string, origin *Request, conn Connection, logger zerolog.Lo
 
 	// about ~10 retransmits
 	tx.acks = make(chan *Request)
-	tx.cancels = make(chan *Request)
+	// tx.cancels = make(chan *Request)
 	tx.done = make(chan struct{})
 	tx.log = logger
 	tx.origin = origin
@@ -125,7 +124,8 @@ func (tx *ServerTx) Respond(res *Response) error {
 		input = server_input_user_300_plus
 	}
 	tx.spinFsmWithResponse(input, res)
-	return nil
+	// In case of termination or some error
+	return tx.Err()
 }
 
 // Acks makes channel for sending acks. Channel is created on demand
@@ -152,31 +152,37 @@ func (tx *ServerTx) ackSendAsync(r *Request) {
 	go tx.ackSend(r)
 }
 
-func (tx *ServerTx) Cancels() <-chan *Request {
-	if tx.cancels != nil {
-		return tx.cancels
-	}
-	tx.cancels = make(chan *Request)
-	return tx.cancels
-}
+// func (tx *ServerTx) Cancels() <-chan *Request {
+// 	if tx.cancels != nil {
+// 		return tx.cancels
+// 	}
+// 	tx.cancels = make(chan *Request)
+// 	return tx.cancels
+// }
 
-func (tx *ServerTx) cancelSend(r *Request) {
-	select {
-	case <-tx.done:
-		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("CANCEL missed")
-	case tx.cancels <- r:
-	}
-}
+// func (tx *ServerTx) cancelSend(r *Request) {
+// 	select {
+// 	case <-tx.done:
+// 		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("CANCEL missed")
+// 	case tx.cancels <- r:
+// 	}
+// }
 
-func (tx *ServerTx) cancelSendAsync(r *Request) {
-	select {
-	case tx.cancels <- r:
-		return
-	default:
-	}
+// func (tx *ServerTx) cancelSendAsync(r *Request) {
+// 	tx.onCancel(r)
 
-	// Go routines should be cheap and it will prevent blocking
-	go tx.cancelSend(r)
+// 	// select {
+// 	// case tx.cancels <- r:
+// 	// default:
+// 	// 	// Go routines should be cheap and it will prevent blocking
+// 	// 	go tx.cancelSend(r)
+// 	// }
+// }
+
+func (tx *ServerTx) OnCancel(f func(r *Request)) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	tx.onCancel = f
 }
 
 func (tx *ServerTx) Terminate() {
@@ -201,9 +207,10 @@ func (tx *ServerTx) delete() {
 	tx.closeOnce.Do(func() {
 		tx.mu.Lock()
 		close(tx.done)
+		onterm := tx.onTerminate
 		tx.mu.Unlock()
-		if tx.onTerminate != nil {
-			tx.onTerminate(tx.key)
+		if onterm != nil {
+			onterm(tx.key)
 		}
 		// TODO with ref this can be added, but normally we expect client does closing
 		// if _, err := tx.conn.TryClose(); err != nil {

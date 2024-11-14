@@ -14,6 +14,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/icholy/digest"
 )
 
@@ -118,6 +121,10 @@ func main() {
 
 	log.Info().Str("addr", *extIP).Msg("Listening on")
 
+	go func() {
+		http.ListenAndServe(":6060", nil)
+	}()
+
 	switch *tran {
 	case "tls", "wss":
 		cert, err := tls.LoadX509KeyPair(*tlscrt, *tlskey)
@@ -131,5 +138,7 @@ func main() {
 		return
 	}
 
-	srv.ListenAndServe(ctx, *tran, *extIP)
+	if err := srv.ListenAndServe(ctx, *tran, *extIP); err != nil {
+		log.Error().Err(err).Msg("Failed to listen")
+	}
 }

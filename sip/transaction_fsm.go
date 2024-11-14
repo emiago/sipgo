@@ -6,25 +6,6 @@ type fsmContextState func(s fsmInput) fsmInput
 
 const ()
 
-// FSM States
-const (
-	client_state_calling = iota
-	client_state_proceeding
-	client_state_completed
-	client_state_accepted
-	client_state_terminated
-)
-
-// FSM States
-const (
-	server_state_trying = iota
-	server_state_proceeding
-	server_state_completed
-	server_state_confirmed
-	server_state_accepted
-	server_state_terminated
-)
-
 // FSM Inputs
 const (
 	FsmInputNone fsmInput = iota
@@ -52,8 +33,8 @@ const (
 	client_input_timer_m
 	client_input_transport_err
 	client_input_delete
-	client_input_cancel
-	client_input_canceled
+	// client_input_cancel
+	// client_input_canceled
 )
 
 func fsmString(f fsmInput) string {
@@ -106,10 +87,10 @@ func fsmString(f fsmInput) string {
 		return "client_input_transport_err"
 	case client_input_delete:
 		return "client_input_delete"
-	case client_input_cancel:
-		return "client_input_cancel"
-	case client_input_canceled:
-		return "client_input_canceled"
+		// case client_input_cancel:
+		// 	return "client_input_cancel"
+		// case client_input_canceled:
+		// 	return "client_input_canceled"
 	}
 	return "unknown transaction state"
 }

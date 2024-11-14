@@ -27,6 +27,8 @@ func (tx *ServerTx) inviteStateProcceeding(s fsmInput) fsmInput {
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actRespondComplete
 	case server_input_transport_err:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actTransErr
+	default:
+		return FsmInputNone
 	}
 
 	return spinfn()
@@ -288,8 +290,8 @@ func (tx *ServerTx) actConfirm() fsmInput {
 		tx.timer_h = nil
 	}
 
-	tx.timer_i = time.AfterFunc(Timer_I, func() {
-		// tx.Log().Trace("timer_i fired")
+	// If transport is reliable this will be 0 and fire imediately
+	tx.timer_i = time.AfterFunc(tx.timer_i_time, func() {
 		tx.spinFsm(server_input_timer_i)
 	})
 
@@ -300,8 +302,20 @@ func (tx *ServerTx) actConfirm() fsmInput {
 }
 
 func (tx *ServerTx) actCancel() fsmInput {
-	tx.passCancel()
-	return FsmInputNone
+	// tx.passCancel()
+	r := tx.fsmCancel
+
+	if r == nil {
+		return FsmInputNone
+	}
+	// Check is there some listener on cancel
+	if tx.onCancel != nil {
+		tx.onCancel(r)
+	}
+	tx.log.Debug().Msg("Passing 487 on CANCEL")
+	tx.fsmResp = NewResponseFromRequest(tx.origin, StatusRequestTerminated, "Request Terminated", nil)
+	tx.fsmErr = ErrTransactionCanceled // For now only informative
+	return server_input_user_300_plus
 }
 
 func (tx *ServerTx) passAck() {
@@ -313,14 +327,18 @@ func (tx *ServerTx) passAck() {
 	tx.ackSendAsync(r)
 }
 
-func (tx *ServerTx) passCancel() {
-	r := tx.fsmCancel
+// func (tx *ServerTx) passCancel() {
+// 	r := tx.fsmCancel
 
-	if r == nil {
-		return
-	}
-	tx.cancelSendAsync(r)
-}
+// 	if r == nil {
+// 		return
+// 	}
+// 	res := tx.onCancel(r)
+// 	if res != nil {
+
+// 	}
+// 	// tx.cancelSendAsync(r)
+// }
 
 func (tx *ServerTx) passResp() error {
 	lastResp := tx.fsmResp

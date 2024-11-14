@@ -188,11 +188,11 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		serverAddr string
 		encrypted  bool
 	}{
-		{transport: "udp", serverAddr: "127.1.1.100:5060"},
-		{transport: "tcp", serverAddr: "127.1.1.100:5060"},
-		{transport: "ws", serverAddr: "127.1.1.100:5061"},
-		{transport: "tls", serverAddr: "127.1.1.100:5062", encrypted: true},
-		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
+		{transport: "udp", serverAddr: "127.1.1.100:15060"},
+		{transport: "tcp", serverAddr: "127.1.1.100:15060"},
+		{transport: "ws", serverAddr: "127.1.1.100:15061"},
+		{transport: "tls", serverAddr: "127.1.1.100:15062", encrypted: true},
+		{transport: "wss", serverAddr: "127.1.1.100:15063", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())

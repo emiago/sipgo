@@ -18,7 +18,7 @@ func TestDialogServerByeRequest(t *testing.T) {
 	uasContact := sip.ContactHeader{
 		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 	}
-	dialogSrv := NewDialogServer(cli, uasContact)
+	dialogSrv := NewDialogServerCache(cli, uasContact)
 
 	invite, _, _ := createTestInvite(t, "sip:uas@uas.com", "udp", "uas.com:5090")
 	invite.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uas", Port: 1234}})

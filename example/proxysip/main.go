@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"time"
 
@@ -26,6 +29,8 @@ import (
 var ()
 
 func main() {
+	defer pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+
 	debflag := flag.Bool("debug", false, "")
 	pprof := flag.Bool("pprof", false, "Full profile")
 	extIP := flag.String("ip", "127.0.0.1:5060", "My exernal ip")
@@ -58,7 +63,11 @@ func main() {
 	go httpServer(":8080")
 
 	srv := setupSipProxy(*dst, *extIP)
-	if err := srv.ListenAndServe(context.TODO(), *transportType, *extIP); err != nil {
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	if err := srv.ListenAndServe(ctx, *transportType, *extIP); err != nil {
 		log.Error().Err(err).Msg("Fail to start sip server")
 		return
 	}
@@ -168,11 +177,16 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 					log.Error().Err(err).Msg("ResponseHandler transaction respond failed")
 				}
 
-				// Early terminate
-				// if req.Method == sip.BYE {
-				// 	// We will call client Terminate
-				// 	return
-				// }
+			// Early terminate
+			// if req.Method == sip.BYE {
+			// 	// We will call client Terminate
+			// 	return
+			// }
+			case <-clTx.Done():
+				if err := tx.Err(); err != nil {
+					log.Error().Err(err).Str("req", req.Method.String()).Msg("Client Transaction done with error")
+				}
+				return
 
 			case m := <-tx.Acks():
 				// Acks can not be send directly trough destination
@@ -180,14 +194,26 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 				m.SetDestination(dst)
 				client.WriteRequest(m)
 
-			case m := <-tx.Cancels():
-				// Send response imediatelly
-				reply(tx, m, 200, "OK")
-				// Cancel client transacaction without waiting. This will send CANCEL request
-				clTx.Cancel()
-
 			case <-tx.Done():
 				if err := tx.Err(); err != nil {
+					if errors.Is(err, sip.ErrTransactionCanceled) {
+						// Cancel other side. This is only on INVITE needed
+						// We need now new transaction
+						if req.IsInvite() {
+							r := newCancelRequest(req)
+							res, err := client.Do(ctx, r)
+							if err != nil {
+								log.Error().Err(err).Str("req", req.Method.String()).Msg("Canceling transaction failed")
+								return
+							}
+							if res.StatusCode != 200 {
+								log.Error().Err(err).Str("req", req.Method.String()).Msg("Canceling transaction failed with non 200 code")
+								return
+							}
+							return
+						}
+					}
+
 					log.Error().Err(err).Str("req", req.Method.String()).Msg("Transaction done with error")
 					return
 				}
@@ -260,4 +286,16 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 	srv.OnCancel(cancelHandler)
 	srv.OnBye(byeHandler)
 	return srv
+}
+
+func newCancelRequest(inviteRequest *sip.Request) *sip.Request {
+	cancelReq := sip.NewRequest(sip.CANCEL, inviteRequest.Recipient)
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.Via())) // Cancel request must match invite TOP via and only have that Via
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.From()))
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.To()))
+	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.CallID()))
+	sip.CopyHeaders("Route", inviteRequest, cancelReq)
+	cancelReq.SetSource(inviteRequest.Source())
+	cancelReq.SetDestination(inviteRequest.Destination())
+	return cancelReq
 }

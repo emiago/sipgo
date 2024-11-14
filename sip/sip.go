@@ -3,11 +3,43 @@ package sip
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
 	RFC3261BranchMagicCookie = "z9hG4bK"
 )
+
+var (
+	SIPDebug  bool
+	siptracer SIPTracer
+)
+
+type SIPTracer interface {
+	SIPTraceRead(transport string, laddr string, raddr string, sipmsg []byte)
+	SIPTraceWrite(transport string, laddr string, raddr string, sipmsg []byte)
+}
+
+func SIPDebugTracer(t SIPTracer) {
+	siptracer = t
+}
+
+func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
+	if siptracer != nil {
+		siptracer.SIPTraceRead(transport, laddr, raddr, sipmsg)
+		return
+	}
+	log.Debug().Msgf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+}
+
+func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
+	if siptracer != nil {
+		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
+		return
+	}
+	log.Debug().Msgf("%s write to %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+}
 
 // GenerateBranch returns random unique branch ID.
 func GenerateBranch() string {

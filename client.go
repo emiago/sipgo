@@ -2,7 +2,6 @@ package sipgo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 
@@ -17,12 +16,22 @@ func Init() {
 	uuid.EnableRandPool()
 }
 
+type ClientTransactionRequester interface {
+	Request(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error)
+}
+
 type Client struct {
 	*UserAgent
 	host  string
 	port  int
 	rport bool
 	log   zerolog.Logger
+
+	// TxRequester allows you to use your transaction requester instead default from transaction layer
+	// Useful only for testing
+	//
+	// Experimental
+	TxRequester ClientTransactionRequester
 }
 
 type ClientOption func(c *Client) error
@@ -112,11 +121,18 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// Deprecated use Hostname
 func (c *Client) GetHostname() string {
 	return c.host
 }
 
+// Hostname returns default hostname or what is set WithHostname option
+func (c *Client) Hostname() string {
+	return c.host
+}
+
 // TransactionRequest uses transaction layer to send request and returns transaction
+// For more correct behavior use client.Do instead which acts same like HTTP req/response
 //
 // By default request will not be cloned and it will populate request with missing headers unless options are used
 // In most cases you want this as you will retry with additional headers
@@ -140,7 +156,7 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 
 		clientRequestBuildReq(c, req)
-		return c.tx.Request(ctx, req)
+		return c.requestTransaction(ctx, req)
 	}
 
 	for _, o := range options {
@@ -148,18 +164,26 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 			return nil, err
 		}
 	}
+	return c.requestTransaction(ctx, req)
+}
+
+func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	if c.TxRequester != nil {
+		return c.TxRequester.Request(ctx, req)
+	}
 	return c.tx.Request(ctx, req)
 }
 
 // Do request is HTTP client like Do request/response.
 // It returns on final response.
-// Canceling ctx sends Cancel Request but it still returns ctx error
+// NOTE: Canceling ctx WILL not send Cancel Request which is needed for INVITE. Use dialog API for dealing with dialogs
 // For more lower API use TransactionRequest directly
 func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := c.TransactionRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer tx.Terminate()
 
 	for {
@@ -174,8 +198,7 @@ func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			err := tx.Cancel()
-			return nil, errors.Join(ctx.Err(), err)
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -254,6 +277,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		from := sip.FromHeader{
 			DisplayName: c.UserAgent.name,
 			Address: sip.Uri{
+				Scheme:    req.Recipient.Scheme,
 				User:      c.UserAgent.name,
 				Host:      c.UserAgent.hostname,
 				UriParams: sip.NewParams(),
@@ -274,7 +298,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	if v := req.To(); v == nil {
 		to := sip.ToHeader{
 			Address: sip.Uri{
-				Encrypted: req.Recipient.Encrypted,
+				Scheme:    req.Recipient.Scheme,
 				User:      req.Recipient.User,
 				Host:      req.Recipient.Host,
 				UriParams: sip.NewParams(),
@@ -406,6 +430,9 @@ func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Optio
 		return fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
 	}
 
+	// Fix lower case algorithm although not supported by rfc
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
+
 	// Reply with digest
 	cred, err := digest.Digest(chal, opts)
 	if err != nil {
@@ -423,6 +450,9 @@ func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) e
 	if err != nil {
 		return fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
 	}
+
+	// Fix lower case algorithm although not supported by rfc
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
 
 	// Reply with digest
 	cred, err := digest.Digest(chal, opts)

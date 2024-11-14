@@ -96,6 +96,10 @@ func (ua *UserAgent) Name() string {
 	return ua.name
 }
 
+func (ua *UserAgent) Hostname() string {
+	return ua.hostname
+}
+
 func (ua *UserAgent) TransportLayer() *sip.TransportLayer {
 	return ua.tp
 }

@@ -2,28 +2,32 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/emiago/sipgo)](https://goreportcard.com/report/github.com/emiago/sipgo)
 ![Used By](https://sourcegraph.com/github.com/emiago/sipgo/-/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-45.9%25-blue)
+![Coverage](https://img.shields.io/badge/coverage-47.0%25-blue)
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://github.com/emiago/sipgo/LICENCE) 
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/emiago/sipgo)
 
 **SIPGO** is library for writing fast SIP services in GO language.  
-It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)) optimized for fast parsing.
+It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)|[RFC6026](https://datatracker.ietf.org/doc/html/rfc6026) optimized for fast parsing.
 
-For extra functionality checkout also   
-- [github.com/emiago/sipgox](https://github.com/emiago/sipgox) - Extra SIP functionality like fast building SIP phone
-- [github.com/emiago/media](https://github.com/emiago/media) - Adds base functionality for real time media (*sdp, rtp, rtcp*)
+---
+**NOTE**: LIBRARY IS IN PROCESS GETTING TO 1.0. THIS MAY TAKE TIME UNTIL WE CLOSE ALL ISSUES. PLEASE OPEN ISSUES FOR DISCUSSION FIRST INSTEAD PULL REQUESTS. OTHER NOTES:
+- dialog managment may be refactored or reduced only to keep some basic functionality handling dialogs per RFC. Rest is moved to diago project
+- only small optimizations/refactoring is considered to happen.
+- if something is missing before 1.0 and it is good to have, it will be moved to sipgox package.
+---
+
+**Libs on top of sipgo:**
+- ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack 
+- ***sipgox*** [github.com/emiago/sipgox](https://github.com/emiago/sipgox): Fast building SIP phone or SIP helpers (It is recomended to switch to **Diago**)
 
 Fetch lib with:
 
 `go get github.com/emiago/sipgo`
 
-**NOTE**: LIB MAY HAVE API CHANGES UNTIL STABLE VERSION.
 
-*If you like/use project currently or need additional help/support checkout [Support section](#support) 
-
+If you like/use project currently and looking for support/sponsoring  checkout [Support section](#support)  
 
 You can follow on [X/Twitter](https://twitter.com/emiago123) for more updates.
-
 
 More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emiago/sipgo)
 
@@ -57,15 +61,7 @@ As example you can find `example/proxysip` as simple version of statefull proxy.
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
-## Used By
 
-<a href="https://www.babelforce.com">
-<img src="icons/babelforce-logo.png" width="300" alt="babelforce">
-</a>
-
-
----
-*If you are using in company, your logo can be here.*
 
 # Usage
 
@@ -83,7 +79,6 @@ srv, _ := sipgo.NewServer(ua) // Creating server handle for ua
 client, _ := sipgo.NewClient(ua) // Creating client handle for ua
 srv.OnInvite(inviteHandler)
 srv.OnAck(ackHandler)
-srv.OnCancel(cancelHandler)
 srv.OnBye(byeHandler)
 
 // For registrars
@@ -137,8 +132,7 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     tx.Respond(res)
 
     select {
-        case m := <-tx.Acks(): // Handle ACK . ACKs on 2xx are send as different request
-        case m := <-tx.Cancels(): // Handle Cancel 
+        case m := <-tx.Acks(): // Handle ACK for response . ACKs on 2xx are send as different request
         case <-tx.Done():
             // Signal transaction is done. 
             // Check any errors with tx.Err() to have more info why terminated
@@ -211,9 +205,18 @@ client.WriteRequest(req)
 
 ## Dialog handling
 
-`DialogClient` and `DialogServer` allow easier managing multiple dialog (Calls) sessions. 
+`DialogUA` is helper struct to create `Dialog`. 
+**Dialog** can be **as server** or **as client** created. Later on this provides you RFC way of sending request within dialog `Do` or `TransactionRequest` functions.
+
+For basic usage `DialogClientCache` and `DialogServerCache` are created to be part of library to manage and cache dialog accross multiple request.
 They are seperated based on your **request context**, but they act more like `peer`.
-They both need `client` **handle** to be able send request and `server` **handle** to accept request.
+
+---
+**NOTE**: **It is recomended that you build your OWN Dialog Server/Client Cache mechanism for dialogs.**
+
+---
+
+For basic control some handling request wrappers like `Ack`, `Bye`, `ReadAck`, `ReadBye` is provided. Sending  any other request should be done with `Do` or receiving can be validated with `ReadRequest`
 
 
 **UAC**:
@@ -225,7 +228,7 @@ client, _ := sipgo.NewClient(ua) // Creating client handle
 contactHDR := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
 }
-dialogCli := sipgo.NewDialogClient(client, contactHDR)
+dialogCli := sipgo.NewDialogClientCache(client, contactHDR)
 
 // Attach Bye handling for dialog
 srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -253,10 +256,14 @@ client, _ := sipgo.NewClient(ua) // Creating client handle
 uasContact := sip.ContactHeader{
     Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
 }
-dialogSrv := sipgo.NewDialogServer(client, uasContact)
+dialogSrv := sipgo.NewDialogServerCache(client, uasContact)
 
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
     dlg, err := dialogSrv.ReadInvite(req, tx)
+    if err != nil {
+        return err
+    }
+    defer dlg.Close() // Close for cleanup from cache
     // handle error
     dlg.Respond(sip.StatusTrying, "Trying", nil)
     dlg.Respond(sip.StatusOK, "OK", nil)
@@ -322,9 +329,22 @@ Content-Length:  0
 ## Support
 
 If you find this project interesting for bigger support or consulting, you can contact me on
-[mail](emirfreelance91@gmail.com)
+[mail](mailto:emirfreelance91@gmail.com)
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
+
+## Trusted By
+
+<a href="https://www.babelforce.com">
+<img src="icons/babelforce-logo.png" width="200" alt="babelforce">
+</a>&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://avero.it">
+<img src="icons/avero.png" width="100" alt="avero">
+</a>
+
+---
+*If you are using in company, your logo can be here.*
+
 
 
 ## Extra

@@ -9,8 +9,12 @@ import (
 )
 
 // DialogUA defines UserAgent that will be used in controling your dialog.
+// It needs client handle for cancelation or sending more subsequent request during dialog
 type DialogUA struct {
-	Client     *Client
+	// Client (required) is used to build and send subsequent request (CANCEL, BYE)
+	Client *Client
+	// ContactHDR (required) is used as default one to build request/response.
+	// You can pass custom on each request, but in dialog it is required to be present
 	ContactHDR sip.ContactHeader
 }
 
@@ -31,6 +35,15 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 		return nil, err
 	}
 
+	// do some minimal validation
+	if inviteReq.CSeq() == nil {
+		return nil, fmt.Errorf("no CSEQ header present")
+	}
+
+	if inviteReq.Contact() == nil {
+		return nil, fmt.Errorf("no Contact header present")
+	}
+
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
 			ID:            id, // this id has already prebuilt tag
@@ -40,6 +53,17 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 		ua:       c,
 	}
 	dtx.Init()
+
+	// Temporarly fix
+	if stx, ok := tx.(*sip.ServerTx); ok {
+		stx.OnTerminate(func(key string) {
+			state := dtx.LoadState()
+			if state < sip.DialogStateEstablished {
+				// It is canceled if transaction died before answer
+				dtx.setState(sip.DialogStateEnded)
+			}
+		})
+	}
 
 	return dtx, nil
 }
