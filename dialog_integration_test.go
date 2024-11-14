@@ -297,7 +297,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 			// ACK
 			t.Log("UAC: ACK")
-			sess.InviteRequest.SetDestination("nodestination.dst")
+			sess.InviteResponse.Contact().Address.Host = "nodestination.dst"
 			ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
 			err = sess.Ack(ctx)
 			require.Error(t, err)
