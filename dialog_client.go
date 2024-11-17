@@ -135,6 +135,8 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 				// this is strict routing
 				req.Recipient = rh.Address
 			}
+		} else if s.ua.RewriteContact {
+			req.SetDestination(s.InviteResponse.Source())
 		}
 	}
 

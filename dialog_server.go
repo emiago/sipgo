@@ -106,9 +106,9 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
-	hdrs := s.InviteRequest.GetHeaders("Record-Route")
-	for i := len(hdrs) - 1; i >= 0; i-- {
-		recordRoute := hdrs[i]
+	rrs := s.InviteRequest.GetHeaders("Record-Route")
+	for i := len(rrs) - 1; i >= 0; i-- {
+		recordRoute := rrs[i]
 		req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
 	}
 
@@ -157,8 +157,7 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
 	}
 
-	if sip.IsReliable(req.Transport()) {
-		// Avoid NAT
+	if s.ua.RewriteContact && len(rrs) == 0 {
 		req.SetDestination(s.InviteRequest.Source())
 	}
 

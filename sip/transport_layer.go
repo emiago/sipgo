@@ -573,3 +573,22 @@ func NetworkToLower(network string) string {
 		return ASCIIToLower(network)
 	}
 }
+
+// NetworkToUpper is faster function converting udp, tcp to UDP, tcp
+func NetworkToUpper(network string) string {
+	// Switch is faster then lower
+	switch network {
+	case "udp":
+		return "UDP"
+	case "tcp":
+		return "TCP"
+	case "tls":
+		return "TLS"
+	case "ws":
+		return "WS"
+	case "wss":
+		return "WSS"
+	default:
+		return ASCIIToUpper(network)
+	}
+}

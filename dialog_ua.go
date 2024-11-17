@@ -16,6 +16,8 @@ type DialogUA struct {
 	// ContactHDR (required) is used as default one to build request/response.
 	// You can pass custom on each request, but in dialog it is required to be present
 	ContactHDR sip.ContactHeader
+
+	RewriteContact bool
 }
 
 func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
