@@ -100,13 +100,37 @@ func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 }
 
 func (s *DialogClientSession) buildReq(req *sip.Request) {
+	// Keep any request inside dialog
+	// var mustHaveHeaders []sip.Header = nil
+	mustHaveHeaders := make([]sip.Header, 0, 5)
+	if h, invH := req.From(), s.InviteRequest.From(); h == nil {
+		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(invH))
+	}
+
+	if h, invH := req.To(), s.InviteResponse.To(); h == nil && invH != nil {
+		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(invH))
+	}
+
+	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
+		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(invH))
+	}
+
+	if h := req.MaxForwards(); h == nil {
+		maxFwd := sip.MaxForwardsHeader(70)
+		mustHaveHeaders = append(mustHaveHeaders, &maxFwd)
+	}
+
 	cseq := req.CSeq()
 	if cseq == nil {
 		cseq = &sip.CSeqHeader{
 			SeqNo:      s.InviteRequest.CSeq().SeqNo,
 			MethodName: req.Method,
 		}
-		req.AppendHeader(cseq)
+		// req.AppendHeader(cseq)
+		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(cseq))
+	}
+	if len(mustHaveHeaders) > 0 {
+		req.PrependHeader(mustHaveHeaders...)
 	}
 
 	// For safety make sure we are starting with our last dialog cseq num
@@ -141,18 +165,6 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 	}
 
 	s.lastCSeqNo.Store(cseq.SeqNo)
-	// Keep any request inside dialog
-	if h, invH := req.From(), s.InviteRequest.From(); h == nil {
-		req.AppendHeader(sip.HeaderClone(invH))
-	}
-
-	if h, invH := req.To(), s.InviteResponse.To(); h == nil && invH != nil {
-		req.AppendHeader(sip.HeaderClone(invH))
-	}
-
-	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
-		req.AppendHeader(sip.HeaderClone(invH))
-	}
 }
 
 // Close must be always called in order to cleanup some internal resources
@@ -418,8 +430,6 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 		sip.CopyHeaders("Route", inviteRequest, ackRequest)
 	}
 
-	maxForwardsHeader := sip.MaxForwardsHeader(70)
-	ackRequest.AppendHeader(&maxForwardsHeader)
 	if h := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(sip.HeaderClone(h))
 	}
@@ -439,6 +449,8 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	cseq := ackRequest.CSeq()
 	cseq.MethodName = sip.ACK
 
+	maxForwardsHeader := sip.MaxForwardsHeader(70)
+	ackRequest.AppendHeader(&maxForwardsHeader)
 	/*
 	   	A UAC SHOULD include a Contact header field in any target refresh
 	    requests within a dialog, and unless there is a need to change it,
