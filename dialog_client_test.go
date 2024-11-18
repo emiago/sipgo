@@ -110,8 +110,16 @@ func BenchmarkDialogDo(b *testing.B) {
 	require.NoError(b, err)
 	dialog.WaitAnswer(context.TODO(), AnswerOptions{})
 
-	for i := 0; i < b.N; i++ {
-		req := sip.NewRequest(sip.REFER, sip.Uri{User: "refer", Host: "localhost"})
-		dialog.Do(context.TODO(), req)
-	}
+	b.Run("ACK", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			dialog.Ack(context.TODO())
+		}
+	})
+	b.Run("NotSupported", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			req := sip.NewRequest(sip.REFER, sip.Uri{User: "refer", Host: "localhost"})
+			dialog.Do(context.TODO(), req)
+		}
+	})
+
 }
