@@ -164,6 +164,10 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		}
 	}
 
+	if h := req.Contact(); h == nil {
+		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
+	}
+
 	s.lastCSeqNo.Store(cseq.SeqNo)
 }
 
