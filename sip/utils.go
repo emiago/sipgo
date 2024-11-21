@@ -288,6 +288,7 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet
 	if err != nil {
 		return nil, err
 	}
+
 	for _, addr := range addrs {
 		var ip net.IP
 		ipNet, ok := addr.(*net.IPNet)
@@ -312,14 +313,15 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet
 
 		switch network {
 		case "ip4":
-			ip = ip.To4()
+			if ip.To4() == nil {
+				continue
+			}
 
 		case "ip6":
-			ip = ip.To16()
-		}
-
-		if ip == nil {
-			continue // not an ipv4 address
+			// IP is v6 only if this returns nil
+			if ip.To4() != nil {
+				continue
+			}
 		}
 
 		return ip, nil
