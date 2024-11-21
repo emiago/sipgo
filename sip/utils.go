@@ -257,7 +257,7 @@ func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
 // Using targetIP it will try to match interface with same subnet
 // network can be "ip" "ip4" "ip6"
 // by default it avoids loopack IP unless targetIP is loopback
-func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface, error) {
+func ResolveInterfacesIP(network string, targetIP *net.IPNet) (net.IP, net.Interface, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, net.Interface{}, err
@@ -268,7 +268,7 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 			continue // interface down
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
-			if targetIP != nil && !targetIP.IsLoopback() {
+			if targetIP != nil && !targetIP.IP.IsLoopback() {
 				continue // loopback interface
 			}
 		}
@@ -283,7 +283,7 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 	return nil, net.Interface{}, errors.New("no interface found on system")
 }
 
-func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (net.IP, error) {
+func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet) (net.IP, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 		}
 		ip = ipNet.IP
 		if targetIP != nil {
-			if !ipNet.Contains(targetIP) {
+			if !targetIP.Contains(ip) {
 				continue
 			}
 		} else {

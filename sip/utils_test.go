@@ -53,7 +53,11 @@ func TestResolveInterfaceIP(t *testing.T) {
 	assert.False(t, ip.IsLoopback())
 	assert.NotNil(t, ip.To16())
 
-	ip, iface, err = ResolveInterfacesIP("ip4", net.ParseIP("127.0.0.1"))
+	ipnet := net.IPNet{
+		IP:   net.ParseIP("127.0.0.1"),
+		Mask: net.IPv4Mask(255, 255, 255, 0),
+	}
+	ip, iface, err = ResolveInterfacesIP("ip4", &ipnet)
 	require.NoError(t, err)
 	require.NotNil(t, ip)
 }
