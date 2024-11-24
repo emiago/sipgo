@@ -103,27 +103,12 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 		}
 	}
 
-	if c.host == "" {
-		// IF we remove this, default would be IPV6 on new system
-		// We can go on net libraries and forcing this with udp4, tcp4
-		h, _, err := sip.ResolveInterfacesIP("ip4", nil)
-		if err != nil {
-			return nil, err
-		}
-		c.host = h.String()
-	}
-
 	return c, nil
 }
 
 // Close client handle. UserAgent must be closed for full transaction and transport layer closing.
 func (c *Client) Close() error {
 	return nil
-}
-
-// Deprecated use Hostname
-func (c *Client) GetHostname() string {
-	return c.host
 }
 
 // Hostname returns default hostname or what is set WithHostname option
