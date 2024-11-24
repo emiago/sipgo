@@ -82,7 +82,7 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 	return ua.WriteInvite(ctx, req)
 }
 
-func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request) (*DialogClientSession, error) {
+func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request, options ...ClientRequestOption) (*DialogClientSession, error) {
 	cli := c.Client
 
 	if inviteReq.Contact() == nil {
@@ -90,7 +90,7 @@ func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request) (*Di
 		inviteReq.AppendHeader(&c.ContactHDR)
 	}
 
-	tx, err := cli.TransactionRequest(ctx, inviteReq)
+	tx, err := cli.TransactionRequest(ctx, inviteReq, options...)
 	if err != nil {
 		return nil, err
 	}
