@@ -274,6 +274,33 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 	return err
 }
 
+func (l *TransportLayer) lookupSIPSRVAddress(host string, scheme string) (*net.SRV, error) {
+	var srvRecord string
+	switch scheme {
+	case "":
+		srvRecord = fmt.Sprintf("_sip._tcp.%s", host)
+	case "sip":
+		srvRecord = fmt.Sprintf("_sip._tcp.%s", host)
+	case "sips":
+		srvRecord = fmt.Sprintf("_sips._tcp.%s", host)
+	default:
+		return nil, fmt.Errorf("unsupported scheme: %s", scheme)
+	}
+
+	_, addrs, err := net.LookupSRV("", "", srvRecord)
+	if err != nil {
+		return nil, err
+	}
+
+	var pAddr *net.SRV
+	for _, addr := range addrs {
+		if pAddr == nil || addr.Priority < pAddr.Priority {
+			pAddr = addr
+		}
+	}
+	return pAddr, nil
+}
+
 // ClientRequestConnection is based on
 // https://www.rfc-editor.org/rfc/rfc3261#section-18.1.1
 // It is wrapper for getting and creating connection
@@ -295,6 +322,10 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	// dns srv lookup
+	var pAddr *net.SRV
+	if pAddr, err = l.lookupSIPSRVAddress(host, req.Recipient.Scheme); err == nil && pAddr != nil {
+		host = pAddr.Target[:len(pAddr.Target)-1]
+	}
 
 	raddr := Addr{
 		IP:       net.ParseIP(host),
