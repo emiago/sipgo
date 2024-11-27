@@ -657,12 +657,12 @@ func (h *ContactHeader) valueWrite(buffer io.StringWriter) {
 
 	buffer.WriteString("<")
 	h.Address.StringWrite(buffer)
-	buffer.WriteString(">")
 
 	if (h.Params != nil) && (h.Params.Length() > 0) {
 		buffer.WriteString(";")
 		h.Params.ToStringWrite(';', buffer)
 	}
+	buffer.WriteString(">")
 }
 
 // Copy the header.
