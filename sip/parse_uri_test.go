@@ -39,6 +39,7 @@ func TestParseUri(t *testing.T) {
 	})
 
 	t.Run("sip case insensitive", func(t *testing.T) {
+		uri = Uri{}
 		testCases := []string{
 			"sip:alice@atlanta.com",
 			"SIP:alice@atlanta.com",
