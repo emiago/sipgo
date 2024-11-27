@@ -21,7 +21,7 @@ func TestSepToString(t *testing.T) {
 
 func BenchmarkHeaderParams(b *testing.B) {
 
-	testParams := func(b *testing.B, hp Params) {
+	testParams := func(b *testing.B, hp HeaderParams) {
 		hp = hp.Add("branch", "assadkjkgeijdas")
 		hp = hp.Add("received", "127.0.0.1")
 		hp = hp.Add("toremove", "removeme")

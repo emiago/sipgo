@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"time"
 )
 
 const (
@@ -19,10 +18,6 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // https://github.com/kpbird/golang_random_string
 func RandString(n int) string {
@@ -67,11 +62,29 @@ func RandStringBytesMask(sb *strings.Builder, n int) string {
 	return sb.String()
 }
 
+func isASCII(c rune) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
+}
+
 // ASCIIToLower is faster than go version. It avoids one more loop
 func ASCIIToLower(s string) string {
+	// first check is ascii already low to avoid alloc
+	nonLowInd := -1
+	for i, c := range s {
+		if 'a' <= c && c <= 'z' {
+			continue
+		}
+		nonLowInd = i
+		break
+	}
+	if nonLowInd < 0 {
+		return s
+	}
+
 	var b strings.Builder
 	b.Grow(len(s))
-	for i := 0; i < len(s); i++ {
+	b.WriteString(s[:nonLowInd])
+	for i := nonLowInd; i < len(s); i++ {
 		c := s[i]
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
@@ -91,6 +104,33 @@ func ASCIIToLowerInPlace(s []byte) {
 	}
 }
 
+func ASCIIToUpper(s string) string {
+	// first check is ascii already up to avoid alloc
+	nonLowInd := -1
+	for i, c := range s {
+		if 'A' <= c && c <= 'Z' {
+			continue
+		}
+		nonLowInd = i
+		break
+	}
+	if nonLowInd < 0 {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s))
+	b.WriteString(s[:nonLowInd])
+	for i := nonLowInd; i < len(s); i++ {
+		c := s[i]
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
 // HeaderToLower is fast ASCII lower string
 func HeaderToLower(s string) string {
 	// Avoid allocations
@@ -105,7 +145,7 @@ func HeaderToLower(s string) string {
 		return "call-id"
 	case "Contact", "contact":
 		return "contact"
-	case "Cseq", "CSEQ", "cseq":
+	case "CSeq", "CSEQ", "cseq":
 		return "cseq"
 	case "Content-Type", "content-type":
 		return "content-type"
@@ -113,11 +153,13 @@ func HeaderToLower(s string) string {
 		return "route"
 	case "Record-Route", "record-route":
 		return "record-route"
+	case "Max-Forwards":
+		return "max-forwards"
 	case "Timestamp", "timestamp":
 		return "timestamp"
 	}
 
-	// This creates one allocation
+	// This creates one allocation if we really need to lower
 	return ASCIIToLower(s)
 }
 
@@ -211,19 +253,11 @@ func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
 	return -1
 }
 
-// ResolveSelfIP returns first non loopback IP
-//
-// Deprecated use ResolveInterfacesIP
-func ResolveSelfIP() (net.IP, error) {
-	ip, _, err := ResolveInterfacesIP("ip4", nil)
-	return ip, err
-}
-
 // ResolveInterfaceIP will check current interfaces and resolve to IP
 // Using targetIP it will try to match interface with same subnet
 // network can be "ip" "ip4" "ip6"
 // by default it avoids loopack IP unless targetIP is loopback
-func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface, error) {
+func ResolveInterfacesIP(network string, targetIP *net.IPNet) (net.IP, net.Interface, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, net.Interface{}, err
@@ -234,7 +268,7 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 			continue // interface down
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
-			if targetIP != nil && !targetIP.IsLoopback() {
+			if targetIP != nil && !targetIP.IP.IsLoopback() {
 				continue // loopback interface
 			}
 		}
@@ -249,11 +283,12 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 	return nil, net.Interface{}, errors.New("no interface found on system")
 }
 
-func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (net.IP, error) {
+func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet) (net.IP, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return nil, err
 	}
+
 	for _, addr := range addrs {
 		var ip net.IP
 		ipNet, ok := addr.(*net.IPNet)
@@ -263,7 +298,7 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 		}
 		ip = ipNet.IP
 		if targetIP != nil {
-			if !ipNet.Contains(targetIP) {
+			if !targetIP.Contains(ip) {
 				continue
 			}
 		} else {
@@ -278,14 +313,15 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 
 		switch network {
 		case "ip4":
-			ip = ip.To4()
+			if ip.To4() == nil {
+				continue
+			}
 
 		case "ip6":
-			ip = ip.To16()
-		}
-
-		if ip == nil {
-			continue // not an ipv4 address
+			// IP is v6 only if this returns nil
+			if ip.To4() != nil {
+				continue
+			}
 		}
 
 		return ip, nil

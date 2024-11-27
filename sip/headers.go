@@ -13,7 +13,7 @@ const ()
 
 // Header is a single SIP header.
 type Header interface {
-	// Name returns header name.
+	// Name returns underlying header name.
 	Name() string
 	Value() string
 	String() string
@@ -283,7 +283,7 @@ func (hs *headers) CloneHeaders() []Header {
 
 // Here are most used headers with quick reference
 
-// CallID returns CallID parsed header or nil if not exists
+// CallID returns underlying CallID parsed header or nil if not exists
 func (hs *headers) CallID() *CallIDHeader {
 	if hs.callid == nil {
 		var h CallIDHeader
@@ -294,7 +294,7 @@ func (hs *headers) CallID() *CallIDHeader {
 	return hs.callid
 }
 
-// Via returns Via parsed header or nil if not exists
+// Via returns underlying Via parsed header or nil if not exists
 func (hs *headers) Via() *ViaHeader {
 	if hs.via == nil {
 		h := &ViaHeader{}
@@ -305,7 +305,7 @@ func (hs *headers) Via() *ViaHeader {
 	return hs.via
 }
 
-// From returns From parsed header or nil if not exists
+// From returns underlying From parsed header or nil if not exists
 func (hs *headers) From() *FromHeader {
 	if hs.from == nil {
 		h := &FromHeader{}
@@ -316,7 +316,7 @@ func (hs *headers) From() *FromHeader {
 	return hs.from
 }
 
-// To returns To parsed header or nil if not exists
+// To returns underlying To parsed header or nil if not exists
 func (hs *headers) To() *ToHeader {
 	if hs.to == nil {
 		h := &ToHeader{}
@@ -327,7 +327,7 @@ func (hs *headers) To() *ToHeader {
 	return hs.to
 }
 
-// CSeq returns CSEQ parsed header or nil if not exists
+// CSeq returns underlying CSEQ parsed header or nil if not exists
 func (hs *headers) CSeq() *CSeqHeader {
 	if hs.cseq == nil {
 		h := &CSeqHeader{}
@@ -338,7 +338,7 @@ func (hs *headers) CSeq() *CSeqHeader {
 	return hs.cseq
 }
 
-// MaxForwards returns Max-Forwards parsed header or nil if not exists
+// MaxForwards returns underlying Max-Forwards parsed header or nil if not exists
 func (hs *headers) MaxForwards() *MaxForwardsHeader {
 	if hs.maxForwards == nil {
 		var h MaxForwardsHeader
@@ -349,7 +349,7 @@ func (hs *headers) MaxForwards() *MaxForwardsHeader {
 	return hs.maxForwards
 }
 
-// ContentLength returns Content-Length parsed header or nil if not exists
+// ContentLength returns underlying Content-Length parsed header or nil if not exists
 func (hs *headers) ContentLength() *ContentLengthHeader {
 	if hs.contentLength == nil {
 		var h ContentLengthHeader
@@ -361,7 +361,7 @@ func (hs *headers) ContentLength() *ContentLengthHeader {
 	return hs.contentLength
 }
 
-// ContentType returns Content-Type parsed header or nil if not exists
+// ContentType returns underlying Content-Type parsed header or nil if not exists
 func (hs *headers) ContentType() *ContentTypeHeader {
 	if hs.contentType == nil {
 		var h ContentTypeHeader
@@ -373,7 +373,7 @@ func (hs *headers) ContentType() *ContentTypeHeader {
 	return hs.contentType
 }
 
-// Contact returns Contact parsed header or nil if not exists
+// Contact returns underlying Contact parsed header or nil if not exists
 func (hs *headers) Contact() *ContactHeader {
 	if hs.contact == nil {
 		h := &ContactHeader{}
@@ -385,7 +385,7 @@ func (hs *headers) Contact() *ContactHeader {
 	return hs.contact
 }
 
-// Route returns Route parsed header or nil if not exists
+// Route returns underlying Route parsed header or nil if not exists
 func (hs *headers) Route() *RouteHeader {
 	if hs.route == nil {
 		h := &RouteHeader{}
@@ -396,7 +396,7 @@ func (hs *headers) Route() *RouteHeader {
 	return hs.route
 }
 
-// RecordRoute returns Record-Route parsed header or nil if not exists
+// RecordRoute returns underlying Record-Route parsed header or nil if not exists
 func (hs *headers) RecordRoute() *RecordRouteHeader {
 	if hs.recordRoute == nil {
 		h := &RecordRouteHeader{}
@@ -504,8 +504,12 @@ func (h *ToHeader) ValueStringWrite(buffer io.StringWriter) {
 	}
 }
 
-func (header *ToHeader) Next() Header {
-	return nil
+func (h *ToHeader) AsFrom() FromHeader {
+	return FromHeader{
+		Address:     *h.Address.Clone(),
+		Params:      h.Params.Clone(),
+		DisplayName: h.DisplayName,
+	}
 }
 
 // Copy the header.
@@ -523,7 +527,7 @@ func (h *ToHeader) headerClone() Header {
 	// 	newTo.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newTo.Params = h.Params.Clone().(HeaderParams)
+		newTo.Params = h.Params.Clone()
 	}
 	return newTo
 }
@@ -590,14 +594,18 @@ func (h *FromHeader) headerClone() Header {
 	// 	newFrom.Address = h.Address.Clone()
 	// }
 	if h.Params != nil {
-		newFrom.Params = h.Params.Clone().(HeaderParams)
+		newFrom.Params = h.Params.Clone()
 	}
 
 	return newFrom
 }
 
-func (header *FromHeader) Next() Header {
-	return nil
+func (h *FromHeader) AsTo() ToHeader {
+	return ToHeader{
+		Address:     *h.Address.Clone(),
+		Params:      h.Params.Clone(),
+		DisplayName: h.DisplayName,
+	}
 }
 
 // ContactHeader is Contact header representation
@@ -674,7 +682,7 @@ func (h *ContactHeader) Clone() *ContactHeader {
 	}
 
 	if h.Params != nil {
-		newCnt.Params = h.Params.Clone().(HeaderParams)
+		newCnt.Params = h.Params.Clone()
 	}
 
 	return newCnt

@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -20,10 +19,6 @@ var (
 	// Errors
 	ErrTransportNotSuported = errors.New("protocol not supported")
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // TransportLayer implementation.
 type TransportLayer struct {
@@ -306,6 +301,12 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		Port:     port,
 		Hostname: host,
 	}
+
+	if raddr.Port == 0 {
+		// Use default port for transport
+		raddr.Port = DefaultPort(network)
+	}
+
 	if raddr.IP == nil {
 		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
 			return nil, err
@@ -462,6 +463,12 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 		return fmt.Errorf("lookup ip addr did not return any ip addr")
 	}
 
+	for _, ip := range ips {
+		if len(ip.IP) == net.IPv4len {
+			addr.IP = ip.IP
+			return nil
+		}
+	}
 	addr.IP = ips[0].IP
 	return nil
 }
@@ -564,5 +571,24 @@ func NetworkToLower(network string) string {
 		return "wss"
 	default:
 		return ASCIIToLower(network)
+	}
+}
+
+// NetworkToUpper is faster function converting udp, tcp to UDP, tcp
+func NetworkToUpper(network string) string {
+	// Switch is faster then lower
+	switch network {
+	case "udp":
+		return "UDP"
+	case "tcp":
+		return "TCP"
+	case "tls":
+		return "TLS"
+	case "ws":
+		return "WS"
+	case "wss":
+		return "WSS"
+	default:
+		return ASCIIToUpper(network)
 	}
 }

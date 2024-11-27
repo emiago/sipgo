@@ -3,6 +3,7 @@ package sip
 import (
 	"fmt"
 	"io"
+	"net"
 	"strconv"
 	"strings"
 
@@ -26,7 +27,7 @@ func NewResponse(
 	res.SipVersion = "SIP/2.0"
 	res.headers = headers{
 		// headers:     make(map[string]Header),
-		headerOrder: make([]Header, 0),
+		headerOrder: make([]Header, 0, 10),
 	}
 	res.StatusCode = statusCode
 	res.Reason = reason
@@ -216,6 +217,15 @@ func NewResponseFromRequest(
 
 	if h := req.CSeq(); h != nil {
 		res.AppendHeader(h.headerClone())
+	}
+
+	if h := res.Via(); h != nil {
+		// https://datatracker.ietf.org/doc/html/rfc3581#section-4
+		if val, exists := h.Params.Get("rport"); exists && val == "" {
+			host, port, _ := net.SplitHostPort(req.Source())
+			h.Params.Add("rport", port)
+			h.Params.Add("received", host)
+		}
 	}
 
 	// 8.2.6.2 Headers and Tags

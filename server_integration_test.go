@@ -92,11 +92,11 @@ func TestIntegrationClientServer(t *testing.T) {
 		serverAddr string
 		encrypted  bool
 	}{
-		{transport: "udp", serverAddr: "127.1.1.100:6060"},
-		{transport: "tcp", serverAddr: "127.1.1.100:6060"},
-		{transport: "ws", serverAddr: "127.1.1.100:6061"},
-		{transport: "tls", serverAddr: "127.1.1.100:6062", encrypted: true},
-		{transport: "wss", serverAddr: "127.1.1.100:6063", encrypted: true},
+		{transport: "udp", serverAddr: "127.1.1.100:16060"},
+		{transport: "tcp", serverAddr: "127.1.1.100:16060"},
+		{transport: "ws", serverAddr: "127.1.1.100:16061"},
+		{transport: "tls", serverAddr: "127.1.1.100:16062", encrypted: true},
+		{transport: "wss", serverAddr: "127.1.1.100:16063", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -162,7 +162,7 @@ func TestIntegrationClientServer(t *testing.T) {
 				proto = "sips"
 			}
 
-			req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+			req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.host)
 			tx, err := client.TransactionRequest(ctx, req)
 			require.NoError(t, err)
 
@@ -188,11 +188,11 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 		serverAddr string
 		encrypted  bool
 	}{
-		{transport: "udp", serverAddr: "127.1.1.100:5060"},
-		{transport: "tcp", serverAddr: "127.1.1.100:5060"},
-		{transport: "ws", serverAddr: "127.1.1.100:5061"},
-		{transport: "tls", serverAddr: "127.1.1.100:5062", encrypted: true},
-		{transport: "wss", serverAddr: "127.1.1.100:5063", encrypted: true},
+		{transport: "udp", serverAddr: "127.1.1.100:15060"},
+		{transport: "tcp", serverAddr: "127.1.1.100:15060"},
+		{transport: "ws", serverAddr: "127.1.1.100:15061"},
+		{transport: "tls", serverAddr: "127.1.1.100:15062", encrypted: true},
+		{transport: "wss", serverAddr: "127.1.1.100:15063", encrypted: true},
 	}
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -281,7 +281,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 					if maxInvitesPerSec != nil {
 						maxInvitesPerSec <- struct{}{}
 					}
-					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.ip.String())
+					req, _, _ := createTestInvite(t, proto+":bob@"+tc.serverAddr, tc.transport, client.host)
 					tx, err := client.TransactionRequest(ctx, req)
 					require.NoError(t, err)
 

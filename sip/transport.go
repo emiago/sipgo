@@ -7,7 +7,6 @@ import (
 )
 
 var (
-	SIPDebug bool
 
 	// IdleConnection will keep connections idle even after transaction terminate
 	// -1 	- single response or request will close
@@ -17,6 +16,16 @@ var (
 )
 
 const (
+	MTU uint = 1500
+
+	DefaultHost     = "127.0.0.1"
+	DefaultProtocol = "UDP"
+
+	DefaultUdpPort int = 5060
+	DefaultTcpPort int = 5060
+	DefaultTlsPort int = 5061
+	DefaultWsPort  int = 80
+	DefaultWssPort int = 443
 	// Transport for different sip messages. GO uses lowercase, but for message parsing, we should
 	// use this constants for setting message Transport
 	TransportUDP = "UDP"
@@ -41,6 +50,24 @@ type Transport interface {
 	CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error)
 	String() string
 	Close() error
+}
+
+// DefaultPort returns transport default port by network.
+func DefaultPort(transport string) int {
+	switch ASCIIToLower(transport) {
+	case "tls":
+		return DefaultTlsPort
+	case "tcp":
+		return DefaultTcpPort
+	case "udp":
+		return DefaultUdpPort
+	case "ws":
+		return DefaultWsPort
+	case "wss":
+		return DefaultWssPort
+	default:
+		return DefaultTcpPort
+	}
 }
 
 type Addr struct {

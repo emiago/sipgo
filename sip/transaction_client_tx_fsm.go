@@ -17,10 +17,15 @@ func (tx *ClientTx) inviteStateCalling(s fsmInput) fsmInput {
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAccept
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actInviteFinal
-	case client_input_cancel:
-		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actCancel
-	case client_input_canceled:
-		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteCanceled
+
+		// NOTE
+		// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
+		// defines that no cancel should be sent unless we are in proceeding state
+		// problematic part is wait
+	// case client_input_cancel:
+	// 	tx.fsmState, spinfn = tx.inviteStateCalling, tx.actCancel
+	// case client_input_canceled:
+	// 	tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteCanceled
 	case client_input_timer_a:
 		tx.fsmState, spinfn = tx.inviteStateCalling, tx.actInviteResend
 	case client_input_timer_b:
@@ -44,10 +49,10 @@ func (tx *ClientTx) inviteStateProcceeding(s fsmInput) fsmInput {
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAccept
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actInviteFinal
-	case client_input_cancel:
-		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancelTimeout
-	case client_input_canceled:
-		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actInviteCanceled
+	// case client_input_cancel:
+	// 	tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancelTimeout
+	// case client_input_canceled:
+	// 	tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actInviteCanceled
 	case client_input_timer_b:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actTimeout
 	case client_input_transport_err:
@@ -64,7 +69,7 @@ func (tx *ClientTx) inviteStateCompleted(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
 	case client_input_300_plus:
-		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actAck
+		tx.fsmState, spinfn = tx.inviteStateCompleted, tx.actAckResend
 	case client_input_transport_err:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actTransErr
 	case client_input_timer_d:
@@ -304,36 +309,46 @@ func (tx *ClientTx) actFinal() fsmInput {
 	return client_input_delete
 }
 
-func (tx *ClientTx) actCancel() fsmInput {
-	// tx.Log().Debug("actCancel")
+// func (tx *ClientTx) actCancel() fsmInput {
+// 	// tx.Log().Debug("actCancel")
 
-	tx.cancel()
+// 	tx.cancel()
 
-	return FsmInputNone
-}
+// 	return FsmInputNone
+// }
 
-func (tx *ClientTx) actCancelTimeout() fsmInput {
-	// tx.Log().Debug("actCancel")
+// func (tx *ClientTx) actCancelTimeout() fsmInput {
+// 	// tx.Log().Debug("actCancel")
 
-	tx.cancel()
+// 	tx.cancel()
 
-	// tx.Log().Tracef("timer_b set to %v", Timer_B)
+// 	// tx.Log().Tracef("timer_b set to %v", Timer_B)
 
-	tx.mu.Lock()
-	if tx.timer_b != nil {
-		tx.timer_b.Stop()
+// 	tx.mu.Lock()
+// 	if tx.timer_b != nil {
+// 		tx.timer_b.Stop()
+// 	}
+// 	tx.timer_b = time.AfterFunc(Timer_B, func() {
+// 		tx.spinFsm(client_input_timer_b)
+// 	})
+// 	tx.mu.Unlock()
+
+// 	return FsmInputNone
+// }
+
+func (tx *ClientTx) actAckResend() fsmInput {
+	// Detect ACK loop.
+	// Case ACK sent and response is received
+	if tx.fsmAck != nil {
+		// ACK was sent. Now delay to prevent infinite loop as temporarly fix
+		// This is not clear per RFC, but client could generate a lot requests in this case
+		tx.log.Error().Msg("ACK loop retransimission. Resending after T2")
+		select {
+		case <-tx.done:
+			return FsmInputNone
+		case <-time.After(T2):
+		}
 	}
-	tx.timer_b = time.AfterFunc(Timer_B, func() {
-		tx.spinFsm(client_input_timer_b)
-	})
-	tx.mu.Unlock()
-
-	return FsmInputNone
-}
-
-func (tx *ClientTx) actAck() fsmInput {
-	// tx.Log().Debug("actAck")
-
 	tx.ack()
 
 	return FsmInputNone

@@ -18,7 +18,6 @@ type ClientTx struct {
 	timer_d      *time.Timer
 	timer_m      *time.Timer
 
-	mu        sync.RWMutex
 	closeOnce sync.Once
 }
 
@@ -91,10 +90,10 @@ func (tx *ClientTx) Responses() <-chan *Response {
 }
 
 // Cancel cancels client transaction by sending CANCEL request
-func (tx *ClientTx) Cancel() error {
-	tx.spinFsm(client_input_cancel)
-	return nil
-}
+// func (tx *ClientTx) Cancel() error {
+// 	tx.spinFsm(client_input_cancel)
+// 	return nil
+// }
 
 func (tx *ClientTx) Terminate() {
 	// select {
@@ -111,38 +110,41 @@ func (tx *ClientTx) Terminate() {
 // therefore running in seperate goroutine is needed
 func (tx *ClientTx) Receive(res *Response) {
 	var input fsmInput
-	if res.IsCancel() {
-		input = client_input_canceled
-	} else {
-		switch {
-		case res.IsProvisional():
-			input = client_input_1xx
-		case res.IsSuccess():
-			input = client_input_2xx
-		default:
-			input = client_input_300_plus
-		}
+
+	// There is no more client cancelation on transaction. It must be done by caller with seperate CANCEL request
+	// and termination of current
+	// if res.IsCancel() {
+	// 	input = client_input_canceled
+	// } else {
+	switch {
+	case res.IsProvisional():
+		input = client_input_1xx
+	case res.IsSuccess():
+		input = client_input_2xx
+	default:
+		input = client_input_300_plus
 	}
+	// }
 
 	tx.spinFsmWithResponse(input, res)
 }
 
-func (tx *ClientTx) cancel() {
-	if !tx.origin.IsInvite() {
-		return
-	}
+// func (tx *ClientTx) cancel() {
+// 	if !tx.origin.IsInvite() {
+// 		return
+// 	}
 
-	cancelRequest := newCancelRequest(tx.origin)
-	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
-		tx.log.Error().
-			Str("invite_request", tx.origin.Short()).
-			Str("cancel_request", cancelRequest.Short()).
-			Msgf("send CANCEL request failed: %s", err)
+// 	cancelRequest := newCancelRequest(tx.origin)
+// 	if err := tx.conn.WriteMsg(cancelRequest); err != nil {
+// 		tx.log.Error().
+// 			Str("invite_request", tx.origin.Short()).
+// 			Str("cancel_request", cancelRequest.Short()).
+// 			Msgf("send CANCEL request failed: %s", err)
 
-		err := wrapTransportError(err)
-		go tx.spinFsmWithError(client_input_transport_err, err)
-	}
-}
+// 		err := wrapTransportError(err)
+// 		go tx.spinFsmWithError(client_input_transport_err, err)
+// 	}
+// }
 
 func (tx *ClientTx) ack() {
 	resp := tx.fsmResp
@@ -151,6 +153,8 @@ func (tx *ClientTx) ack() {
 	}
 
 	ack := newAckRequestNon2xx(tx.origin, resp, nil)
+	tx.fsmAck = ack // NOTE: this could be incorect property to use but it helps preventing loops in some cases
+
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().
@@ -186,10 +190,11 @@ func (tx *ClientTx) delete() {
 		tx.mu.Lock()
 
 		close(tx.done)
+		onterm := tx.onTerminate
 		tx.mu.Unlock()
 
 		// Maybe there is better way
-		if tx.onTerminate != nil {
+		if onterm != nil {
 			tx.onTerminate(tx.key)
 		}
 

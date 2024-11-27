@@ -49,7 +49,7 @@ func TestParseUri(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "alice", uri.User)
 			assert.Equal(t, "atlanta.com", uri.Host)
-			assert.False(t, uri.Encrypted)
+			assert.False(t, uri.IsEncrypted())
 		}
 
 		testCases = []string{
@@ -62,7 +62,7 @@ func TestParseUri(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "alice", uri.User)
 			assert.Equal(t, "atlanta.com", uri.Host)
-			assert.True(t, uri.Encrypted)
+			assert.True(t, uri.IsEncrypted())
 		}
 
 	})
@@ -73,16 +73,14 @@ func TestParseUri(t *testing.T) {
 		str = "sip://alice@localhost:5060"
 		err = ParseUri(str, &uri)
 		require.NoError(t, err)
-		assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+		assert.Equal(t, "sip://alice@localhost:5060", uri.String())
 	})
 
 	t.Run("no sip scheme", func(t *testing.T) {
-		// No scheme we currently allow
 		uri = Uri{}
 		str = "alice@localhost:5060"
 		err = ParseUri(str, &uri)
-		require.NoError(t, err)
-		assert.Equal(t, "sip:alice@localhost:5060", uri.String())
+		require.Error(t, err)
 	})
 
 	t.Run("uri params parsed", func(t *testing.T) {
@@ -124,7 +122,7 @@ func TestParseUri(t *testing.T) {
 
 	t.Run("params no value", func(t *testing.T) {
 		uri = Uri{}
-		str = "127.0.0.2:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
+		str = "sip:127.0.0.2:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
 		err = ParseUri(str, &uri)
 		require.NoError(t, err)
 

@@ -3,22 +3,43 @@ package sip
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
-	MTU uint = 1500
-
-	DefaultHost     = "127.0.0.1"
-	DefaultProtocol = "UDP"
-
-	DefaultUdpPort int = 5060
-	DefaultTcpPort int = 5060
-	DefaultTlsPort int = 5061
-	DefaultWsPort  int = 80
-	DefaultWssPort int = 443
-
 	RFC3261BranchMagicCookie = "z9hG4bK"
 )
+
+var (
+	SIPDebug  bool
+	siptracer SIPTracer
+)
+
+type SIPTracer interface {
+	SIPTraceRead(transport string, laddr string, raddr string, sipmsg []byte)
+	SIPTraceWrite(transport string, laddr string, raddr string, sipmsg []byte)
+}
+
+func SIPDebugTracer(t SIPTracer) {
+	siptracer = t
+}
+
+func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
+	if siptracer != nil {
+		siptracer.SIPTraceRead(transport, laddr, raddr, sipmsg)
+		return
+	}
+	log.Debug().Msgf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+}
+
+func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
+	if siptracer != nil {
+		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
+		return
+	}
+	log.Debug().Msgf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg)
+}
 
 // GenerateBranch returns random unique branch ID.
 func GenerateBranch() string {
@@ -43,24 +64,6 @@ func GenerateTagN(n int) string {
 	sb := &strings.Builder{}
 	RandStringBytesMask(sb, n)
 	return sb.String()
-}
-
-// DefaultPort returns transport default port by network.
-func DefaultPort(transport string) int {
-	switch ASCIIToLower(transport) {
-	case "tls":
-		return DefaultTlsPort
-	case "tcp":
-		return DefaultTcpPort
-	case "udp":
-		return DefaultUdpPort
-	case "ws":
-		return DefaultWsPort
-	case "wss":
-		return DefaultWssPort
-	default:
-		return DefaultTcpPort
-	}
 }
 
 // MakeDialogIDFromMessage creates dialog ID of message.

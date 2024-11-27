@@ -81,7 +81,7 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 	lowerFieldName := HeaderToLower(fieldName)
 	fieldText := strings.TrimSpace(headerText[colonIdx+1:])
 
-	headerParser, ok := headersParsers[lowerFieldName]
+	headerParser, ok := headersParser[lowerFieldName]
 	if !ok {
 		// We have no registered parser for this header type,
 		// so we encapsulate the header data in a GenericHeader struct.

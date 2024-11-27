@@ -31,6 +31,7 @@ func TestTransportLayerClosing(t *testing.T) {
 func TestTransportLayerClientConnectionReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	defer tp.Close()
 	require.True(t, tp.ConnectionReuse)
 
 	t.Run("Default", func(t *testing.T) {
@@ -76,6 +77,7 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	defer tp.Close()
 	tp.ConnectionReuse = false
 
 	t.Run("Default", func(t *testing.T) {
@@ -112,8 +114,27 @@ func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
 		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876, Params: NewParams()})
 		conn3, err := tp.ClientRequestConnection(context.TODO(), req)
-
 		require.NoError(t, err)
+
 		require.NotEqual(t, conn, conn3)
 	})
+}
+
+func TestTransportLayerDefaultPort(t *testing.T) {
+	// NOTE it creates real network connection
+
+	// TODO add other transports
+	for _, tran := range []string{TransportUDP} {
+		t.Run(tran, func(t *testing.T) {
+			tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+			req := NewRequest(OPTIONS, Uri{Host: "127.0.0.99"})
+			req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+
+			_, err := tp.ClientRequestConnection(context.TODO(), req)
+			require.NoError(t, err)
+
+			tp.Close()
+			require.Equal(t, "127.0.0.99:5060", req.Destination())
+		})
+	}
 }

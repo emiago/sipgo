@@ -10,7 +10,6 @@ import (
 type UserAgent struct {
 	name        string
 	hostname    string
-	ip          net.IP
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
 	parser      *sip.Parser
@@ -53,6 +52,9 @@ func WithUserAgenTLSConfig(c *tls.Config) UserAgentOption {
 	}
 }
 
+// WithUserAgentParser allows removing default behavior of parser
+// You can define and remove default headers parser map and pass here.
+// Only use if your benchmarks are better than default
 func WithUserAgentParser(p *sip.Parser) UserAgentOption {
 	return func(s *UserAgent) error {
 		s.parser = p
@@ -65,24 +67,14 @@ func WithUserAgentParser(p *sip.Parser) UserAgentOption {
 // Check options for customizing user agent
 func NewUA(options ...UserAgentOption) (*UserAgent, error) {
 	ua := &UserAgent{
-		name: "sipgo",
-		// hostname:    "localhost",
+		name:        "sipgo",
+		hostname:    "localhost",
 		dnsResolver: net.DefaultResolver,
 		parser:      sip.NewParser(),
 	}
 
 	for _, o := range options {
 		if err := o(ua); err != nil {
-			return nil, err
-		}
-	}
-
-	if ua.ip == nil {
-		v, err := sip.ResolveSelfIP()
-		if err != nil {
-			return nil, err
-		}
-		if err := ua.setIP(v); err != nil {
 			return nil, err
 		}
 	}
@@ -100,18 +92,12 @@ func (ua *UserAgent) Close() error {
 	return ua.tp.Close()
 }
 
-// Listen adds listener for serve
-func (ua *UserAgent) setIP(ip net.IP) (err error) {
-	ua.ip = ip
-	return err
-}
-
-func (ua *UserAgent) GetIP() net.IP {
-	return ua.ip
-}
-
 func (ua *UserAgent) Name() string {
 	return ua.name
+}
+
+func (ua *UserAgent) Hostname() string {
+	return ua.hostname
 }
 
 func (ua *UserAgent) TransportLayer() *sip.TransportLayer {

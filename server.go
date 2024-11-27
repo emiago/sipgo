@@ -21,6 +21,18 @@ var (
 )
 
 type ListenReadyCtxValue chan struct{}
+type ListenReadyFuncCtxValue func(network string, addr string)
+
+func listenReadyCtx(ctx context.Context, network string, addr string) {
+	if v := ctx.Value(ListenReadyCtxKey); v != nil {
+		switch vv := v.(type) {
+		case ListenReadyCtxValue:
+			vv <- struct{}{}
+		case ListenReadyFuncCtxValue:
+			vv(network, addr)
+		}
+	}
+}
 
 // RequestHandler is a callback that will be called on the incoming request
 type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
@@ -106,7 +118,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 	}()
 
 	switch network {
-	case "udp", "udp4":
+	case "udp", "udp4", "udp6":
 		// resolve local UDP endpoint
 		laddr, err := net.ResolveUDPAddr(network, addr)
 		if err != nil {
@@ -119,12 +131,10 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = udpConn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
-		}
+		listenReadyCtx(ctx, network, udpConn.LocalAddr().String())
 		return srv.tp.ServeUDP(udpConn)
 
-	case "tcp", "tcp4":
+	case "tcp", "tcp4", "tcp6":
 		laddr, err := net.ResolveTCPAddr(network, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -136,13 +146,12 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = conn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
-		}
+		listenReadyCtx(ctx, network, conn.Addr().String())
 
 		return srv.tp.ServeTCP(conn)
-	case "ws":
-		network = "tcp"
+	case "ws", "ws4", "ws6":
+		ipv := network[2:]
+		network = "tcp" + ipv
 		laddr, err := net.ResolveTCPAddr(network, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
@@ -154,9 +163,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = conn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
-		}
+		listenReadyCtx(ctx, network, conn.Addr().String())
 		// and uses listener to buffer
 		return srv.tp.ServeWS(conn)
 	}
@@ -164,7 +171,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 }
 
 // Serve will fire all listeners that are secured.
-// Network supported: tls, wss
+// Network supported: tls, wss, tcp, tcp4, tcp6, ws, ws4, ws6
 func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	network = strings.ToLower(network)
 
@@ -185,15 +192,31 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 
 		}
 	}()
-	// Do some filtering
+	// Support explicitp ipv4 vs ipv6
+	tcpNetwork := "tcp"
 	switch network {
-	case "tls", "tcp", "ws", "wss":
-		laddr, err := net.ResolveTCPAddr("tcp", addr)
+	case "tcp":
+		tcpNetwork = "tcp"
+		network = "tls"
+	case "ws":
+		tcpNetwork = "tcp"
+		network = "wss"
+	case "tcp4", "ws4":
+		tcpNetwork = "tcp4"
+		network = "tls"
+	case "tcp6", "ws6":
+		tcpNetwork = "tcp6"
+		network = "wss"
+	}
+
+	switch network {
+	case "tls", "wss":
+		laddr, err := net.ResolveTCPAddr(tcpNetwork, addr)
 		if err != nil {
 			return fmt.Errorf("fail to resolve address. err=%w", err)
 		}
 
-		listener, err := tls.Listen("tcp", laddr.String(), conf)
+		listener, err := tls.Listen(tcpNetwork, laddr.String(), conf)
 		if err != nil {
 			return fmt.Errorf("listen tls error. err=%w", err)
 		}
@@ -201,9 +224,9 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 		connCloser = listener
 
 		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			close(v.(ListenReadyCtxValue))
+			v.(ListenReadyCtxValue) <- struct{}{} //
 		}
-		if network == "ws" || network == "wss" {
+		if network == "wss" {
 			return srv.tp.ServeWSS(listener)
 		}
 
@@ -245,7 +268,6 @@ func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
 	srv.handleRequest(req, tx)
 }
 
-// handleRequest must be run in seperate goroutine
 func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	for _, mid := range srv.requestMiddlewares {
 		mid(req)

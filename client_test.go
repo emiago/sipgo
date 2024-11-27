@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/icholy/digest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,9 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 
 func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 	// ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
-	ua, err := NewUA()
+	ua, err := NewUA(
+		WithUserAgentHostname("sip.myserver.com"),
+	)
 	require.Nil(t, err)
 
 	c, err := NewClient(ua,
@@ -200,3 +203,30 @@ func TestClientRequestOptions(t *testing.T) {
 	conn, err := tp.ClientRequestConnection(context.TODO(), req)
 }
 */
+
+func TestDigestAuthLowerCase(t *testing.T) {
+	challenge := `Digest username="user", realm="asterisk", nonce="662d65a084b88c6d2a745a9de086fa91", uri="sip:+user@example.com", algorithm=sha-256, response="3681b63e5d9c3bb80e5350e2783d7b88"`
+	chal, err := digest.ParseChallenge(challenge)
+	require.NoError(t, err)
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
+
+	_, err = digest.Digest(chal, digest.Options{
+		Method:   "INVITE",
+		Username: "user",
+		URI:      "sip:+user@example.com",
+	})
+	require.NoError(t, err)
+}
+
+func BenchmarkClientTransactionRequestBuild(t *testing.B) {
+	ua, err := NewUA()
+	require.Nil(t, err)
+
+	c, err := NewClient(ua,
+		WithClientHostname("10.0.0.0"),
+	)
+	for i := 0; i < t.N; i++ {
+		req := sip.NewRequest(sip.INVITE, sip.Uri{User: "test", Host: "localhost"})
+		clientRequestBuildReq(c, req)
+	}
+}

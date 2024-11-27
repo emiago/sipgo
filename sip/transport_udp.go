@@ -26,7 +26,7 @@ type transportUDP struct {
 	// listener *net.UDPConn
 	parser *Parser
 
-	pool ConnectionPool
+	pool *ConnectionPool
 	log  zerolog.Logger
 }
 
@@ -99,7 +99,14 @@ func (t *transportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	laddrStr := laddr.String()
 	lc := &net.ListenConfig{}
-	udpconn, err := lc.ListenPacket(ctx, "udp", laddrStr)
+
+	protocol := "udp"
+	if laddr.IP == nil && raddr.IP.To4() != nil {
+		// Use IPV4 if remote is same
+		protocol = "udp4"
+	}
+
+	udpconn, err := lc.ListenPacket(ctx, protocol, laddrStr)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +382,7 @@ func (c *UDPConnection) TryClose() (int, error) {
 func (c *UDPConnection) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	if SIPDebug {
-		log.Debug().Msgf("UDP read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
+		logSIPRead("UDP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
 	}
 	return n, err
 }
@@ -383,7 +390,7 @@ func (c *UDPConnection) Read(b []byte) (n int, err error) {
 func (c *UDPConnection) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	if SIPDebug {
-		log.Debug().Msgf("UDP write %s -> %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), string(b[:n]))
+		logSIPWrite("UDP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
 	}
 	return n, err
 }
@@ -392,8 +399,7 @@ func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
 	if SIPDebug && err == nil {
-		// addr is nil on error
-		log.Debug().Msgf("UDP read from %s <- %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
+		logSIPRead("UDP", c.PacketConn.LocalAddr().String(), addr.String(), b[:n])
 	}
 	return n, addr, err
 }
@@ -402,8 +408,7 @@ func (c *UDPConnection) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	// Some debug hook. TODO move to proper way
 	n, err = c.PacketConn.WriteTo(b, addr)
 	if SIPDebug && err == nil {
-		// addr is nil on error
-		log.Debug().Msgf("UDP write to %s -> %s:\n%s", c.PacketConn.LocalAddr().String(), addr.String(), string(b[:n]))
+		logSIPWrite("UDP", c.PacketConn.LocalAddr().String(), addr.String(), b[:n])
 	}
 	return n, err
 }
@@ -439,6 +444,10 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 		raddr := net.UDPAddr{
 			IP:   net.ParseIP(host),
 			Port: port,
+		}
+
+		if raddr.Port == 0 {
+			raddr.Port = DefaultUdpPort
 		}
 
 		n, err = c.WriteTo(data, &raddr)

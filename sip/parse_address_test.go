@@ -25,7 +25,7 @@ func TestParseAddressValue(t *testing.T) {
 		assert.Equal(t, "password", uri.Password)
 		assert.Equal(t, "127.0.0.1", uri.Host)
 		assert.Equal(t, 5060, uri.Port)
-		assert.Equal(t, true, uri.Encrypted)
+		assert.Equal(t, true, uri.IsEncrypted())
 		assert.Equal(t, false, uri.Wildcard)
 
 		user, ok := uri.UriParams.Get("user")
@@ -45,7 +45,7 @@ func TestParseAddressValue(t *testing.T) {
 		assert.Equal(t, "", displayName)
 		assert.Equal(t, "1215174826", uri.User)
 		assert.Equal(t, "222.222.222.222", uri.Host)
-		assert.Equal(t, false, uri.Encrypted)
+		assert.Equal(t, false, uri.IsEncrypted())
 	})
 
 	t.Run("wildcard", func(t *testing.T) {

@@ -30,7 +30,7 @@ type transportWS struct {
 	log       zerolog.Logger
 	transport string
 
-	pool   ConnectionPool
+	pool   *ConnectionPool
 	dialer ws.Dialer
 }
 
@@ -98,6 +98,9 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 		_, err = u.Upgrade(conn)
 		if err != nil {
 			t.log.Error().Err(err).Msg("Fail to upgrade")
+			if err := conn.Close(); err != nil {
+				t.log.Error().Err(err).Msg("Closing connection failed")
+			}
 			continue
 		}
 
@@ -357,7 +360,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 
 		// header.Masked = false
 		if SIPDebug {
-			log.Debug().Msgf("WS read %s <- %s:\n%s", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr(), string(data))
+			logSIPRead("WS", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), data)
 		}
 
 		n += copy(b[n:], data)
@@ -372,7 +375,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
 	if SIPDebug {
-		log.Debug().Str("caller", c.LocalAddr().String()).Msgf("WS write -> %s:\n%s", c.Conn.RemoteAddr(), string(b))
+		logSIPWrite("WS", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b)
 	}
 
 	fs := ws.NewFrame(ws.OpText, true, b)

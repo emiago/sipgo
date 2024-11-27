@@ -3,6 +3,8 @@ package sip
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,6 +75,7 @@ var (
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.3.1
 	ErrTransactionTimeout   = errors.New("transaction timeout")
 	ErrTransactionTransport = errors.New("transaction transport error")
+	ErrTransactionCanceled  = errors.New("transaction canceled")
 )
 
 func wrapTransportError(err error) error {
@@ -98,25 +101,21 @@ type ServerTransaction interface {
 	// Respond sends response. It is expected that is prebuilt with correct headers
 	// Use NewResponseFromRequest to build response
 	Respond(res *Response) error
+	// Acks returns ACK during transaction.
 	Acks() <-chan *Request
-	// Cancels is triggered when transaction is canceled, that is SIP CANCEL is received for transaction.
-	Cancels() <-chan *Request
 }
 
 type ClientTransaction interface {
 	Transaction
 	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
-	// Cancel sends cancel request
-	// TODO: Do we need context passing here?
-	Cancel() error
 }
 
 type baseTx struct {
-	key string
+	mu sync.Mutex
 
+	key    string
 	origin *Request
-	// tpl    *transport.Layer
 
 	conn Connection
 	done chan struct{}
@@ -158,6 +157,16 @@ func (tx *baseTx) Done() <-chan struct{} {
 }
 
 func (tx *baseTx) OnTerminate(f FnTxTerminate) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if tx.onTerminate != nil {
+		prev := tx.onTerminate
+		tx.onTerminate = func(key string) {
+			prev(key)
+			f(key)
+		}
+		return
+	}
 	tx.onTerminate = f
 }
 
@@ -179,7 +188,9 @@ func (tx *baseTx) initFSM(fsmState fsmContextState) {
 func (tx *baseTx) spinFsmUnsafe(in fsmInput) {
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
-			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
+			fname = fname[strings.LastIndex(fname, ".")+1:]
+			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
 		}
 		i = tx.fsmState(i)
 	}
@@ -190,7 +201,9 @@ func (tx *baseTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
 	for i := in; i != FsmInputNone; {
 		if TransactionFSMDebug {
-			tx.log.Debug().Str("state", fsmString(i)).Msg("Changing transaction state")
+			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
+			fname = fname[strings.LastIndex(fname, ".")+1:]
+			tx.log.Debug().Str("key", tx.key).Str("input", fsmString(i)).Str("state", fname).Msg("Changing transaction state")
 		}
 		i = tx.fsmState(i)
 	}
@@ -233,8 +246,20 @@ func (tx *baseTx) Err() error {
 
 type FnTxTerminate func(key string)
 
+func isRFC3261(branch string) bool {
+	return branch != "" &&
+		strings.HasPrefix(branch, RFC3261BranchMagicCookie) &&
+		strings.TrimPrefix(branch, RFC3261BranchMagicCookie) != ""
+}
+
 // MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
 func MakeServerTxKey(msg Message) (string, error) {
+	return makeServerTxKey(msg, "")
+}
+
+// MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
+// https://datatracker.ietf.org/doc/html/rfc3261#section-17.2.3
+func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
 		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
@@ -245,8 +270,12 @@ func MakeServerTxKey(msg Message) (string, error) {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
 	}
 	method := cseq.MethodName
-	if method == ACK || method == CANCEL {
+	if method == ACK {
 		method = INVITE
+	}
+
+	if asMethod != "" {
+		method = asMethod
 	}
 
 	var isRFC3261 bool
@@ -312,13 +341,21 @@ func MakeServerTxKey(msg Message) (string, error) {
 
 // MakeClientTxKey creates client key for matching responses - RFC 3261 17.1.3.
 func MakeClientTxKey(msg Message) (string, error) {
+	return makeClientTxKey(msg, "")
+}
+
+func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	cseq := msg.CSeq()
 	if cseq == nil {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
 	}
 	method := cseq.MethodName
-	if method == ACK || method == CANCEL {
+	if method == ACK {
 		method = INVITE
+	}
+
+	if asMethod != "" {
+		method = asMethod
 	}
 
 	firstViaHop := msg.Via()

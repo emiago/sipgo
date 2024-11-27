@@ -31,8 +31,7 @@ func NewRequest(method RequestMethod, recipient Uri) *Request {
 	req.SipVersion = "SIP/2.0"
 	// req.headers = newHeaders()
 	req.headers = headers{
-		// headers:     make(map[string]Header),
-		headerOrder: make([]Header, 0),
+		headerOrder: make([]Header, 0, 10), // making capacity allows faster appending headers
 	}
 	req.Method = method
 	req.Recipient = recipient
@@ -187,6 +186,7 @@ func (req *Request) Source() string {
 	return fmt.Sprintf("%v:%v", host, port)
 }
 
+// TODO: return Addr instead string, to remove double string parsing
 func (req *Request) Destination() string {
 	if dest := req.MessageData.Destination(); dest != "" {
 		return dest
@@ -235,8 +235,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
 		hdrs := inviteResponse.GetHeaders("Record-Route")
 		for i := len(hdrs) - 1; i >= 0; i-- {
-			h := hdrs[i].headerClone()
-			ackRequest.AppendHeader(h)
+			recordRoute := hdrs[i]
+			ackRequest.AppendHeader(NewHeader("Route", recordRoute.Value()))
 		}
 	}
 
@@ -279,7 +279,8 @@ func NewAckRequest(inviteRequest *Request, inviteResponse *Response, body []byte
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
-	ackRequest.SetDestination(inviteRequest.Destination())
+	// NOTE forcing here destination will be wrong if we have custom Route handling by proxies
+	// ackRequest.SetDestination(inviteRequest.Destination())
 
 	return ackRequest
 }

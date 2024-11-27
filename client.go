@@ -2,7 +2,6 @@ package sipgo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 
@@ -17,12 +16,22 @@ func Init() {
 	uuid.EnableRandPool()
 }
 
+type ClientTransactionRequester interface {
+	Request(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error)
+}
+
 type Client struct {
 	*UserAgent
 	host  string
 	port  int
 	rport bool
 	log   zerolog.Logger
+
+	// TxRequester allows you to use your transaction requester instead default from transaction layer
+	// Useful only for testing
+	//
+	// Experimental
+	TxRequester ClientTransactionRequester
 }
 
 type ClientOption func(c *Client) error
@@ -37,7 +46,6 @@ func WithClientLogger(logger zerolog.Logger) ClientOption {
 
 // WithClientHost allows setting default route host or IP on Via
 // in case of IP it will enforce transport layer to create/reuse connection with this IP
-// default: user agent IP
 // This is useful when you need to act as client first and avoid creating server handle listeners.
 // NOTE: From header hostname is WithUserAgentHostname option on UA or modify request manually
 func WithClientHostname(hostname string) ClientOption {
@@ -86,7 +94,6 @@ func WithClientAddr(addr string) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
-		host:      ua.GetIP().String(),
 		log:       log.Logger.With().Str("caller", "Client").Logger(),
 	}
 
@@ -104,21 +111,21 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) GetHostname() string {
+// Hostname returns default hostname or what is set WithHostname option
+func (c *Client) Hostname() string {
 	return c.host
 }
 
 // TransactionRequest uses transaction layer to send request and returns transaction
+// For more correct behavior use client.Do instead which acts same like HTTP req/response
 //
-// NOTE: By default request will not be cloned and it will populate request with missing headers unless options are used
+// By default request will not be cloned and it will populate request with missing headers unless options are used
 // In most cases you want this as you will retry with additional headers
 //
 // Following header fields will be added if not exist to have correct SIP request:
 // To, From, CSeq, Call-ID, Max-Forwards, Via
-//
-// Passing options will override this behavior, that is it is expected
-// that you have request fully built
-// This is useful when using client handle in proxy building as request are already parsed
+// Passing options will override this behavior, that is, it is expected that your request is already prebuild
+// This is mostly the case when creating proxy
 func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, options ...ClientRequestOption) (sip.ClientTransaction, error) {
 	if req.IsAck() {
 		return nil, fmt.Errorf("ACK request must be sent directly through transport. Use WriteRequest")
@@ -134,7 +141,7 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 
 		clientRequestBuildReq(c, req)
-		return c.tx.Request(ctx, req)
+		return c.requestTransaction(ctx, req)
 	}
 
 	for _, o := range options {
@@ -142,20 +149,26 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 			return nil, err
 		}
 	}
+	return c.requestTransaction(ctx, req)
+}
+
+func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	if c.TxRequester != nil {
+		return c.TxRequester.Request(ctx, req)
+	}
 	return c.tx.Request(ctx, req)
 }
 
-// Experimental
-//
-// Do request is HTTP client like Do request/response
+// Do request is HTTP client like Do request/response.
 // It returns on final response.
-// Canceling ctx sends Cancel Request but it still returns ctx error
-// For more control use TransactionRequest
+// NOTE: Canceling ctx WILL not send Cancel Request which is needed for INVITE. Use dialog API for dealing with dialogs
+// For more lower API use TransactionRequest directly
 func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := c.TransactionRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer tx.Terminate()
 
 	for {
@@ -170,7 +183,7 @@ func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error
 			return nil, tx.Err()
 
 		case <-ctx.Done():
-			return nil, errors.Join(ctx.Err(), tx.Cancel())
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -210,21 +223,7 @@ func (c *Client) digestTransactionRequest(ctx context.Context, req *sip.Request,
 	cseq.SeqNo++
 
 	req.RemoveHeader("Via")
-	tx, err := c.TransactionRequest(context.TODO(), req, ClientRequestAddVia)
-	return tx, err
-}
-
-// digestProxyAuthRequest does basic digest auth with proxy header
-func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
-	if err := digestProxyAuthApply(req, res, opts); err != nil {
-		return nil, err
-	}
-
-	cseq := req.CSeq()
-	cseq.SeqNo++
-
-	req.RemoveHeader("Via")
-	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	tx, err := c.TransactionRequest(ctx, req, ClientRequestAddVia)
 	return tx, err
 }
 
@@ -247,15 +246,23 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 
 type ClientRequestOption func(c *Client, req *sip.Request) error
 
+// ClientRequestBuild will build missing fields in request
+// This is by default but can be used to combine with other ClientRequestOptions
+func ClientRequestBuild(c *Client, r *sip.Request) error {
+	return clientRequestBuildReq(c, r)
+}
+
 func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.1
 	// A valid SIP request formulated by a UAC MUST, at a minimum, contain
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
 	// and Via;
 
+	mustHeader := make([]sip.Header, 0, 6)
 	if v := req.Via(); v == nil {
 		// Multi VIA value must be manually added
-		ClientRequestAddVia(c, req)
+		via := clientRequestCreateVia(c, req)
+		mustHeader = append(mustHeader, via)
 	}
 
 	// From and To headers should not contain Port numbers, headers, uri params
@@ -263,6 +270,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		from := sip.FromHeader{
 			DisplayName: c.UserAgent.name,
 			Address: sip.Uri{
+				Scheme:    req.Recipient.Scheme,
 				User:      c.UserAgent.name,
 				Host:      c.UserAgent.hostname,
 				UriParams: sip.NewParams(),
@@ -277,13 +285,13 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		}
 
 		from.Params.Add("tag", sip.GenerateTagN(16))
-		req.AppendHeader(&from)
+		mustHeader = append(mustHeader, &from)
 	}
 
 	if v := req.To(); v == nil {
 		to := sip.ToHeader{
 			Address: sip.Uri{
-				Encrypted: req.Recipient.Encrypted,
+				Scheme:    req.Recipient.Scheme,
 				User:      req.Recipient.User,
 				Host:      req.Recipient.Host,
 				UriParams: sip.NewParams(),
@@ -291,7 +299,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 			},
 			Params: sip.NewParams(),
 		}
-		req.AppendHeader(&to)
+		mustHeader = append(mustHeader, &to)
 	}
 
 	if v := req.CallID(); v == nil {
@@ -301,7 +309,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		}
 
 		callid := sip.CallIDHeader(uuid.String())
-		req.AppendHeader(&callid)
+		mustHeader = append(mustHeader, &callid)
 
 	}
 
@@ -310,13 +318,15 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 			SeqNo:      1,
 			MethodName: req.Method,
 		}
-		req.AppendHeader(&cseq)
+		mustHeader = append(mustHeader, &cseq)
 	}
 
 	if v := req.MaxForwards(); v == nil {
 		maxfwd := sip.MaxForwardsHeader(70)
-		req.AppendHeader(&maxfwd)
+		mustHeader = append(mustHeader, &maxfwd)
 	}
+
+	req.PrependHeader(mustHeader...)
 
 	if req.Body() == nil {
 		req.SetBody(nil)
@@ -325,15 +335,15 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	return nil
 }
 
-// ClientRequestBuild will build missing fields in request
-// This is by default but can be used to combine with other ClientRequestOptions
-func ClientRequestBuild(c *Client, r *sip.Request) error {
-	return clientRequestBuildReq(c, r)
-}
-
 // ClientRequestAddVia is option for adding via header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
+	via := clientRequestCreateVia(c, r)
+	r.PrependHeader(via)
+	return nil
+}
+
+func clientRequestCreateVia(c *Client, r *sip.Request) *sip.ViaHeader {
 	// TODO
 	// A client that sends a request to a multicast address MUST add the
 	// "maddr" parameter to its Via header field value containing the
@@ -362,8 +372,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 			via.Params.Add("received", h)
 		}
 	}
-	r.PrependHeader(newvia)
-	return nil
+	return newvia
 }
 
 // ClientRequestAddRecordRoute is option for adding record route header
@@ -403,7 +412,7 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	maxfwd.Dec()
 
 	if maxfwd.Val() <= 0 {
-		return fmt.Errorf("Max forwards reached")
+		return fmt.Errorf("max forwards reached")
 	}
 	return nil
 }
@@ -414,6 +423,9 @@ func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Optio
 	if err != nil {
 		return fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
 	}
+
+	// Fix lower case algorithm although not supported by rfc
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
 
 	// Reply with digest
 	cred, err := digest.Digest(chal, opts)
@@ -433,6 +445,9 @@ func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) e
 		return fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
 	}
 
+	// Fix lower case algorithm although not supported by rfc
+	chal.Algorithm = sip.ASCIIToUpper(chal.Algorithm)
+
 	// Reply with digest
 	cred, err := digest.Digest(chal, opts)
 	if err != nil {
@@ -442,4 +457,18 @@ func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) e
 	req.RemoveHeader("Authorization")
 	req.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 	return nil
+}
+
+// digestProxyAuthRequest does basic digest auth with proxy header
+func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Request, res *sip.Response, opts digest.Options) (sip.ClientTransaction, error) {
+	if err := digestProxyAuthApply(req, res, opts); err != nil {
+		return nil, err
+	}
+
+	cseq := req.CSeq()
+	cseq.SeqNo++
+
+	req.RemoveHeader("Via")
+	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	return tx, err
 }
