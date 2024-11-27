@@ -16,6 +16,8 @@ type DialogUA struct {
 	// ContactHDR (required) is used as default one to build request/response.
 	// You can pass custom on each request, but in dialog it is required to be present
 	ContactHDR sip.ContactHeader
+
+	RewriteContact bool
 }
 
 func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
@@ -80,7 +82,7 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 	return ua.WriteInvite(ctx, req)
 }
 
-func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request) (*DialogClientSession, error) {
+func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request, options ...ClientRequestOption) (*DialogClientSession, error) {
 	cli := c.Client
 
 	if inviteReq.Contact() == nil {
@@ -88,7 +90,7 @@ func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request) (*Di
 		inviteReq.AppendHeader(&c.ContactHDR)
 	}
 
-	tx, err := cli.TransactionRequest(ctx, inviteReq)
+	tx, err := cli.TransactionRequest(ctx, inviteReq, options...)
 	if err != nil {
 		return nil, err
 	}

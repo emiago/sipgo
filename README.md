@@ -281,6 +281,16 @@ srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
 })
 ```
 
+### Dialog Do/Transaction request
+
+For any other request within dialog you should use `dialog.Do` to send request. Requests withing dialog need more 
+checks to pass and therefore this API helps to keep requests within dialog session.
+```go
+req := sip.NewRequest(sip.INFO, recipient)
+res, err := dialog.Do(ctx, req)
+```
+
+
 ## Stateful Proxy build
 
 Proxy is combination client and server handle that creates server/client transaction. They need to share

@@ -38,7 +38,7 @@ func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
 		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
 		return
 	}
-	log.Debug().Msgf("%s write to %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+	log.Debug().Msgf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg)
 }
 
 // GenerateBranch returns random unique branch ID.

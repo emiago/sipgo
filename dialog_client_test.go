@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/siptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,6 +90,36 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 		assert.Equal(t, "sip:p1.com", bye.Recipient.String())
 		assert.Equal(t, "<sip:p1.com>", bye.Route().Value())
 		assert.Equal(t, "<sip:p2.com;lr>", bye.GetHeaders("Route")[1].Value())
+	})
+
+}
+
+func BenchmarkDialogDo(b *testing.B) {
+	ua, _ := NewUA()
+	cli, _ := NewClient(ua)
+	cli.TxRequester = &siptest.ClientTxRequester{
+		OnRequest: func(req *sip.Request) *sip.Response {
+			return sip.NewResponseFromRequest(req, 200, "OK", nil)
+		},
+	}
+	dua := &DialogUA{
+		Client: cli,
+	}
+
+	dialog, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+	require.NoError(b, err)
+	dialog.WaitAnswer(context.TODO(), AnswerOptions{})
+
+	b.Run("ACK", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			dialog.Ack(context.TODO())
+		}
+	})
+	b.Run("NotSupported", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			req := sip.NewRequest(sip.REFER, sip.Uri{User: "refer", Host: "localhost"})
+			dialog.Do(context.TODO(), req)
+		}
 	})
 
 }

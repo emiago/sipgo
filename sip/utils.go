@@ -257,7 +257,7 @@ func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
 // Using targetIP it will try to match interface with same subnet
 // network can be "ip" "ip4" "ip6"
 // by default it avoids loopack IP unless targetIP is loopback
-func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface, error) {
+func ResolveInterfacesIP(network string, targetIP *net.IPNet) (net.IP, net.Interface, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, net.Interface{}, err
@@ -268,7 +268,7 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 			continue // interface down
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
-			if targetIP != nil && !targetIP.IsLoopback() {
+			if targetIP != nil && !targetIP.IP.IsLoopback() {
 				continue // loopback interface
 			}
 		}
@@ -283,11 +283,12 @@ func ResolveInterfacesIP(network string, targetIP net.IP) (net.IP, net.Interface
 	return nil, net.Interface{}, errors.New("no interface found on system")
 }
 
-func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (net.IP, error) {
+func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet) (net.IP, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return nil, err
 	}
+
 	for _, addr := range addrs {
 		var ip net.IP
 		ipNet, ok := addr.(*net.IPNet)
@@ -297,7 +298,7 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 		}
 		ip = ipNet.IP
 		if targetIP != nil {
-			if !ipNet.Contains(targetIP) {
+			if !targetIP.Contains(ip) {
 				continue
 			}
 		} else {
@@ -312,14 +313,15 @@ func resolveInterfaceIp(iface net.Interface, network string, targetIP net.IP) (n
 
 		switch network {
 		case "ip4":
-			ip = ip.To4()
+			if ip.To4() == nil {
+				continue
+			}
 
 		case "ip6":
-			ip = ip.To16()
-		}
-
-		if ip == nil {
-			continue // not an ipv4 address
+			// IP is v6 only if this returns nil
+			if ip.To4() != nil {
+				continue
+			}
 		}
 
 		return ip, nil

@@ -88,13 +88,42 @@ func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
 // This ensures that you have proper request done within dialog
 func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	// Keep any request inside dialog
+	mustHaveHeaders := make([]sip.Header, 0, 5)
+	if h, invH := req.From(), s.InviteResponse; h == nil && invH != nil {
+		hh := invH.To().AsFrom()
+		// req.AppendHeader(&hh)
+		mustHaveHeaders = append(mustHaveHeaders, &hh)
+	}
+
+	if h, invH := req.To(), s.InviteRequest.From(); h == nil {
+		hh := invH.AsTo()
+		// req.AppendHeader(&hh)
+		mustHaveHeaders = append(mustHaveHeaders, &hh)
+	}
+
+	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
+		// req.AppendHeader(sip.HeaderClone(invH))
+		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(invH))
+	}
+
+	if h := req.MaxForwards(); h == nil {
+		// req.AppendHeader(sip.HeaderClone(invH))
+		maxFwd := sip.MaxForwardsHeader(70)
+		mustHaveHeaders = append(mustHaveHeaders, &maxFwd)
+	}
+
 	cseq := req.CSeq()
 	if cseq == nil {
 		cseq = &sip.CSeqHeader{
 			SeqNo:      s.InviteRequest.CSeq().SeqNo,
 			MethodName: req.Method,
 		}
-		req.AppendHeader(cseq)
+		// req.AppendHeader(cseq)
+		mustHaveHeaders = append(mustHaveHeaders, cseq)
+	}
+	if len(mustHaveHeaders) > 0 {
+		req.PrependHeader(mustHaveHeaders...)
 	}
 
 	// For safety make sure we are starting with our last dialog cseq num
@@ -106,9 +135,9 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	}
 
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
-	hdrs := s.InviteRequest.GetHeaders("Record-Route")
-	for i := len(hdrs) - 1; i >= 0; i-- {
-		recordRoute := hdrs[i]
+	rrs := s.InviteRequest.GetHeaders("Record-Route")
+	for i := len(rrs) - 1; i >= 0; i-- {
+		recordRoute := rrs[i]
 		req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
 	}
 
@@ -138,27 +167,11 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 
 	s.lastCSeqNo.Store(cseq.SeqNo)
 
-	// Keep any request inside dialog
-	if h, invH := req.From(), s.InviteResponse; h == nil && invH != nil {
-		hh := invH.To().AsFrom()
-		req.AppendHeader(&hh)
-	}
-
-	if h, invH := req.To(), s.InviteRequest.From(); h == nil {
-		hh := invH.AsTo()
-		req.AppendHeader(&hh)
-	}
-
-	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
-		req.AppendHeader(sip.HeaderClone(invH))
-	}
-
 	if h := req.Contact(); h == nil {
 		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
 	}
 
-	if sip.IsReliable(req.Transport()) {
-		// Avoid NAT
+	if s.ua.RewriteContact && len(rrs) == 0 {
 		req.SetDestination(s.InviteRequest.Source())
 	}
 

@@ -31,8 +31,7 @@ func NewRequest(method RequestMethod, recipient Uri) *Request {
 	req.SipVersion = "SIP/2.0"
 	// req.headers = newHeaders()
 	req.headers = headers{
-		// headers:     make(map[string]Header),
-		headerOrder: make([]Header, 0),
+		headerOrder: make([]Header, 0, 10), // making capacity allows faster appending headers
 	}
 	req.Method = method
 	req.Recipient = recipient

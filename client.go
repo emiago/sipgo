@@ -103,27 +103,12 @@ func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 		}
 	}
 
-	if c.host == "" {
-		// IF we remove this, default would be IPV6 on new system
-		// We can go on net libraries and forcing this with udp4, tcp4
-		h, _, err := sip.ResolveInterfacesIP("ip4", nil)
-		if err != nil {
-			return nil, err
-		}
-		c.host = h.String()
-	}
-
 	return c, nil
 }
 
 // Close client handle. UserAgent must be closed for full transaction and transport layer closing.
 func (c *Client) Close() error {
 	return nil
-}
-
-// Deprecated use Hostname
-func (c *Client) GetHostname() string {
-	return c.host
 }
 
 // Hostname returns default hostname or what is set WithHostname option
@@ -261,15 +246,23 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 
 type ClientRequestOption func(c *Client, req *sip.Request) error
 
+// ClientRequestBuild will build missing fields in request
+// This is by default but can be used to combine with other ClientRequestOptions
+func ClientRequestBuild(c *Client, r *sip.Request) error {
+	return clientRequestBuildReq(c, r)
+}
+
 func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.1
 	// A valid SIP request formulated by a UAC MUST, at a minimum, contain
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
 	// and Via;
 
+	mustHeader := make([]sip.Header, 0, 6)
 	if v := req.Via(); v == nil {
 		// Multi VIA value must be manually added
-		ClientRequestAddVia(c, req)
+		via := clientRequestCreateVia(c, req)
+		mustHeader = append(mustHeader, via)
 	}
 
 	// From and To headers should not contain Port numbers, headers, uri params
@@ -292,7 +285,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		}
 
 		from.Params.Add("tag", sip.GenerateTagN(16))
-		req.AppendHeader(&from)
+		mustHeader = append(mustHeader, &from)
 	}
 
 	if v := req.To(); v == nil {
@@ -306,7 +299,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 			},
 			Params: sip.NewParams(),
 		}
-		req.AppendHeader(&to)
+		mustHeader = append(mustHeader, &to)
 	}
 
 	if v := req.CallID(); v == nil {
@@ -316,7 +309,7 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		}
 
 		callid := sip.CallIDHeader(uuid.String())
-		req.AppendHeader(&callid)
+		mustHeader = append(mustHeader, &callid)
 
 	}
 
@@ -325,13 +318,15 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 			SeqNo:      1,
 			MethodName: req.Method,
 		}
-		req.AppendHeader(&cseq)
+		mustHeader = append(mustHeader, &cseq)
 	}
 
 	if v := req.MaxForwards(); v == nil {
 		maxfwd := sip.MaxForwardsHeader(70)
-		req.AppendHeader(&maxfwd)
+		mustHeader = append(mustHeader, &maxfwd)
 	}
+
+	req.PrependHeader(mustHeader...)
 
 	if req.Body() == nil {
 		req.SetBody(nil)
@@ -340,15 +335,15 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	return nil
 }
 
-// ClientRequestBuild will build missing fields in request
-// This is by default but can be used to combine with other ClientRequestOptions
-func ClientRequestBuild(c *Client, r *sip.Request) error {
-	return clientRequestBuildReq(c, r)
-}
-
 // ClientRequestAddVia is option for adding via header
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261.html#section-16.6
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
+	via := clientRequestCreateVia(c, r)
+	r.PrependHeader(via)
+	return nil
+}
+
+func clientRequestCreateVia(c *Client, r *sip.Request) *sip.ViaHeader {
 	// TODO
 	// A client that sends a request to a multicast address MUST add the
 	// "maddr" parameter to its Via header field value containing the
@@ -377,8 +372,7 @@ func ClientRequestAddVia(c *Client, r *sip.Request) error {
 			via.Params.Add("received", h)
 		}
 	}
-	r.PrependHeader(newvia)
-	return nil
+	return newvia
 }
 
 // ClientRequestAddRecordRoute is option for adding record route header

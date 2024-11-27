@@ -21,6 +21,18 @@ var (
 )
 
 type ListenReadyCtxValue chan struct{}
+type ListenReadyFuncCtxValue func(network string, addr string)
+
+func listenReadyCtx(ctx context.Context, network string, addr string) {
+	if v := ctx.Value(ListenReadyCtxKey); v != nil {
+		switch vv := v.(type) {
+		case ListenReadyCtxValue:
+			vv <- struct{}{}
+		case ListenReadyFuncCtxValue:
+			vv(network, addr)
+		}
+	}
+}
 
 // RequestHandler is a callback that will be called on the incoming request
 type RequestHandler func(req *sip.Request, tx sip.ServerTransaction)
@@ -119,9 +131,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = udpConn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			v.(ListenReadyCtxValue) <- struct{}{}
-		}
+		listenReadyCtx(ctx, network, udpConn.LocalAddr().String())
 		return srv.tp.ServeUDP(udpConn)
 
 	case "tcp", "tcp4", "tcp6":
@@ -136,9 +146,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = conn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			v.(ListenReadyCtxValue) <- struct{}{}
-		}
+		listenReadyCtx(ctx, network, conn.Addr().String())
 
 		return srv.tp.ServeTCP(conn)
 	case "ws", "ws4", "ws6":
@@ -155,9 +163,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 		}
 
 		connCloser = conn
-		if v := ctx.Value(ListenReadyCtxKey); v != nil {
-			v.(ListenReadyCtxValue) <- struct{}{}
-		}
+		listenReadyCtx(ctx, network, conn.Addr().String())
 		// and uses listener to buffer
 		return srv.tp.ServeWS(conn)
 	}

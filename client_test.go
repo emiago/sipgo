@@ -217,3 +217,16 @@ func TestDigestAuthLowerCase(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+func BenchmarkClientTransactionRequestBuild(t *testing.B) {
+	ua, err := NewUA()
+	require.Nil(t, err)
+
+	c, err := NewClient(ua,
+		WithClientHostname("10.0.0.0"),
+	)
+	for i := 0; i < t.N; i++ {
+		req := sip.NewRequest(sip.INVITE, sip.Uri{User: "test", Host: "localhost"})
+		clientRequestBuildReq(c, req)
+	}
+}
