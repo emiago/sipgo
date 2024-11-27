@@ -145,6 +145,16 @@ func (uri *Uri) Addr() string {
 
 // HostPort represents host:port part
 func (uri *Uri) HostPort() string {
-	p := strconv.Itoa(uri.Port)
+	transport := TransportTCP
+	if uri.IsEncrypted() {
+		transport = TransportTLS
+	}
+
+	port := uri.Port
+	if port == 0 {
+		port = DefaultPort(transport)
+	}
+
+	p := strconv.Itoa(port)
 	return uri.Host + ":" + p
 }

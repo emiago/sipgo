@@ -50,6 +50,7 @@ func TestParseUri(t *testing.T) {
 			assert.Equal(t, "alice", uri.User)
 			assert.Equal(t, "atlanta.com", uri.Host)
 			assert.False(t, uri.IsEncrypted())
+			assert.Equal(t, "atlanta.com:5060", uri.HostPort())
 		}
 
 		testCases = []string{
@@ -63,6 +64,7 @@ func TestParseUri(t *testing.T) {
 			assert.Equal(t, "alice", uri.User)
 			assert.Equal(t, "atlanta.com", uri.Host)
 			assert.True(t, uri.IsEncrypted())
+			assert.Equal(t, "atlanta.com:5061", uri.HostPort())
 		}
 
 	})
