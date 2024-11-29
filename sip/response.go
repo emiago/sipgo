@@ -75,11 +75,11 @@ func (res *Response) String() string {
 
 func (res *Response) StringWrite(buffer io.StringWriter) {
 	res.StartLineWrite(buffer)
-	buffer.WriteString("\r\n")
+	//	buffer.WriteString("\r\n")
 	// Write the headers.
 	res.headers.StringWrite(buffer)
 	// Empty line
-	buffer.WriteString("\r\n")
+	//	buffer.WriteString("\r\n")
 	// message body
 	if res.body != nil {
 		// buffer.WriteString("\r\n")
@@ -190,12 +190,7 @@ func (res *Response) Destination() string {
 }
 
 // RFC 3261 - 8.2.6
-func NewResponseFromRequest(
-	req *Request,
-	statusCode StatusCode,
-	reason string,
-	body []byte,
-) *Response {
+func NewResponseFromRequest(req *Request, statusCode StatusCode, reason string, body []byte) *Response {
 	res := NewResponse(
 		statusCode,
 		reason,
