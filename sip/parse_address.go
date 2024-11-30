@@ -280,6 +280,40 @@ func parseRecordRouteHeader(headerText string, h *RecordRouteHeader) error {
 	return parseRouteAddress(headerText, &h.Address)
 }
 
+func headerParserReferTo(headerName string, headerText string) (header Header, err error) {
+	h := ReferToHeader{}
+	return &h, parseReferToHeader(headerText, &h)
+}
+
+func parseReferToHeader(headerText string, h *ReferToHeader) error {
+	return parseRouteAddress(headerText, &h.Address) // calling parseRouteAddress because the structure is same
+}
+
+func headerParserReferredBy(headerName string, headerText string) (header Header, err error) {
+	h := &ReferredByHeader{}
+	return h, parseReferredByHeader(headerText, h)
+}
+
+func parseReferredByHeader(headerText string, h *ReferredByHeader) error {
+	var err error
+
+	h.Params = NewParams()
+	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
+	if err != nil {
+		return err
+	}
+
+	if h.Address.Wildcard {
+		// The Wildcard '*' URI is only permitted in Contact headers.
+		err = fmt.Errorf(
+			"wildcard uri not permitted in to: header: %s",
+			headerText,
+		)
+		return err
+	}
+	return nil
+}
+
 func parseRouteAddress(headerText string, address *Uri) (err error) {
 	inBrackets := false
 	inQuotes := false
