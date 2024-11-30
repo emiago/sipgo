@@ -57,6 +57,7 @@ var headersParsers = mapHeadersParser{
 	"route":          headerParserRoute,
 	"record-route":   headerParserRecordRoute,
 	"refer-to":       headerParserReferTo,
+	"referred-by":    headerParserReferredBy,
 }
 
 // DefaultHeadersParser returns minimal version header parser.
