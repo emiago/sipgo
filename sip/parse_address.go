@@ -280,6 +280,15 @@ func parseRecordRouteHeader(headerText string, h *RecordRouteHeader) error {
 	return parseRouteAddress(headerText, &h.Address)
 }
 
+func headerParserReferTo(headerName string, headerText string) (header Header, err error) {
+	h := ReferToHeader{}
+	return &h, parseReferToHeader(headerText, &h)
+}
+
+func parseReferToHeader(headerText string, h *ReferToHeader) error {
+	return parseRouteAddress(headerText, &h.Uri)
+}
+
 func parseRouteAddress(headerText string, address *Uri) (err error) {
 	inBrackets := false
 	inQuotes := false

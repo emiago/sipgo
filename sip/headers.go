@@ -49,6 +49,7 @@ type headers struct {
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 	maxForwards   *MaxForwardsHeader
+	referTo       *ReferToHeader
 }
 
 func (hs *headers) String() string {
@@ -94,6 +95,8 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentType = m
 	case *MaxForwardsHeader:
 		hs.maxForwards = m
+	case *ReferToHeader:
+		hs.referTo = m
 	}
 }
 
@@ -121,6 +124,8 @@ func (hs *headers) unref(header Header) {
 		hs.contentType = nil
 	case *MaxForwardsHeader:
 		hs.maxForwards = nil
+	case *ReferToHeader:
+		hs.referTo = nil
 	}
 }
 
@@ -405,6 +410,17 @@ func (hs *headers) RecordRoute() *RecordRouteHeader {
 		}
 	}
 	return hs.recordRoute
+}
+
+// ReferTo returns underlying Refer-To parsed header or nil if not exists
+func (hs *headers) ReferTo() *ReferToHeader {
+	if hs.referTo == nil {
+		h := &ReferToHeader{}
+		if parseHeaderLazy(hs, parseReferToHeader, []string{"refer-to"}, h) {
+			hs.referTo = h
+		}
+	}
+	return hs.referTo
 }
 
 // NewHeader creates generic type of header
@@ -1012,6 +1028,48 @@ func (h *RecordRouteHeader) Clone() *RecordRouteHeader {
 		Address: *h.Address.Clone(),
 	}
 	return newRoute
+}
+
+// ReferToHeader is Refer-To header representation.
+type ReferToHeader struct {
+	Uri Uri
+}
+
+func (h *ReferToHeader) Name() string { return "Refer-To" }
+
+func (h *ReferToHeader) Value() string {
+	var buffer strings.Builder
+	h.ValueStringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *ReferToHeader) ValueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString("<")
+	h.Uri.StringWrite(buffer)
+	buffer.WriteString(">")
+}
+
+func (h *ReferToHeader) String() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *ReferToHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
+func (h *ReferToHeader) headerClone() Header {
+	return h.Clone()
+}
+
+func (h *ReferToHeader) Clone() *ReferToHeader {
+	newTarget := &ReferToHeader{
+		Uri: *h.Uri.Clone(),
+	}
+	return newTarget
 }
 
 // Copy all headers of one type from one message to another.
