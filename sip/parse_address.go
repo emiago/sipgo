@@ -286,7 +286,7 @@ func headerParserReferTo(headerName string, headerText string) (header Header, e
 }
 
 func parseReferToHeader(headerText string, h *ReferToHeader) error {
-	return parseRouteAddress(headerText, &h.Uri)
+	return parseRouteAddress(headerText, &h.Address)
 }
 
 func parseRouteAddress(headerText string, address *Uri) (err error) {

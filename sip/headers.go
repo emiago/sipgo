@@ -1032,7 +1032,7 @@ func (h *RecordRouteHeader) Clone() *RecordRouteHeader {
 
 // ReferToHeader is Refer-To header representation.
 type ReferToHeader struct {
-	Uri Uri
+	Address Uri
 }
 
 func (h *ReferToHeader) Name() string { return "Refer-To" }
@@ -1045,7 +1045,7 @@ func (h *ReferToHeader) Value() string {
 
 func (h *ReferToHeader) ValueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("<")
-	h.Uri.StringWrite(buffer)
+	h.Address.StringWrite(buffer)
 	buffer.WriteString(">")
 }
 
@@ -1067,9 +1067,14 @@ func (h *ReferToHeader) headerClone() Header {
 
 func (h *ReferToHeader) Clone() *ReferToHeader {
 	newTarget := &ReferToHeader{
-		Uri: *h.Uri.Clone(),
+		Address: *h.Address.Clone(),
 	}
 	return newTarget
+}
+
+// ReferredByHeader is Referred-By header representation.
+type ReferredByHeader struct {
+	Uri Uri
 }
 
 // Copy all headers of one type from one message to another.
