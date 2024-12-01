@@ -96,10 +96,6 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentType = m
 	case *MaxForwardsHeader:
 		hs.maxForwards = m
-	case *ReferToHeader:
-		hs.referTo = m
-	case *ReferredByHeader:
-		hs.referredBy = m
 	}
 }
 
@@ -127,10 +123,6 @@ func (hs *headers) unref(header Header) {
 		hs.contentType = nil
 	case *MaxForwardsHeader:
 		hs.maxForwards = nil
-	case *ReferToHeader:
-		hs.referTo = nil
-	case *ReferredByHeader:
-		hs.referredBy = nil
 	}
 }
 
