@@ -440,6 +440,10 @@ func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Optio
 
 func digestAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
 	wwwAuth := res.GetHeader("WWW-Authenticate")
+	if wwwAuth == nil {
+		return fmt.Errorf("No WWW-Authenticate header present")
+	}
+
 	chal, err := digest.ParseChallenge(wwwAuth.Value())
 	if err != nil {
 		return fmt.Errorf("fail to parse chalenge wwwauth=%q: %w", wwwAuth.Value(), err)
