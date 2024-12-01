@@ -91,12 +91,19 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
 	s.buildReq(req)
 	// Passing option to avoid CSEQ apply
-	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestAddVia)
+	return s.ua.Client.TransactionRequest(ctx, req, s.addVia)
 }
 
 func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 	s.buildReq(req)
-	return s.ua.Client.WriteRequest(req, ClientRequestAddVia)
+	return s.ua.Client.WriteRequest(req, s.addVia)
+}
+
+func (s *DialogClientSession) addVia(c *Client, req *sip.Request) error {
+	if req.Via() == nil {
+		ClientRequestAddVia(c, req)
+	}
+	return nil
 }
 
 func (s *DialogClientSession) buildReq(req *sip.Request) {
