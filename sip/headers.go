@@ -410,22 +410,21 @@ func (hs *headers) RecordRoute() *RecordRouteHeader {
 }
 
 // ReferTo returns underlying Refer-To parsed header or nil if not exists
-func (hs *headers) ParseReferTo() (ret *ReferToHeader, ok bool) {
+func (hs *headers) ParseReferTo() *ReferToHeader {
 	h := &ReferToHeader{}
 	if parseHeaderLazy(hs, parseReferToHeader, []string{"refer-to"}, h) {
-		hs.referTo = h
-		return h, true
+		return h
 	}
-	return nil, false
+	return nil
 }
 
 // ReferredBy returns underlying Referred-By parsed header or nil if not exists
-func (hs *headers) ParseReferredBy() (ret *ReferredByHeader, ok bool) {
+func (hs *headers) ParseReferredBy() *ReferredByHeader {
 	h := &ReferredByHeader{}
 	if parseHeaderLazy(hs, parseReferredByHeader, []string{"referred-by"}, h) {
-		return h, true
+		return h
 	}
-	return nil, false
+	return nil
 }
 
 // NewHeader creates generic type of header
