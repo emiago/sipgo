@@ -131,7 +131,7 @@ func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 
 // This should performe better to avoid any interface allocation
 func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
-	buf := make([]byte, transportBufferSize)
+	buf := make([]byte, TransportBufferSize)
 	defer t.pool.Delete(laddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
 

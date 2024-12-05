@@ -126,7 +126,7 @@ func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 
 // This should performe better to avoid any interface allocation
 func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr string, handler MessageHandler) {
-	buf := make([]byte, transportBufferSize)
+	buf := make([]byte, TransportBufferSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
 	defer t.pool.Delete(laddr)

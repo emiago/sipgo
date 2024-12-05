@@ -180,7 +180,7 @@ func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, ladd
 } */
 
 func (t *transportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
-	buf := make([]byte, transportBufferSize)
+	buf := make([]byte, TransportBufferSize)
 	defer t.pool.CloseAndDelete(conn, laddr)
 	defer t.log.Debug().Str("addr", laddr).Msg("Read listener connection stopped")
 

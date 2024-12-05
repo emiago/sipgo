@@ -13,6 +13,9 @@ var (
 	// 0 	- close connection immediatelly after transaction terminate
 	// 1 	- keep connection idle after transaction termination
 	IdleConnection int = 1
+
+	// TransportBufferSize sets this buffer size to use on reading SIP messages.
+	TransportBufferSize uint16 = 65535
 )
 
 const (
@@ -33,8 +36,6 @@ const (
 	TransportTLS = "TLS"
 	TransportWS  = "WS"
 	TransportWSS = "WSS"
-
-	transportBufferSize uint16 = 65535
 
 	// TransportFixedLengthMessage sets message size limit for parsing and avoids stream parsing
 	TransportFixedLengthMessage uint16 = 0
