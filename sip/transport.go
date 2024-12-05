@@ -14,8 +14,8 @@ var (
 	// 1 	- keep connection idle after transaction termination
 	IdleConnection int = 1
 
-	// TransportBufferSize sets this buffer size to use on reading SIP messages.
-	TransportBufferSize uint16 = 65535
+	// TransportBufferReadSize sets this buffer size to use on reading SIP messages.
+	TransportBufferReadSize uint16 = 65535
 )
 
 const (
