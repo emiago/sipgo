@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
@@ -46,6 +47,9 @@ type Dialog struct {
 	cancel context.CancelFunc
 
 	onStatePointer atomic.Pointer[DialogStateFn]
+
+	// store user values
+	values sync.Map
 }
 
 // Init setups dialog state
@@ -118,4 +122,16 @@ func (d *Dialog) CSEQ() uint32 {
 
 func (d *Dialog) Context() context.Context {
 	return d.ctx
+}
+
+func (d *Dialog) Store(key string, value any) {
+	d.values.Store(key, value)
+}
+
+func (d *Dialog) Load(key string) (any, bool) {
+	return d.values.Load(key)
+}
+
+func (d *Dialog) Delete(key string) {
+	d.values.Delete(key)
 }
