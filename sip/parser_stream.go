@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 )
 
@@ -106,27 +105,12 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 			}
 			unparsed = reader.Bytes()
 
-			// Grab content length header
-			// TODO: Maybe this is not best approach
-			hdrs := msg.GetHeaders("Content-Length")
-			if len(hdrs) == 0 {
-				// No body then
+			h := msg.ContentLength()
+			if h == nil {
 				return msg, nil
 			}
 
-			h := hdrs[0]
-
-			// TODO: Have fast reference instead casting
-			var contentLength int
-			if clh, ok := h.(*ContentLengthHeader); ok {
-				contentLength = int(*clh)
-			} else {
-				n, err := strconv.Atoi(h.Value())
-				if err != nil {
-					return nil, fmt.Errorf("fail to parse content length: %w", err)
-				}
-				contentLength = n
-			}
+			contentLength := int(*h)
 
 			if contentLength <= 0 {
 				return msg, nil

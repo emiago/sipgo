@@ -109,6 +109,9 @@ type Message interface {
 	To() *ToHeader
 	// CSeq returns 'CSeq' header field.
 	CSeq() *CSeqHeader
+	// Content Length headers
+	ContentLength() *ContentLengthHeader
+
 	// Body returns message body.
 	Body() []byte
 	// SetBody sets message body.
