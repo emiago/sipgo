@@ -46,6 +46,10 @@ func (p *ParserStream) reset() {
 // ParseSIPStream parsing messages comming in stream
 // It has slight overhead vs parsing full message
 func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
+	return msgs, p.parseBuffer(data, &msgs)
+}
+
+func (p *ParserStream) parseBuffer(data []byte, msgs *[]Message) (err error) {
 	if p.reader == nil {
 		p.reader = streamBufReader.Get().(*bytes.Buffer)
 		p.reader.Reset()
@@ -55,22 +59,22 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 	reader.Write(data) // This should append to our already buffer
 
 	unparsed := reader.Bytes() // TODO find a better way as we only want to move our offset
-
 	for {
-		// msg, err := parseSingle(reader)
-		msg, err := p.parseSingle(reader, &unparsed)
+		err := p.parseSingle(reader, &unparsed)
 		switch err {
 		case ErrParseLineNoCRLF, ErrParseReadBodyIncomplete:
 			reader.Reset()
 			reader.Write(unparsed)
-			return nil, ErrParseSipPartial
+			return ErrParseSipPartial
 		}
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		msgs = append(msgs, msg)
+		// cb(p.msg)
+		// msgs[i] = p.msg
+		*msgs = append(*msgs, p.msg)
 		if len(unparsed) == 0 {
 			// Maybe we need to check did empty spaces left
 			break
@@ -89,8 +93,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 	return
 }
 
-func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg Message, err error) {
-
+func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (err error) {
 	// TODO change this with functions and store last function state
 	switch p.state {
 	case stateStartLine:
@@ -98,14 +101,14 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg 
 
 		if err != nil {
 			if err == io.EOF {
-				return nil, ErrParseLineNoCRLF
+				return ErrParseLineNoCRLF
 			}
-			return nil, err
+			return err
 		}
 
-		msg, err = parseLine(startLine)
+		msg, err := parseLine(startLine)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		p.state = stateHeader
@@ -119,9 +122,9 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg 
 			if err != nil {
 				if err == io.EOF {
 					// No more to read
-					return nil, ErrParseLineNoCRLF
+					return ErrParseLineNoCRLF
 				}
-				return nil, err
+				return err
 			}
 
 			if len(line) == 0 {
@@ -131,7 +134,7 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg 
 
 			err = p.headersParsers.parseMsgHeader(msg, line)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %w", err.Error(), ErrParseEOF)
+				return fmt.Errorf("%s: %w", err.Error(), ErrParseEOF)
 				// log.Info().Err(err).Str("line", line).Msg("skip header due to error")
 			}
 			*unparsed = reader.Bytes()
@@ -140,13 +143,12 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg 
 
 		h := msg.ContentLength()
 		if h == nil {
-			return msg, nil
+			return nil
 		}
 
 		contentLength := int(*h)
-
 		if contentLength <= 0 {
-			return msg, nil
+			return nil
 		}
 
 		body := make([]byte, contentLength)
@@ -162,17 +164,17 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (msg 
 		n, err := reader.Read(body[p.readContentLength:])
 		*unparsed = reader.Bytes()
 		if err != nil {
-			return nil, fmt.Errorf("read message body failed: %w", err)
+			return fmt.Errorf("read message body failed: %w", err)
 		}
 		p.readContentLength += n
 
 		if p.readContentLength < contentLength {
-			return nil, ErrParseReadBodyIncomplete
+			return ErrParseReadBodyIncomplete
 		}
 
 		p.state = -1 // Clear state
-		return msg, nil
+		return nil
 	default:
-		return nil, fmt.Errorf("Parser is in unknown state")
+		return fmt.Errorf("Parser is in unknown state")
 	}
 }
