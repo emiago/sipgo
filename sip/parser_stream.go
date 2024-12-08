@@ -58,6 +58,10 @@ func (p *ParserStream) ParseSIPStreamEach(data []byte, cb func(msg Message)) (er
 	}
 
 	reader := p.reader
+	if reader.Len()+len(data) > ParseMaxMessageLength {
+		return fmt.Errorf("Message exceeds ParseMaxMessageLength")
+	}
+
 	reader.Write(data) // This should append to our already buffer
 
 	unparsed := reader.Bytes() // TODO find a better way as we only want to move our offset

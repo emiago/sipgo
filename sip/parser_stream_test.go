@@ -296,6 +296,37 @@ func TestParserStreamMultiple(t *testing.T) {
 	})
 }
 
+func TestParserStreamMessageSizeLimit(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines := []string{
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
+		"CSeq: 100 INVITE",
+		"Contact: <sip:192.168.1.155:44861;transport=tcp>;some.tag.here;other-tag=here",
+		"From: <sip:192.168.1.155>;tag=76fb12e7e2241ed6",
+		"To: <sip:192.168.1.254:5060>",
+		"Max-Forwards: 70",
+		"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,INFO,OPTIONS,REFER,NOTIFY",
+		"User-Agent: MyUserAgent v2.3.6. b53ee2632df (DEV) Client",
+		"Supported: replaces,100rel,timer,gruu,path,outbound",
+		"Session-Expires: 1800",
+		"Session-ID: e937754d76855249814a9b7f8b3bf556;remote=00000000000000000000000000000000",
+		"Content-Type: application/sdp",
+		"Content-Length: 65000",
+		"",
+		strings.Repeat("x", 65000),
+	}
+
+	data := []byte(strings.Join(lines, "\r\n"))
+
+	_, err := parser.ParseSIPStream(data)
+	require.Error(t, err)
+	require.Equal(t, "Message exceeds ParseMaxMessageLength", err.Error())
+}
+
 func BenchmarkParserStream(b *testing.B) {
 	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())

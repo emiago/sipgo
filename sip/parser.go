@@ -29,10 +29,7 @@ var (
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 	ErrParseMoreMessages       = errors.New("Stream has more message")
 
-	ParseMaxMessageLength = 65000
-	ParseMaxHeaderLength  = 4096
-	ParseMaxBodyLength    = 61440
-	ParseMaxNumHeaders    = 64
+	ParseMaxMessageLength = 65535
 )
 
 func ParseMessage(msgData []byte) (Message, error) {
