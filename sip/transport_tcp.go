@@ -182,20 +182,18 @@ func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 }
 
 func (t *transportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
-	msgs, err := par.ParseSIPStream(data)
-	if err == ErrParseSipPartial {
-		return
-	}
-
-	for _, msg := range msgs {
-		if err != nil {
-			t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
-			return
-		}
-
+	err := par.ParseSIPStreamEach(data, func(msg Message) {
 		msg.SetTransport(t.Network())
 		msg.SetSource(src)
 		handler(msg)
+	})
+
+	if err != nil {
+		if err == ErrParseSipPartial {
+			return
+		}
+		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
+		return
 	}
 }
 

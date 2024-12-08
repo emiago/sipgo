@@ -46,10 +46,12 @@ func (p *ParserStream) reset() {
 // ParseSIPStream parsing messages comming in stream
 // It has slight overhead vs parsing full message
 func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
-	return msgs, p.parseBuffer(data, &msgs)
+	return msgs, p.ParseSIPStreamEach(data, func(msg Message) {
+		msgs = append(msgs, msg)
+	})
 }
 
-func (p *ParserStream) parseBuffer(data []byte, msgs *[]Message) (err error) {
+func (p *ParserStream) ParseSIPStreamEach(data []byte, cb func(msg Message)) (err error) {
 	if p.reader == nil {
 		p.reader = streamBufReader.Get().(*bytes.Buffer)
 		p.reader.Reset()
@@ -72,9 +74,7 @@ func (p *ParserStream) parseBuffer(data []byte, msgs *[]Message) (err error) {
 			return err
 		}
 
-		// cb(p.msg)
-		// msgs[i] = p.msg
-		*msgs = append(*msgs, p.msg)
+		cb(p.msg)
 		if len(unparsed) == 0 {
 			// Maybe we need to check did empty spaces left
 			break

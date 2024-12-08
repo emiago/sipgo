@@ -346,26 +346,6 @@ func BenchmarkParserStream(b *testing.B) {
 		}
 	})
 
-	b.Run("NoChunksParallel", func(b *testing.B) {
-		b.RunParallel(func(p *testing.PB) {
-			pstream := parser.NewSIPStream()
-			for p.Next() {
-				var msg Message
-				var err error
-
-				msgs, err := pstream.ParseSIPStream(data)
-				if err != nil {
-					b.Fatal("Parsing failed", err)
-				}
-
-				msg = msgs[0]
-				if req, _ := msg.(*Request); !req.IsInvite() {
-					b.Fatal("Not INVITE")
-				}
-			}
-		})
-	})
-
 	b.Run("SingleRoutine", func(b *testing.B) {
 		pstream := parser.NewSIPStream()
 		for i := 0; i < b.N; i++ {
