@@ -256,9 +256,10 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.1
 	// A valid SIP request formulated by a UAC MUST, at a minimum, contain
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
-	// and Via;
+	// Via, and User-Agent;
 
-	mustHeader := make([]sip.Header, 0, 6)
+	mustHeader := make([]sip.Header, 0, 7)
+
 	if v := req.Via(); v == nil {
 		// Multi VIA value must be manually added
 		via := clientRequestCreateVia(c, req)
@@ -310,6 +311,13 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 
 		callid := sip.CallIDHeader(uuid.String())
 		mustHeader = append(mustHeader, &callid)
+
+	}
+
+	if v := req.UserAgent(); v == nil {
+
+		useragent := sip.UserAgentHeader(c.UserAgent.uaHeader)
+		mustHeader = append(mustHeader, &useragent)
 
 	}
 
