@@ -148,6 +148,16 @@ func parseCallIdHeader(headerText string, callId *CallIDHeader) error {
 	return nil
 }
 
+func parseUserAgentHeader(headerText string, useragent *UserAgentHeader) error {
+	headerText = strings.TrimSpace(headerText)
+	if len(headerText) == 0 {
+		return fmt.Errorf("empty User-Agent body")
+	}
+
+	*useragent = UserAgentHeader(headerText)
+	return nil
+}
+
 func headerParserMaxForwards(headerName string, headerText string) (header Header, err error) {
 	var maxfwd MaxForwardsHeader
 	return &maxfwd, parseMaxForwardsHeader(headerText, &maxfwd)

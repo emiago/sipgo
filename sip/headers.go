@@ -51,6 +51,8 @@ type headers struct {
 	maxForwards   *MaxForwardsHeader
 	referTo       *ReferToHeader
 	referredBy    *ReferredByHeader
+
+	useragent *UserAgentHeader
 }
 
 func (hs *headers) String() string {
@@ -96,6 +98,8 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.contentType = m
 	case *MaxForwardsHeader:
 		hs.maxForwards = m
+	case *UserAgentHeader:
+		hs.useragent = m
 	}
 }
 
@@ -123,6 +127,8 @@ func (hs *headers) unref(header Header) {
 		hs.contentType = nil
 	case *MaxForwardsHeader:
 		hs.maxForwards = nil
+	case *UserAgentHeader:
+		hs.useragent = nil
 	}
 }
 
@@ -425,6 +431,17 @@ func (hs *headers) ParseReferredBy() *ReferredByHeader {
 		return h
 	}
 	return nil
+}
+
+// UserAgent returns underlying UserAgent parsed header or nil if not exists
+func (hs *headers) UserAgent() *UserAgentHeader {
+	if hs.useragent == nil {
+		var h UserAgentHeader
+		if parseHeaderLazy(hs, parseUserAgentHeader, []string{"user-agent", "i"}, &h) {
+			hs.useragent = &h
+		}
+	}
+	return hs.useragent
 }
 
 // NewHeader creates generic type of header

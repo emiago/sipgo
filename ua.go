@@ -10,6 +10,7 @@ import (
 type UserAgent struct {
 	name        string
 	hostname    string
+	uaHeader    string
 	dnsResolver *net.Resolver
 	tlsConfig   *tls.Config
 	parser      *sip.Parser
@@ -21,9 +22,10 @@ type UserAgentOption func(s *UserAgent) error
 
 // WithUserAgent changes user agent name
 // Default: sipgo
-func WithUserAgent(ua string) UserAgentOption {
+func WithUserAgent(username, uaHeader string) UserAgentOption {
 	return func(s *UserAgent) error {
-		s.name = ua
+		s.name = username
+		s.uaHeader = uaHeader
 		return nil
 	}
 }
