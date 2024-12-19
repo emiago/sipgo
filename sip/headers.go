@@ -38,6 +38,8 @@ func HeaderClone(h Header) Header {
 type headers struct {
 	headerOrder []Header
 
+	// Here we only need headers that have frequent access.
+	// DO not add any custom headers, or more specific headers
 	via           *ViaHeader
 	from          *FromHeader
 	to            *ToHeader
@@ -49,8 +51,6 @@ type headers struct {
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 	maxForwards   *MaxForwardsHeader
-	referTo       *ReferToHeader
-	referredBy    *ReferredByHeader
 }
 
 func (hs *headers) String() string {
@@ -409,8 +409,8 @@ func (hs *headers) RecordRoute() *RecordRouteHeader {
 	return hs.recordRoute
 }
 
-// ReferTo returns underlying Refer-To parsed header or nil if not exists
-func (hs *headers) ParseReferTo() *ReferToHeader {
+// ReferTo parses underlying Refer-To header or nil if not exists
+func (hs *headers) ReferTo() *ReferToHeader {
 	h := &ReferToHeader{}
 	if parseHeaderLazy(hs, parseReferToHeader, []string{"refer-to"}, h) {
 		return h
@@ -418,8 +418,8 @@ func (hs *headers) ParseReferTo() *ReferToHeader {
 	return nil
 }
 
-// ReferredBy returns underlying Referred-By parsed header or nil if not exists
-func (hs *headers) ParseReferredBy() *ReferredByHeader {
+// ReferredBy parses underlying Referred-By header or nil if not exists
+func (hs *headers) ReferredBy() *ReferredByHeader {
 	h := &ReferredByHeader{}
 	if parseHeaderLazy(hs, parseReferredByHeader, []string{"referred-by"}, h) {
 		return h
