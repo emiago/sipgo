@@ -341,7 +341,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 			return c, nil
 		}
 	} else if l.ConnectionReuse {
-		viaHop.Params.Add("alias", "")
+		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 
 		c, _ := transport.GetConnection(addr)
