@@ -313,6 +313,8 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		}
 
 		// Save destination in request to avoid repeated resolving
+		// This also solves problem where subsequent request like NON 2xx ACK can
+		// send on same destination without resolving again.
 		req.SetDestination(raddr.String())
 	}
 

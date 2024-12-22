@@ -155,6 +155,11 @@ func (tx *ClientTx) ack() {
 	ack := newAckRequestNon2xx(tx.origin, resp, nil)
 	tx.fsmAck = ack // NOTE: this could be incorect property to use but it helps preventing loops in some cases
 
+	// https://github.com/emiago/sipgo/issues/168
+	// Destination can be FQDN and we do not want to resolve this.
+	// Still in case reliable connection, this ack will reuse same INVITE connection
+	ack.SetDestination(tx.origin.Destination())
+
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
 		tx.log.Error().
