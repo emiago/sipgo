@@ -157,7 +157,9 @@ func (tx *ClientTx) ack() {
 
 	// https://github.com/emiago/sipgo/issues/168
 	// Destination can be FQDN and we do not want to resolve this.
-	// Still in case reliable connection, this ack will reuse same INVITE connection
+	// Per https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
+	// The ACK MUST be sent to the same address, port, and transport to which the original request was sent
+	// This is only needed for UDP
 	ack.SetDestination(tx.origin.Destination())
 
 	err := tx.conn.WriteMsg(ack)
