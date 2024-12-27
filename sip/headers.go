@@ -35,8 +35,13 @@ func HeaderClone(h Header) Header {
 	return h.headerClone()
 }
 
+// type HeaderKV struct {
+// 	k string
+// 	v string
+// }
+
 type headers struct {
-	headerOrder []Header
+	headerOrder []HeaderKV
 
 	// Here we only need headers that have frequent access.
 	// DO not add any custom headers, or more specific headers
@@ -100,7 +105,33 @@ func (hs *headers) setHeaderRef(header Header) {
 }
 
 func (hs *headers) unref(header Header) {
-	switch header.(type) {
+	switch v := header.(type) {
+	case *HeaderKV:
+		switch v.K {
+		case "Via":
+			hs.via = nil
+		case "From":
+			hs.from = nil
+		case "To":
+			hs.to = nil
+		case "CallID":
+			hs.callid = nil
+		case "CSeq":
+			hs.cseq = nil
+		case "Contact":
+			hs.contact = nil
+		case "Route":
+			hs.route = nil
+		case "Record-Route":
+			hs.recordRoute = nil
+		case "Content-Length":
+			hs.contentLength = nil
+		case "Content-Type":
+			hs.contentType = nil
+		case "Max-Forwards":
+			hs.maxForwards = nil
+		}
+
 	case *ViaHeader:
 		hs.via = nil
 	case *FromHeader:
@@ -128,7 +159,8 @@ func (hs *headers) unref(header Header) {
 
 // AppendHeader adds header at end of header list
 func (hs *headers) AppendHeader(header Header) {
-	hs.headerOrder = append(hs.headerOrder, header)
+	kv := HeaderKV{K: header.Name(), V: header.Value()}
+	hs.headerOrder = append(hs.headerOrder, kv)
 	// update only if no multiple headers. TODO find this better
 	switch m := header.(type) {
 	case *ViaHeader:
@@ -148,12 +180,17 @@ func (hs *headers) AppendHeader(header Header) {
 	}
 }
 
+func (hs *headers) AddHeader(key string, val string) {
+	kv := HeaderKV{K: key, V: val}
+	hs.headerOrder = append(hs.headerOrder, kv)
+}
+
 // AppendHeaderAfter adds header after specified header. In case header does not exist normal AppendHeader is called
 // Use it only if you need it
 func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	ind := -1
 	for i, h := range hs.headerOrder {
-		if h.Name() == name {
+		if h.K == name {
 			ind = i
 		}
 	}
@@ -168,9 +205,9 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 		return
 	}
 
-	newOrder := make([]Header, len(hs.headerOrder)+1)
+	newOrder := make([]HeaderKV, len(hs.headerOrder)+1)
 	copy(newOrder, hs.headerOrder[:ind+1])
-	newOrder[ind+1] = header
+	newOrder[ind+1] = HeaderKV{K: header.Name(), V: header.Value()}
 	hs.setHeaderRef(header)
 	copy(newOrder[ind+2:], hs.headerOrder[ind+1:])
 	hs.headerOrder = newOrder
@@ -180,9 +217,9 @@ func (hs *headers) AppendHeaderAfter(header Header, name string) {
 // using as list reduces need of realloc underneath array
 func (hs *headers) PrependHeader(headers ...Header) {
 	offset := len(headers)
-	newOrder := make([]Header, len(hs.headerOrder)+offset)
+	newOrder := make([]HeaderKV, len(hs.headerOrder)+offset)
 	for i, h := range headers {
-		newOrder[i] = h
+		newOrder[i] = HeaderKV{K: h.Name(), V: h.Value()}
 		hs.setHeaderRef(h)
 	}
 	for i, h := range hs.headerOrder {
@@ -194,8 +231,8 @@ func (hs *headers) PrependHeader(headers ...Header) {
 // ReplaceHeader replaces first header with same name
 func (hs *headers) ReplaceHeader(header Header) {
 	for i, h := range hs.headerOrder {
-		if h.Name() == header.Name() {
-			hs.headerOrder[i] = header
+		if h.K == header.Name() {
+			hs.headerOrder[i] = HeaderKV{K: header.Name(), V: header.Value()}
 			hs.setHeaderRef(header)
 			break
 		}
@@ -203,7 +240,7 @@ func (hs *headers) ReplaceHeader(header Header) {
 }
 
 // Headers gets some headers.
-func (hs *headers) Headers() []Header {
+func (hs *headers) Headers() []HeaderKV {
 	// hdrs := make([]Header, 0)
 	// for _, key := range hs.headerOrder {
 	// 	hdrs = append(hdrs, hs.headers[key])
@@ -220,7 +257,8 @@ func (hs *headers) GetHeaders(name string) []Header {
 	nameLower := HeaderToLower(name)
 	for _, h := range hs.headerOrder {
 		if HeaderToLower(h.Name()) == nameLower {
-			hds = append(hds, h)
+			v := h
+			hds = append(hds, &v)
 		}
 	}
 	return hds
@@ -238,7 +276,7 @@ func (hs *headers) GetHeader(name string) Header {
 func (hs *headers) getHeader(nameLower string) Header {
 	for _, h := range hs.headerOrder {
 		if HeaderToLower(h.Name()) == nameLower {
-			return h
+			return &h
 		}
 	}
 
@@ -255,7 +293,7 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 		if entry.Name() == name {
 			foundIdx = idx
 			hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
-			hs.unref(entry)
+			hs.unref(&entry)
 			break
 		}
 	}
@@ -265,7 +303,7 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 	if removed {
 		for _, entry := range hs.headerOrder[foundIdx:] {
 			if entry.Name() == name {
-				hs.setHeaderRef(entry)
+				hs.setHeaderRef(&entry)
 				break
 			}
 		}
@@ -305,6 +343,17 @@ func (hs *headers) Via() *ViaHeader {
 		}
 	}
 	return hs.via
+}
+
+func (hs *headers) vias() []*ViaHeader {
+	hdrs := hs.GetHeaders("via")
+	res := make([]*ViaHeader, len(hdrs))
+	for i, v := range hdrs {
+		h := &ViaHeader{}
+		parseViaHeader(v.Value(), h)
+		res[i] = h
+	}
+	return res
 }
 
 // From returns underlying From parsed header or nil if not exists
@@ -429,9 +478,9 @@ func (hs *headers) ReferredBy() *ReferredByHeader {
 
 // NewHeader creates generic type of header
 func NewHeader(name, value string) Header {
-	return &genericHeader{
-		HeaderName: name,
-		Contents:   value,
+	return &HeaderKV{
+		K: name,
+		V: value,
 	}
 }
 

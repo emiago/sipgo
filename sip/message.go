@@ -99,6 +99,8 @@ type Message interface {
 	PrependHeader(header ...Header)
 	// AppendHeader appends header to message.
 	AppendHeader(header Header)
+
+	AddHeader(key string, value string)
 	// CallID returns 'Call-ID' header.
 	CallID() *CallIDHeader
 	// Via returns the top 'Via' header field.

@@ -38,26 +38,26 @@ func (e errComaDetected) Error() string {
 // u	Allow-Events	-events-	"understand"
 // v	Via	RFC 3261
 var headersParsers = mapHeadersParser{
-	"c":              headerParserContentType,
-	"content-type":   headerParserContentType,
-	"f":              headerParserFrom,
-	"from":           headerParserFrom,
-	"to":             headerParserTo,
-	"t":              headerParserTo,
-	"contact":        headerParserContact,
-	"m":              headerParserContact,
-	"i":              headerParserCallId,
-	"call-id":        headerParserCallId,
-	"cseq":           headerParserCSeq,
-	"via":            headerParserVia,
-	"v":              headerParserVia,
-	"max-forwards":   headerParserMaxForwards,
-	"content-length": headerParserContentLength,
-	"l":              headerParserContentLength,
-	"route":          headerParserRoute,
-	"record-route":   headerParserRecordRoute,
-	"refer-to":       headerParserReferTo,
-	"referred-by":    headerParserReferredBy,
+	// "c":              headerParserContentType,
+	// "content-type":   headerParserContentType,
+	// "f":              headerParserFrom,
+	// "from":           headerParserFrom,
+	// "to":             headerParserTo,
+	// "t":              headerParserTo,
+	// "contact":        headerParserContact,
+	// "m":              headerParserContact,
+	// "i":              headerParserCallId,
+	// "call-id":        headerParserCallId,
+	// "cseq":           headerParserCSeq,
+	// "via":            headerParserVia,
+	// "v":              headerParserVia,
+	// "max-forwards":   headerParserMaxForwards,
+	// "content-length": headerParserContentLength,
+	// "l":              headerParserContentLength,
+	// "route":          headerParserRoute,
+	// "record-route":   headerParserRecordRoute,
+	// "refer-to":       headerParserReferTo,
+	// "referred-by":    headerParserReferredBy,
 }
 
 // DefaultHeadersParser returns minimal version header parser.
@@ -89,8 +89,9 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 		// so we encapsulate the header data in a GenericHeader struct.
 		// We do only forwarding on this with trimmed space. Validation and parsing is required by user
 
-		header := NewHeader(fieldName, fieldText)
-		msg.AppendHeader(header)
+		// header := NewHeader(fieldName, fieldText)
+		// msg.AppendHeader(header)
+		msg.AddHeader(fieldName, fieldText)
 		return nil
 	}
 

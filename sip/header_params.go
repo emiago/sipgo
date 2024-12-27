@@ -10,6 +10,29 @@ type HeaderKV struct {
 	V string
 }
 
+func (h *HeaderKV) Name() string {
+	return h.K
+}
+
+func (h *HeaderKV) Value() string {
+	return h.V
+}
+
+func (h *HeaderKV) String() string {
+	return h.K + ": " + h.V
+}
+
+func (h *HeaderKV) StringWrite(w io.StringWriter) {
+	w.WriteString(h.K)
+	w.WriteString(": ")
+	w.WriteString(h.V)
+}
+
+func (h *HeaderKV) headerClone() Header {
+	v := *h
+	return &v
+}
+
 // HeaderParams are key value params. They do not provide order by default due to performance reasons
 type HeaderParams map[string]string
 

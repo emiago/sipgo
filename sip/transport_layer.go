@@ -190,6 +190,8 @@ func (l *TransportLayer) addListenPort(network string, port int) {
 	}
 }
 
+// GetListenPort
+// Deprecated: use ListenPorts
 func (l *TransportLayer) GetListenPort(network string) int {
 	network = NetworkToLower(network)
 	ports, _ := l.listenPorts[network]
@@ -197,6 +199,15 @@ func (l *TransportLayer) GetListenPort(network string) int {
 		return ports[0]
 	}
 	return 0
+}
+
+// ListenPorts returns all ports that are listening on network
+func (l *TransportLayer) ListenPorts(network string) []int {
+	l.listenPortsMu.Lock()
+	defer l.listenPortsMu.Unlock()
+
+	ports, _ := l.listenPorts[network]
+	return append(ports[:0:0], ports...)
 }
 
 func (l *TransportLayer) WriteMsg(msg Message) error {

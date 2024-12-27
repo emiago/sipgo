@@ -27,7 +27,7 @@ func NewResponse(
 	res.SipVersion = "SIP/2.0"
 	res.headers = headers{
 		// headers:     make(map[string]Header),
-		headerOrder: make([]Header, 0, 10),
+		headerOrder: make([]HeaderKV, 0, 10),
 	}
 	res.StatusCode = statusCode
 	res.Reason = reason
