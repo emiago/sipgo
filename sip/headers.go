@@ -711,6 +711,10 @@ func (h *ContactHeader) Clone() *ContactHeader {
 // CallIDHeader is a Call-ID header presentation
 type CallIDHeader string
 
+func NewCallIDHeader(callID string) *CallIDHeader {
+	return (*CallIDHeader)(&callID)
+}
+
 func (h *CallIDHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
@@ -776,6 +780,10 @@ func (h *CSeqHeader) headerClone() Header {
 // MaxForwardsHeader is Max-Forwards header representation
 type MaxForwardsHeader uint32
 
+func NewMaxForwardsHeader(maxForwards uint32) *MaxForwardsHeader {
+	return (*MaxForwardsHeader)(&maxForwards)
+}
+
 func (h *MaxForwardsHeader) String() string {
 	var buffer strings.Builder
 	h.StringWrite(&buffer)
@@ -805,6 +813,10 @@ func (h MaxForwardsHeader) Val() uint32 {
 // ExpiresHeader is Expires header representation
 type ExpiresHeader uint32
 
+func NewExpiresHeader(expires uint32) *ExpiresHeader {
+	return (*ExpiresHeader)(&expires)
+}
+
 func (h *ExpiresHeader) String() string {
 	return fmt.Sprintf("%s: %s", h.Name(), h.Value())
 }
@@ -823,6 +835,10 @@ func (h *ExpiresHeader) headerClone() Header { return h }
 
 // ContentLengthHeader is Content-Length header representation
 type ContentLengthHeader uint32
+
+func NewContentLengthHeader(contentLength uint32) *ContentLengthHeader {
+	return (*ContentLengthHeader)(&contentLength)
+}
 
 func (h ContentLengthHeader) String() string {
 	var buffer strings.Builder
@@ -930,6 +946,10 @@ func (h *ViaHeader) Clone() *ViaHeader {
 
 // ContentTypeHeader  is Content-Type header representation.
 type ContentTypeHeader string
+
+func NewContentTypeHeader(contentType string) *ContentTypeHeader {
+	return (*ContentTypeHeader)(&contentType)
+}
 
 func (h *ContentTypeHeader) String() string {
 	var buffer strings.Builder

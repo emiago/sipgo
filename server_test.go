@@ -57,8 +57,7 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 		},
 		Params: sip.NewParams(),
 	})
-	callid := sip.CallIDHeader("gotest-" + time.Now().Format(time.RFC3339Nano))
-	req.AppendHeader(&callid)
+	req.AppendHeader(sip.NewCallIDHeader("gotest-" + time.Now().Format(time.RFC3339Nano)))
 	req.AppendHeader(&sip.CSeqHeader{SeqNo: 1, MethodName: method})
 	req.SetBody(nil)
 	return req
