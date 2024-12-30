@@ -199,6 +199,15 @@ func (l *TransportLayer) GetListenPort(network string) int {
 	return 0
 }
 
+func (l *TransportLayer) ListenPorts(network string) []int {
+	l.listenPortsMu.Lock()
+	defer l.listenPortsMu.Unlock()
+
+	network = NetworkToLower(network)
+	ports, _ := l.listenPorts[network]
+	return append(ports[:0:0], ports...) // Faster clone without cloning other slice fields
+}
+
 func (l *TransportLayer) WriteMsg(msg Message) error {
 	network := msg.Transport()
 	addr := msg.Destination()
