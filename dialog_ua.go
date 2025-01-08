@@ -17,6 +17,7 @@ type DialogUA struct {
 	// You can pass custom on each request, but in dialog it is required to be present
 	ContactHDR sip.ContactHeader
 
+	// RewriteContact sends request on source IP instead Contact. Should be used when behind NAT.
 	RewriteContact bool
 }
 

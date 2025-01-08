@@ -61,6 +61,7 @@ func (s *DialogServerSession) ReadRequest(req *sip.Request, tx sip.ServerTransac
 	return nil
 }
 
+// Do does request response pattern. For more control over transaction use TransactionRequest
 func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := s.TransactionRequest(ctx, req)
 	if err != nil {
@@ -92,23 +93,19 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	mustHaveHeaders := make([]sip.Header, 0, 5)
 	if h, invH := req.From(), s.InviteResponse; h == nil && invH != nil {
 		hh := invH.To().AsFrom()
-		// req.AppendHeader(&hh)
 		mustHaveHeaders = append(mustHaveHeaders, &hh)
 	}
 
 	if h, invH := req.To(), s.InviteRequest.From(); h == nil {
 		hh := invH.AsTo()
-		// req.AppendHeader(&hh)
 		mustHaveHeaders = append(mustHaveHeaders, &hh)
 	}
 
 	if h, invH := req.CallID(), s.InviteRequest.CallID(); h == nil {
-		// req.AppendHeader(sip.HeaderClone(invH))
 		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(invH))
 	}
 
 	if h := req.MaxForwards(); h == nil {
-		// req.AppendHeader(sip.HeaderClone(invH))
 		maxFwd := sip.MaxForwardsHeader(70)
 		mustHaveHeaders = append(mustHaveHeaders, &maxFwd)
 	}
@@ -119,7 +116,6 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 			SeqNo:      s.InviteRequest.CSeq().SeqNo,
 			MethodName: req.Method,
 		}
-		// req.AppendHeader(cseq)
 		mustHaveHeaders = append(mustHaveHeaders, cseq)
 	}
 	if len(mustHaveHeaders) > 0 {
@@ -305,7 +301,6 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	if id != s.Dialog.ID {
-		// TODO. This can be panic
 		return fmt.Errorf("ID do not match. Invite request has changed headers?")
 	}
 
@@ -320,7 +315,6 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 func (s *DialogServerSession) Bye(ctx context.Context) error {
 	req := s.Dialog.InviteRequest
 	cont := s.Dialog.InviteRequest.Contact()
-	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
 	bye := sip.NewRequest(sip.BYE, cont.Address)
 	bye.SetTransport(req.Transport())
 
