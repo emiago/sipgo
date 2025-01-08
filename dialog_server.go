@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -318,11 +320,29 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 }
 
 func (s *DialogServerSession) Bye(ctx context.Context) error {
-	req := s.Dialog.InviteRequest
+	// If contact address is non-routable, use the source address instead
 	cont := s.Dialog.InviteRequest.Contact()
-	// TODO Contact is has no resolvable address or TCP is used, then address should be source due TO NAT
+	ip := net.ParseIP(cont.Address.Host)
+	if ip == nil || ip.IsUnspecified() || ip.IsPrivate() {
+		host, port, _ := net.SplitHostPort(s.Dialog.InviteRequest.Source())
+		cont.Address.Host = host
+		cont.Address.Port, _ = strconv.Atoi(port)
+	}
+
+	// If contact address is non-routable, use the source address instead
+
 	bye := sip.NewRequest(sip.BYE, cont.Address)
-	bye.SetTransport(req.Transport())
+
+	// Set transport to match contact
+	transport, ok := cont.Address.UriParams.Get("transport")
+	if !ok {
+		if cont.Address.Scheme == "sips" {
+			transport = "tcp"
+		} else {
+			transport = "udp"
+		}
+	}
+	bye.SetTransport(transport)
 
 	return s.WriteBye(ctx, bye)
 }
