@@ -328,12 +328,9 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 		cont.Address.Host = host
 		cont.Address.Port, _ = strconv.Atoi(port)
 	}
-
-	// If contact address is non-routable, use the source address instead
-
 	bye := sip.NewRequest(sip.BYE, cont.Address)
 
-	// Set transport to match contact
+	// Set transport to the value from the contact header
 	transport, ok := cont.Address.UriParams.Get("transport")
 	if !ok {
 		if cont.Address.Scheme == "sips" {
