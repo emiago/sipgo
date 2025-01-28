@@ -437,6 +437,9 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 
 // Bye sends bye and terminates session. Use WriteBye if you want to customize bye request
 func (s *DialogClientSession) Bye(ctx context.Context) error {
+	if s.InviteResponse == nil {
+		return fmt.Errorf("bye: can not send as no invite response present")
+	}
 	bye := newByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
 	return s.WriteBye(ctx, bye)
 }

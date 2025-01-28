@@ -311,6 +311,16 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	var err error
 
 	a := msg.remoteAddress() // Destination should be already resolved by transport layer
+	if a.IP == nil {
+		// Do fallback
+		host, port, err := ParseAddr(msg.Destination())
+		if err != nil {
+			return err
+		}
+		a.IP = net.ParseIP(host)
+		a.Port = port
+	}
+
 	raddr := net.UDPAddr{
 		IP:   a.IP,
 		Port: a.Port,

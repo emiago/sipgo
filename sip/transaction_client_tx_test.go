@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"log/slog"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ func TestClientTransactionInviteFSM(t *testing.T) {
 	// make things fast
 	SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
 	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	req.raddr = Addr{IP: net.ParseIP("127.0.0.99"), Port: 5060}
 
 	incoming := bytes.NewBuffer([]byte{})
 	outgoing := bytes.NewBuffer([]byte{})
@@ -27,7 +29,6 @@ func TestClientTransactionInviteFSM(t *testing.T) {
 	}
 	tx := NewClientTx("123", req, conn, slog.Default())
 
-	// CALLING STATE
 	err := tx.Init()
 	require.NoError(t, err)
 	require.NoError(t, compareFunctions(tx.currentFsmState(), tx.inviteStateCalling))

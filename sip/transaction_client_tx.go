@@ -189,7 +189,7 @@ func (tx *ClientTx) ack() {
 	// Per https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
 	// The ACK MUST be sent to the same address, port, and transport to which the original request was sent
 	// This is only needed for UDP
-	ack.SetDestination(tx.origin.Destination())
+	ack.raddr = tx.origin.raddr
 
 	err := tx.conn.WriteMsg(ack)
 	if err != nil {
