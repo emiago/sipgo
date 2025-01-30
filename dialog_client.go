@@ -133,8 +133,7 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 			SeqNo:      s.InviteRequest.CSeq().SeqNo,
 			MethodName: req.Method,
 		}
-		// req.AppendHeader(cseq)
-		mustHaveHeaders = append(mustHaveHeaders, sip.HeaderClone(cseq))
+		mustHaveHeaders = append(mustHaveHeaders, cseq)
 	}
 	if len(mustHaveHeaders) > 0 {
 		req.PrependHeader(mustHaveHeaders...)

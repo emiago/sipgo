@@ -10,9 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
+func testClient(t testing.TB, f func(req *sip.Request) *sip.Response) *Client {
 	ua, _ := NewUA()
-	client, _ := NewClient(ua)
+	client, err := NewClient(ua)
+	require.NoError(t, err)
+	client.TxRequester = &siptest.ClientTxRequester{
+		OnRequest: f,
+	}
+	return client
+}
+
+func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
+	client := testClient(t, func(req *sip.Request) *sip.Response {
+		return sip.NewResponseFromRequest(req, 200, "OK", nil)
+	})
 
 	invite := sip.NewRequest(sip.INVITE, sip.Uri{User: "test", Host: "localhost"})
 	invite.AppendHeader(sip.NewHeader("Contact", "<sip:uac@uac.p1.com>"))
@@ -92,6 +103,35 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 		assert.Equal(t, "<sip:p2.com;lr>", bye.GetHeaders("Route")[1].Value())
 	})
 
+}
+
+func TestDialogClientMultiRequest(t *testing.T) {
+	var sentReq *sip.Request
+	client := testClient(t, func(req *sip.Request) *sip.Response {
+		sentReq = req
+		return sip.NewResponseFromRequest(req, 200, "OK", nil)
+	})
+
+	dua := DialogUA{
+		Client: client,
+	}
+	d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, d.InviteRequest.From())
+	assert.NotNil(t, d.InviteRequest.To())
+	assert.NotNil(t, d.InviteRequest.Contact())
+	assert.NotEmpty(t, d.InviteRequest.CallID())
+	assert.NotEmpty(t, d.InviteRequest.MaxForwards())
+
+	err = d.WaitAnswer(context.TODO(), AnswerOptions{})
+	require.NoError(t, err)
+	d.Ack(context.TODO())
+	assert.Equal(t, d.InviteRequest.CSeq().SeqNo, sentReq.CSeq().SeqNo)
+
+	_, err = d.Do(context.Background(), sip.NewRequest(sip.INVITE, sip.Uri{User: "reinvite", Host: "localhost"}))
+	require.NoError(t, err)
+
+	assert.Equal(t, d.InviteRequest.CSeq().SeqNo+1, sentReq.CSeq().SeqNo)
 }
 
 func BenchmarkDialogDo(b *testing.B) {
