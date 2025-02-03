@@ -132,7 +132,7 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.2
 	rrs := s.InviteRequest.GetHeaders("Record-Route")
-	for i := len(rrs) - 1; i >= 0; i-- {
+	for i := range rrs {
 		recordRoute := rrs[i]
 		req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
 	}
