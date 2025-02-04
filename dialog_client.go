@@ -153,7 +153,7 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		// More on
 		// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.1
 		if len(hdrs) > 0 {
-			for i := len(hdrs) - 1; i >= 0; i-- {
+			for i := range hdrs {
 				// We need to put record-route as recipient in case of strict routing
 				recordRoute := hdrs[i]
 				req.AppendHeader(sip.NewHeader("Route", recordRoute.Value()))
