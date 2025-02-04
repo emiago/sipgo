@@ -40,7 +40,7 @@ func TestDialogServerByeRequest(t *testing.T) {
 	require.Equal(t, invite.CallID(), bye.CallID())
 
 	routes := bye.GetHeaders("Route")
-	assert.Equal(t, "<sip:P3:5060>", routes[0].Value())
+	assert.Equal(t, "<sip:P1:5060>", routes[0].Value())
 	assert.Equal(t, "<sip:P2:5060>", routes[1].Value())
-	assert.Equal(t, "<sip:P1:5060>", routes[2].Value())
+	assert.Equal(t, "<sip:P3:5060>", routes[2].Value())
 }
