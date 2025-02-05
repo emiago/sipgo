@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -27,7 +27,7 @@ var (
 // WS transport implementation
 type transportWS struct {
 	parser    *Parser
-	log       zerolog.Logger
+	log       *slog.Logger
 	transport string
 
 	pool   *ConnectionPool
@@ -41,10 +41,21 @@ func newWSTransport(par *Parser) *transportWS {
 		transport: TransportWS,
 		dialer:    ws.DefaultDialer,
 	}
-
 	p.dialer.Protocols = WebSocketProtocols
-	p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
+	// p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
+}
+
+func (t *transportWS) init(par *Parser) {
+	t.parser = par
+	t.pool = NewConnectionPool()
+	t.transport = TransportWS
+	t.dialer = ws.DefaultDialer
+	t.dialer.Protocols = WebSocketProtocols
+
+	if t.log == nil {
+		t.log = slog.With("caller", "transport<WS>")
+	}
 }
 
 func (t *transportWS) String() string {
@@ -62,7 +73,8 @@ func (t *transportWS) Close() error {
 
 // Serve is direct way to provide conn on which this worker will listen
 func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
-	t.log.Debug().Msgf("begin listening on %s %s", t.Network(), l.Addr().String())
+	log := t.log
+	log.Debug("begin listening on", "network", t.Network(), "laddr", l.Addr().String())
 
 	// Prepare handshake header writer from http.Header mapping.
 	// Some phones want to return this
@@ -79,7 +91,7 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 
 	if SIPDebug {
 		u.OnHeader = func(key, value []byte) error {
-			log.Debug().Str(string(key), string(value)).Msg("non-websocket header:")
+			log.Debug("non-websocket header:", string(key), string(value))
 			return nil
 		}
 	}
@@ -87,19 +99,19 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			t.log.Error().Err(err).Msg("Failed to accept connection")
+			log.Error("Failed to accept connection", "error", err)
 			return err
 		}
 
 		raddr := conn.RemoteAddr().String()
 
-		t.log.Debug().Str("addr", raddr).Msg("New connection accept")
+		log.Debug("New connection accept", "addr", raddr)
 
 		_, err = u.Upgrade(conn)
 		if err != nil {
-			t.log.Error().Err(err).Msg("Fail to upgrade")
+			log.Error("Fail to upgrade", "error", err)
 			if err := conn.Close(); err != nil {
-				t.log.Error().Err(err).Msg("Closing connection failed")
+				log.Error("Closing connection failed", "error", err)
 			}
 			continue
 		}
@@ -112,7 +124,7 @@ func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	laddr := conn.LocalAddr().String()
-	t.log.Debug().Str("raddr", raddr).Msg("New WS connection")
+	t.log.Debug("New WS connection", "raddr", raddr)
 	c := &WSConnection{
 		Conn:       conn,
 		refcount:   1 + IdleConnection,
@@ -126,12 +138,13 @@ func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 
 // This should performe better to avoid any interface allocation
 func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr string, handler MessageHandler) {
+	log := t.log
 	buf := make([]byte, TransportBufferReadSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
 	defer t.pool.Delete(laddr)
 	defer t.pool.CloseAndDelete(conn, raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("Websocket read connection stopped")
+	defer log.Debug("Websocket read connection stopped", "raddr", raddr)
 
 	// Create stream parser context
 	par := t.parser.NewSIPStream()
@@ -140,17 +153,17 @@ func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr str
 		num, err := conn.Read(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
-				t.log.Debug().Err(err).Msg("Read connection closed")
+				t.log.Debug("Read connection closed", "error", err)
 				return
 			}
 
-			t.log.Error().Err(err).Msg("Got TCP error")
+			t.log.Error("Got TCP error", "error", err)
 			return
 		}
 
 		if num == 0 {
 			// // What todo
-			log.Debug().Msg("Got no bytes, sleeping")
+			log.Debug("Got no bytes, sleeping")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -165,7 +178,7 @@ func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr str
 		if len(data) <= 4 {
 			//One or 2 CRLF
 			if len(bytes.Trim(data, "\r\n")) == 0 {
-				t.log.Debug().Msg("Keep alive CRLF received")
+				log.Debug("Keep alive CRLF received")
 				continue
 			}
 		}
@@ -179,20 +192,7 @@ func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr str
 func (t *transportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
-		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
-		return
-	}
-
-	msg.SetTransport(t.transport)
-	msg.SetSource(src)
-	handler(msg)
-}
-
-// TODO use this when message size limit is defined
-func (t *transportWS) parseFull(data []byte, src string, handler MessageHandler) {
-	msg, err := t.parser.ParseSIP(data) //Very expensive operation
-	if err != nil {
-		t.log.Error().Err(err).Str("data", string(data)).Msg("failed to parse")
+		t.log.Error("failed to parse", "error", err, "data", string(data))
 		return
 	}
 
@@ -238,12 +238,13 @@ func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 }
 
 func (t *transportWS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
+	log := t.log
 	addr := raddr.String()
-	t.log.Debug().Str("raddr", addr).Msg("Dialing new connection")
+	log.Debug("Dialing new connection", "raddr", addr)
 
 	// How to define local interface
 	if laddr != nil {
-		log.Error().Str("laddr", laddr.String()).Msg("Dialing with local IP is not supported on ws")
+		log.Error("Dialing with local IP is not supported on ws", "laddr", laddr.String())
 	}
 
 	conn, _, _, err := t.dialer.Dial(ctx, "ws://"+addr)

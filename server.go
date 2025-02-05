@@ -6,13 +6,11 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 
 	"github.com/emiago/sipgo/sip"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -45,7 +43,8 @@ type Server struct {
 	requestHandlers map[sip.RequestMethod]RequestHandler
 	noRouteHandler  RequestHandler
 
-	log zerolog.Logger
+	// log zerolog.Logger
+	log *slog.Logger
 
 	requestMiddlewares  []func(r *sip.Request)
 	responseMiddlewares []func(r *sip.Response)
@@ -54,7 +53,7 @@ type Server struct {
 type ServerOption func(s *Server) error
 
 // WithServerLogger allows customizing server logger
-func WithServerLogger(logger zerolog.Logger) ServerOption {
+func WithServerLogger(logger *slog.Logger) ServerOption {
 	return func(s *Server) error {
 		s.log = logger
 		return nil
@@ -83,7 +82,8 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		requestMiddlewares:  make([]func(r *sip.Request), 0),
 		responseMiddlewares: make([]func(r *sip.Response), 0),
 		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
-		log:                 log.Logger.With().Str("caller", "Server").Logger(),
+		// log:                 log.Logger.With().Str("caller", "Server").Logger(),
+		log: slog.With("caller", "Server"),
 	}
 	for _, o := range options {
 		if err := o(s); err != nil {
@@ -111,7 +111,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 				return
 			}
 			if err := connCloser.Close(); err != nil {
-				srv.log.Error().Err(err).Msg("Failed to close listener")
+				srv.log.Error("Failed to close listener", "error", err)
 			}
 
 		}
@@ -187,7 +187,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 				return
 			}
 			if err := connCloser.Close(); err != nil {
-				srv.log.Error().Err(err).Msg("Failed to close listener")
+				srv.log.Error("Failed to close listener", "error", err)
 			}
 
 		}
@@ -386,10 +386,10 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 }
 
 func (srv *Server) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransaction) {
-	srv.log.Warn().Msg("SIP request handler not found")
+	srv.log.Warn("SIP request handler not found", "method", req.Method)
 	res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
 	if err := tx.Respond(res); err != nil {
-		srv.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
+		srv.log.Error("respond '405 Method Not Allowed' failed", "error", err)
 	}
 }
 

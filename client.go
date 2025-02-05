@@ -3,13 +3,12 @@ package sipgo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
 	"github.com/icholy/digest"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func Init() {
@@ -25,7 +24,7 @@ type Client struct {
 	host  string
 	port  int
 	rport bool
-	log   zerolog.Logger
+	log   *slog.Logger
 
 	// TxRequester allows you to use your transaction requester instead default from transaction layer
 	// Useful only for testing
@@ -37,7 +36,7 @@ type Client struct {
 type ClientOption func(c *Client) error
 
 // WithClientLogger allows customizing client logger
-func WithClientLogger(logger zerolog.Logger) ClientOption {
+func WithClientLogger(logger *slog.Logger) ClientOption {
 	return func(s *Client) error {
 		s.log = logger
 		return nil
@@ -94,7 +93,7 @@ func WithClientAddr(addr string) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
-		log:       log.Logger.With().Str("caller", "Client").Logger(),
+		log:       slog.With("caller", "Client"),
 	}
 
 	for _, o := range options {
