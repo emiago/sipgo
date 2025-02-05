@@ -267,13 +267,14 @@ func ResolveInterfacesIP(network string, targetIP *net.IPNet) (net.IP, net.Inter
 		if iface.Flags&net.FlagUp == 0 {
 			continue // interface down
 		}
+
 		if iface.Flags&net.FlagLoopback != 0 {
 			if targetIP != nil && !targetIP.IP.IsLoopback() {
 				continue // loopback interface
 			}
 		}
 
-		ip, err := resolveInterfaceIp(iface, network, targetIP)
+		ip, err := ResolveInterfaceIp(iface, network, targetIP)
 		if errors.Is(err, io.EOF) {
 			continue
 		}
@@ -283,7 +284,7 @@ func ResolveInterfacesIP(network string, targetIP *net.IPNet) (net.IP, net.Inter
 	return nil, net.Interface{}, errors.New("no interface found on system")
 }
 
-func resolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet) (net.IP, error) {
+func ResolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet) (net.IP, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return nil, err
