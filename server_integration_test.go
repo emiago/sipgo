@@ -283,6 +283,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 						maxInvitesPerSec <- struct{}{}
 					}
 					req := sip.NewRequest(sip.INVITE, sip.Uri{User: "bob", Host: shost, Port: sport, Scheme: proto})
+					req.SetTransport(tc.transport)
 					tx, err := client.TransactionRequest(ctx, req)
 					require.NoError(t, err)
 
