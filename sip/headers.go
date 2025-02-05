@@ -149,7 +149,9 @@ func (hs *headers) AppendHeader(header Header) {
 }
 
 // AppendHeaderAfter adds header after specified header. In case header does not exist normal AppendHeader is called
-// Use it only if you need it
+// Performance wise it should be avoided
+//
+// Deprecated: Will be removed in next releases
 func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	ind := -1
 	for i, h := range hs.headerOrder {

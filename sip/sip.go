@@ -1,10 +1,10 @@
 package sip
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -30,7 +30,10 @@ func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
 		siptracer.SIPTraceRead(transport, laddr, raddr, sipmsg)
 		return
 	}
-	log.Debug().Msgf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg)
+
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		slog.Debug(fmt.Sprintf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg))
+	}
 }
 
 func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
@@ -38,7 +41,9 @@ func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
 		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
 		return
 	}
-	log.Debug().Msgf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg)
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		slog.Debug(fmt.Sprintf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg))
+	}
 }
 
 // GenerateBranch returns random unique branch ID.

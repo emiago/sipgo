@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 // TLS transport implementation
@@ -42,8 +41,29 @@ func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
 	}
 
 	// p.tlsConf = dialTLSConf
-	p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
+	// p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
 	return p
+}
+
+func (t *transportWSS) init(par *Parser, dialTLSConf *tls.Config) {
+	t.transportWS.init(par)
+	t.transportWS.transport = TransportWSS
+	t.dialer.TLSConfig = dialTLSConf
+
+	t.dialer.TLSClient = func(conn net.Conn, hostname string) net.Conn {
+		// This is just extracted from tls dialer code
+		config := dialTLSConf
+
+		if config.ServerName == "" {
+			config = config.Clone()
+			config.ServerName = hostname
+		}
+		return tls.Client(conn, config)
+	}
+
+	if t.log == nil {
+		t.log = slog.With("caller", "transport<WSS>")
+	}
 }
 
 func (t *transportWSS) String() string {
@@ -53,7 +73,7 @@ func (t *transportWSS) String() string {
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
 func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	log := &t.log
+	log := t.log
 
 	// Must have IP resolved
 	if raddr.IP == nil {
@@ -91,13 +111,13 @@ func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		LocalAddr: tladdr,
 	}
 
-	log.Debug().Str("raddr", traddr.String()).Msg("Dialing new connection")
+	log.Debug("Dialing new connection", "raddr", traddr.String())
 	conn, err := netDialer.DialContext(ctx, "tcp", traddr.String())
 	if err != nil {
 		return nil, fmt.Errorf("dial TCP error: %w", err)
 	}
 
-	log.Debug().Str("hostname", hostname).Msg("Setuping TLS connection")
+	log.Debug("Setuping TLS connection", "hostname", hostname)
 	tlsConn := t.dialer.TLSClient(conn, hostname)
 
 	u, err := url.ParseRequestURI("wss://" + addr)

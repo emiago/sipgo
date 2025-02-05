@@ -3,6 +3,7 @@ package sipgo
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -107,6 +108,13 @@ func TestMain(m *testing.M) {
 	}
 	sip.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
 	sip.TransactionFSMDebug = os.Getenv("TRANSACTION_DEBUG") == "true"
+
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(os.Getenv("LOG_LEVEL"))); err != nil {
+		lvl = slog.LevelInfo
+	}
+	slog.SetLogLoggerLevel(lvl)
+
 	m.Run()
 }
 
@@ -400,7 +408,7 @@ func ExampleServer_OnNoRoute() {
 		res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
 		// Send response directly and let transaction terminate
 		if err := srv.WriteResponse(res); err != nil {
-			srv.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
+			srv.log.Error("respond '405 Method Not Allowed' failed", "error", err)
 		}
 	})
 }
