@@ -9,8 +9,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -476,6 +474,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 }
 
 func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
+	log := l.log
 	defer func(start time.Time) {
 		if dur := time.Since(start); dur > 50*time.Millisecond {
 			l.log.Warn("DNS resolution is slow", "dur", dur)
@@ -487,7 +486,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		if err == nil {
 			return nil
 		}
-		log.Warn().Str("host", host).Err(err).Msg("Doing SRV lookup failed.")
+		log.Warn("Doing SRV lookup failed.", "host", host, "error", err)
 		return l.resolveAddrIP(ctx, host, addr)
 	}
 
@@ -496,7 +495,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		return nil
 	}
 
-	log.Info().Err(err).Msg("IP addr resolving failed, doing via dns SRV resolver...")
+	log.Info("IP addr resolving failed, doing via dns SRV resolver...", "error", err)
 	return l.resolveAddrSRV(ctx, network, host, addr)
 }
 
@@ -589,9 +588,11 @@ func (l *TransportLayer) Close() error {
 	var werr error
 	for _, t := range l.transports {
 		if err := t.Close(); err != nil {
-			// For now dump last error
-			werr = err
+			werr = errors.Join(werr, err)
 		}
+	}
+	if werr != nil {
+		l.log.Debug("Layer closed with error", "error", werr)
 	}
 	return werr
 }

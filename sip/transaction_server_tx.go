@@ -3,10 +3,9 @@ package sip
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog"
 )
 
 type ServerTx struct {
@@ -28,7 +27,7 @@ type ServerTx struct {
 	closeOnce sync.Once
 }
 
-func NewServerTx(key string, origin *Request, conn Connection, logger zerolog.Logger) *ServerTx {
+func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logger) *ServerTx {
 	tx := new(ServerTx)
 	tx.key = key
 	tx.conn = conn
@@ -66,12 +65,12 @@ func (tx *ServerTx) Init() error {
 			)
 			// tx.Log().Trace("timer_1xx fired")
 			if err := tx.Respond(trying); err != nil {
-				tx.log.Error().Err(err).Msg("send '100 Trying' response failed")
+				tx.log.Error("send '100 Trying' response failed", "error", err, "tx", tx.Key())
 			}
 		})
 		tx.mu.Unlock()
 	}
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Server transaction initialized")
+	tx.log.Debug("Server transaction initialized", "tx", tx.Key())
 	return nil
 }
 
@@ -148,7 +147,7 @@ func (tx *ServerTx) Value(v any) (k any) {
 func (tx *ServerTx) ackSend(r *Request) {
 	select {
 	case <-tx.done:
-		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("ACK missed")
+		tx.log.Warn("ACK missed", "callid", r.CallID().Value(), "tx", tx.Key())
 	case tx.acks <- r:
 	}
 }
@@ -171,7 +170,7 @@ func (tx *ServerTx) OnCancel(f func(r *Request)) {
 }
 
 func (tx *ServerTx) Terminate() {
-	tx.log.Debug().Msg("Server transaction terminating")
+	tx.log.Debug("Server transaction terminating", "tx", tx.Key())
 	tx.delete()
 }
 
@@ -244,5 +243,5 @@ func (tx *ServerTx) delete() {
 		tx.timer_1xx = nil
 	}
 	tx.mu.Unlock()
-	tx.log.Debug().Str("tx", tx.Key()).Msg("Server transaction destroyed")
+	tx.log.Debug("Server transaction destroyed", "tx", tx.Key())
 }

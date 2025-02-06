@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"net"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -59,9 +57,8 @@ func (t *transportUDP) Network() string {
 }
 
 func (t *transportUDP) Close() error {
-	t.pool.Clear()
+	return t.pool.Clear()
 	// Closing listeners is caller thing.
-	return nil
 }
 
 // ServeConn is direct way to provide conn on which this worker will listen
@@ -191,7 +188,11 @@ func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, ladd
 
 func (t *transportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
-	defer t.pool.CloseAndDelete(conn, laddr)
+	defer func() {
+		if err := t.pool.CloseAndDelete(conn, laddr); err != nil {
+			t.log.Warn("connection pool not clean cleanup", "error", err)
+		}
+	}()
 	defer t.log.Debug("Read listener connection stopped", "laddr", laddr)
 
 	var lastRaddr string
@@ -376,13 +377,13 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return ref, nil
 	}
 
-	log.Debug().Str("src", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("UDP reference decrement")
+	slog.Debug("UDP reference decrement", "src", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		log.Warn().Str("src", c.LocalAddr().String()).Str("dst", c.RemoteAddr().String()).Int("ref", ref).Msg("UDP ref went negative")
+		slog.Warn("UDP ref went negative", "src", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 		return 0, nil
 	}
 

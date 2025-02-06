@@ -50,8 +50,7 @@ func (t *transportTCP) Network() string {
 
 func (t *transportTCP) Close() error {
 	// return t.connections.Done()
-	t.pool.Clear()
-	return nil
+	return t.pool.Clear()
 }
 
 // Serve is direct way to provide conn on which this worker will listen
@@ -139,7 +138,11 @@ func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
 	defer t.pool.Delete(laddr)
-	defer t.pool.CloseAndDelete(conn, raddr)
+	defer func() {
+		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
+			t.log.Warn("connection pool not clean cleanup", "error", err)
+		}
+	}()
 
 	// Create stream parser context
 	par := t.parser.NewSIPStream()
