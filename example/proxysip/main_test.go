@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -12,8 +13,6 @@ import (
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/sip"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -187,14 +186,15 @@ func TestMain(m *testing.M) {
 	logruser.SetOutput(os.Stderr)
 	// logruser.SetLevel(logrus.DebugLevel)
 
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: "2006-01-02 15:04:05.000",
-	}).With().Timestamp().Logger().Level(zerolog.WarnLevel)
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(os.Getenv("LOG_LEVEL"))); err != nil {
+		lvl = slog.LevelInfo
+	}
+	slog.SetLogLoggerLevel(lvl)
 
 	if *debug {
 		logruser.SetLevel(logrus.TraceLevel)
-		log.Logger = log.Logger.With().Logger().Level(zerolog.DebugLevel)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 		sip.SIPDebug = true
 	}
 
