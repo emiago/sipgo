@@ -3,9 +3,7 @@ package sip
 import (
 	"context"
 	"fmt"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 type TransactionRequestHandler func(req *Request, tx *ServerTx)
@@ -13,11 +11,11 @@ type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
 func defaultRequestHandler(r *Request, tx *ServerTx) {
-	log.Info().Str("caller", "transactionLayer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
+	slog.Info("Unhandled sip request. OnRequest handler not added", "caller", "transactionLayer", "msg", r.Short())
 }
 
 func defaultUnhandledRespHandler(r *Response) {
-	log.Info().Str("caller", "transactionLayer").Str("msg", r.Short()).Msg("Unhandled sip response. UnhandledResponseHandler handler not added")
+	slog.Info("Unhandled sip response. UnhandledResponseHandler handler not added", "caller", "transactionLayer", "msg", r.Short())
 }
 
 type TransactionLayer struct {
@@ -28,10 +26,18 @@ type TransactionLayer struct {
 	clientTransactions *transactionStore
 	serverTransactions *transactionStore
 
-	log zerolog.Logger
+	log *slog.Logger
 }
 
-func NewTransactionLayer(tpl *TransportLayer) *TransactionLayer {
+type TransactionLayerOption func(tpl *TransportLayer)
+
+func WithTransactionLayerLogger(l *slog.Logger) TransactionLayerOption {
+	return func(tpl *TransportLayer) {
+		tpl.log = l
+	}
+}
+
+func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption) *TransactionLayer {
 	txl := &TransactionLayer{
 		tpl:                tpl,
 		clientTransactions: newTransactionStore(),
@@ -40,7 +46,7 @@ func NewTransactionLayer(tpl *TransportLayer) *TransactionLayer {
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
 	}
-	txl.log = log.Logger.With().Str("caller", "transactionLayer").Logger()
+	txl.log = slog.With("caller", "transactionLayer")
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 	return txl
@@ -64,15 +70,21 @@ func (txl *TransactionLayer) handleMessage(msg Message) {
 
 	switch msg := msg.(type) {
 	case *Request:
-		go txl.handleRequest(msg)
+		go txl.handleRequestBackground(msg)
 	case *Response:
-		go txl.handleResponse(msg)
+		go txl.handleResponseBackground(msg)
 	default:
-		txl.log.Error().Msg("unsupported message, skip it")
+		txl.log.Error("unsupported message, skip it")
 	}
 }
 
-func (txl *TransactionLayer) handleRequest(req *Request) {
+func (txl *TransactionLayer) handleRequestBackground(req *Request) {
+	if err := txl.handleRequest(req); err != nil {
+		txl.log.Error("Server tx failed to handle request", "error", err, "req", req.StartLine())
+	}
+}
+
+func (txl *TransactionLayer) handleRequest(req *Request) error {
 	if req.IsCancel() {
 		// Match transaction https://datatracker.ietf.org/doc/html/rfc3261#section-9.2
 		// 	The CANCEL method requests that the TU at the server side cancel a
@@ -83,67 +95,68 @@ func (txl *TransactionLayer) handleRequest(req *Request) {
 		// For now we only match INVITE
 		key, err := makeServerTxKey(req, INVITE)
 		if err != nil {
-			txl.log.Error().Err(err).Msg("Server tx make key failed")
-			return
+			return fmt.Errorf("make key failed: %w", err)
 		}
 
 		tx, exists := txl.getServerTx(key)
 		if exists {
 			// If ok this should terminate this transaction
 			if err := tx.Receive(req); err != nil {
-				txl.log.Error().Err(err).Msg("Server tx failed to receive req")
-				return
+				return fmt.Errorf("failed to receive req: %w", err)
 			}
 
 			// Reuse connection and send 200 for CANCEL
 			if err := tx.conn.WriteMsg(NewResponseFromRequest(req, StatusOK, "OK", nil)); err != nil {
-				txl.log.Error().Err(err).Msg("Failed to respond 200 for CANCEL")
+				return fmt.Errorf("Failed to respond 200 for CANCEL: %w", err)
 			}
-			return
+			return nil
 		}
 		// Now proceed as normal transaction, and let developer decide what todo with this CANCEL
 	}
 
 	key, err := makeServerTxKey(req, "")
 	if err != nil {
-		txl.log.Error().Err(err).Msg("Server tx make key failed")
-		return
+		return fmt.Errorf("make key failed: %w", err)
 	}
 
 	tx, exists := txl.getServerTx(key)
 	if exists {
 		if err := tx.Receive(req); err != nil {
-			txl.log.Error().Err(err).Msg("Server tx failed to receive req")
+			return fmt.Errorf("failed to receive req: %w", err)
 		}
-		return
+		return nil
 	}
 
 	// Connection must exist by transport layer.
 	// TODO: What if we are gettinb BYE and client closed connection
 	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
 	if err != nil {
-		txl.log.Error().Err(err).Msg("Server tx get connection failed")
-		return
+		return fmt.Errorf("get connection failed: %w", err)
 	}
 
 	tx = NewServerTx(key, req, conn, txl.log)
 
 	if err := tx.Init(); err != nil {
-		txl.log.Error().Err(err).Msg("Server tx init failed")
-		return
+		return fmt.Errorf("init failed: %w", err)
 	}
 	// put tx to store, to match retransmitting requests later
 	txl.serverTransactions.put(tx.Key(), tx)
 	tx.OnTerminate(txl.serverTxTerminate)
 
 	txl.reqHandler(req, tx)
+	return nil
 }
 
-func (txl *TransactionLayer) handleResponse(res *Response) {
+func (txl *TransactionLayer) handleResponseBackground(res *Response) {
+	if err := txl.handleResponse(res); err != nil {
+		txl.log.Error("Client tx failed to handle response", "error", err)
+	}
+}
+
+func (txl *TransactionLayer) handleResponse(res *Response) error {
 	key, err := MakeClientTxKey(res)
 	if err != nil {
-		txl.log.Error().Err(err).Msg("Client tx make key failed")
-		return
+		return fmt.Errorf("make key failed: %w", err)
 	}
 
 	tx, exists := txl.getClientTx(key)
@@ -151,10 +164,11 @@ func (txl *TransactionLayer) handleResponse(res *Response) {
 		// RFC 3261 - 17.1.1.2.
 		// Not matched responses should be passed directly to the UA
 		txl.unRespHandler(res)
-		return
+		return nil
 	}
 
 	tx.Receive(res)
+	return nil
 }
 
 func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*ClientTx, error) {
@@ -217,13 +231,13 @@ func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
 
 func (txl *TransactionLayer) clientTxTerminate(key string) {
 	if !txl.clientTransactions.drop(key) {
-		txl.log.Info().Str("key", key).Msg("Non existing client tx was removed")
+		txl.log.Info("Non existing client tx was removed", "tx", key)
 	}
 }
 
 func (txl *TransactionLayer) serverTxTerminate(key string) {
 	if !txl.serverTransactions.drop(key) {
-		txl.log.Info().Str("key", key).Msg("Non existing server tx was removed")
+		txl.log.Info("Non existing server tx was removed", "tx", key)
 	}
 }
 
@@ -248,7 +262,7 @@ func (txl *TransactionLayer) getServerTx(key string) (*ServerTx, bool) {
 func (txl *TransactionLayer) Close() {
 	txl.clientTransactions.terminateAll()
 	txl.serverTransactions.terminateAll()
-	txl.log.Debug().Msg("transaction layer closed")
+	txl.log.Debug("transaction layer closed")
 }
 
 func (txl *TransactionLayer) Transport() *TransportLayer {

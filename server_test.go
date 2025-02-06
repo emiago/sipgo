@@ -12,8 +12,6 @@ import (
 
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/sip"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -98,14 +96,14 @@ func createTestBye(t testing.TB, targetSipUri string, transport, addr string, ca
 }
 
 func TestMain(m *testing.M) {
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: "2006-01-02 15:04:05.000",
-	}).With().Timestamp().Logger().Level(zerolog.WarnLevel)
+	// log.Logger = zerolog.New(zerolog.ConsoleWriter{
+	// 	Out:        os.Stdout,
+	// 	TimeFormat: "2006-01-02 15:04:05.000",
+	// }).With().Timestamp().Logger().Level(zerolog.WarnLevel)
 
-	if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
-		log.Logger = log.Level(lvl)
-	}
+	// if lvl, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
+	// 	log.Logger = log.Level(lvl)
+	// }
 	sip.SIPDebug = os.Getenv("SIP_DEBUG") == "true"
 	sip.TransactionFSMDebug = os.Getenv("TRANSACTION_DEBUG") == "true"
 

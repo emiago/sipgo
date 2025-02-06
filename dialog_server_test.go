@@ -2,10 +2,10 @@ package sipgo
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func TestDialogServerByeRequest(t *testing.T) {
 	invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P2", Port: 5060}})
 	invite.AppendHeader(&sip.RecordRouteHeader{Address: sip.Uri{Host: "P3", Port: 5060}})
 
-	dialog, err := dialogSrv.ReadInvite(invite, sip.NewServerTx("test", invite, nil, log.Logger))
+	dialog, err := dialogSrv.ReadInvite(invite, sip.NewServerTx("test", invite, nil, slog.Default()))
 	require.NoError(t, err)
 
 	res := sip.NewResponseFromRequest(invite, sip.StatusOK, "OK", nil)

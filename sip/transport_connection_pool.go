@@ -2,10 +2,9 @@ package sip
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 type Connection interface {
@@ -39,9 +38,13 @@ type ConnectionPool struct {
 }
 
 func NewConnectionPool() *ConnectionPool {
-	return &ConnectionPool{
-		m: make(map[string]Connection),
-	}
+	p := &ConnectionPool{}
+	p.init()
+	return p
+}
+
+func (p *ConnectionPool) init() {
+	p.m = make(map[string]Connection)
 }
 
 func (p *ConnectionPool) Add(a string, c Connection) {
@@ -93,16 +96,15 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 }
 
 // CloseAndDelete closes connection and deletes from pool
-func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) {
+func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) error {
 	p.Lock()
 	defer p.Unlock()
+	delete(p.m, addr)
 	ref, _ := c.TryClose() // Be nice. Saves from double closing
 	if ref > 0 {
-		if err := c.Close(); err != nil {
-			log.Warn().Err(err).Msg("Closing conection return error")
-		}
+		return c.Close()
 	}
-	delete(p.m, addr)
+	return nil
 }
 
 func (p *ConnectionPool) Delete(addr string) {
@@ -120,19 +122,23 @@ func (p *ConnectionPool) DeleteMultiple(addrs []string) {
 }
 
 // Clear will clear all connection from pool and close them
-func (p *ConnectionPool) Clear() {
+func (p *ConnectionPool) Clear() error {
 	p.Lock()
 	defer p.Unlock()
+
+	defer func() {
+		// Remove all
+		p.m = make(map[string]Connection)
+	}()
+
+	var werr error
 	for _, c := range p.m {
 		if c.Ref(0) <= 0 {
 			continue
 		}
-		if err := c.Close(); err != nil {
-			log.Warn().Err(err).Msg("Closing conection return error")
-		}
+		werr = errors.Join(werr, c.Close())
 	}
-	// Remove all
-	p.m = make(map[string]Connection)
+	return werr
 }
 
 func (p *ConnectionPool) Size() int {

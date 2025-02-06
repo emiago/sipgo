@@ -3,10 +3,9 @@ package sip
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 const ()
@@ -149,9 +148,7 @@ func (hs *headers) AppendHeader(header Header) {
 }
 
 // AppendHeaderAfter adds header after specified header. In case header does not exist normal AppendHeader is called
-// Performance wise it should be avoided
-//
-// Deprecated: Will be removed in next releases
+// Use it only if you need it
 func (hs *headers) AppendHeaderAfter(header Header, name string) {
 	ind := -1
 	for i, h := range hs.headerOrder {
@@ -1158,7 +1155,7 @@ func parseHeaderLazy[T any, HP headerPointerReceiver[T]](hs *headers, f func(hea
 		}
 
 		if err := f(hdr.Value(), h); err != nil {
-			log.Debug().Err(err).Msgf("Lazy header parsing of %s failed", hdr.Name())
+			slog.Debug("Lazy header parsing failed", "header", hdr.Name(), "error", err)
 			return false
 		}
 		return true
