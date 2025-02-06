@@ -43,7 +43,6 @@ type Server struct {
 	requestHandlers map[sip.RequestMethod]RequestHandler
 	noRouteHandler  RequestHandler
 
-	// log zerolog.Logger
 	log *slog.Logger
 
 	requestMiddlewares  []func(r *sip.Request)
