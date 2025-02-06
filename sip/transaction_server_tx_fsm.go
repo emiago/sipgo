@@ -247,13 +247,13 @@ func (tx *ServerTx) actFinal() fsmInput {
 
 // Inform user of transport error
 func (tx *ServerTx) actTransErr() fsmInput {
-	tx.log.Debug().Err(tx.fsmErr).Msg("Transport error. Transaction will terminate")
+	tx.log.Debug("Transport error. Transaction will terminate", "fsmError", tx.fsmErr, "tx", tx.Key())
 	return server_input_delete
 }
 
-// Inform user of timeout error
+// Inform user of timeout fsmError
 func (tx *ServerTx) actTimeout() fsmInput {
-	tx.log.Debug().Err(tx.fsmErr).Msg("Timed out. Transaction will terminate")
+	tx.log.Debug("Timed out. Transaction will terminate", "fsmError", tx.fsmErr, "tx", tx.Key())
 	return server_input_delete
 }
 
@@ -272,7 +272,7 @@ func (tx *ServerTx) actRespondDelete() fsmInput {
 
 	if err != nil {
 		tx.fsmErr = wrapTransportError(err)
-		tx.log.Debug().Err(err).Msg("fail to actRespondDelete")
+		tx.log.Debug("fail to actRespondDelete", "error", err, "tx", tx.Key())
 		return server_input_transport_err
 	}
 
@@ -314,7 +314,7 @@ func (tx *ServerTx) actCancel() fsmInput {
 	if tx.onCancel != nil {
 		tx.onCancel(r)
 	}
-	tx.log.Debug().Msg("Passing 487 on CANCEL")
+	tx.log.Debug("Passing 487 on CANCEL", "tx", tx.Key())
 	tx.fsmResp = NewResponseFromRequest(tx.origin, StatusRequestTerminated, "Request Terminated", nil)
 	tx.fsmErr = ErrTransactionCanceled // For now only informative
 	return server_input_user_300_plus
@@ -352,7 +352,7 @@ func (tx *ServerTx) passResp() error {
 	// tx.Log().Debug("actFinal")
 	err := tx.conn.WriteMsg(lastResp)
 	if err != nil {
-		tx.log.Debug().Err(err).Str("res", lastResp.StartLine()).Msg("fail to pass response")
+		tx.log.Debug("fail to pass response", "error", err, "res", lastResp.StartLine(), "tx", tx.Key())
 		tx.fsmErr = wrapTransportError(err)
 		return err
 	}

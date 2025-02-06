@@ -67,8 +67,7 @@ func (t *transportWS) Network() string {
 }
 
 func (t *transportWS) Close() error {
-	t.pool.Clear()
-	return nil
+	return t.pool.Clear()
 }
 
 // Serve is direct way to provide conn on which this worker will listen
@@ -143,7 +142,11 @@ func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
 	defer t.pool.Delete(laddr)
-	defer t.pool.CloseAndDelete(conn, raddr)
+	defer func() {
+		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
+			t.log.Warn("connection pool not clean cleanup", "error", err)
+		}
+	}()
 	defer log.Debug("Websocket read connection stopped", "raddr", raddr)
 
 	// Create stream parser context

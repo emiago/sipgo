@@ -3,11 +3,11 @@ package sip
 import (
 	"bytes"
 	"io"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/emiago/sipgo/fakes"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +25,7 @@ func TestServerTransactionFSM(t *testing.T) {
 				Writers: map[string]io.Writer{"127.0.0.2:5060": outgoing},
 			},
 		}
-		tx := NewServerTx("123", req, conn, log.Logger)
+		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
@@ -40,7 +40,7 @@ func TestServerTransactionFSM(t *testing.T) {
 				Writers: map[string]io.Writer{"127.0.0.2:5060": outgoing},
 			},
 		}
-		tx := NewServerTx("123", req, conn, log.Logger)
+		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestServerTransactionFSMInvite(t *testing.T) {
 				Writers: map[string]io.Writer{"127.0.0.2:5060": outgoing},
 			},
 		}
-		tx := NewServerTx("123", req, conn, log.Logger)
+		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
