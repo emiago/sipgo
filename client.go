@@ -133,7 +133,8 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 
 	if len(options) == 0 {
 		if cseq := req.CSeq(); cseq != nil {
-			// Increase cseq if this is existing transaction
+			// Increase cseq if this is new transaction but has cseq added.
+			// Request within dialog should not have this behavior
 			// WriteRequest for ex ACK will not increase and this is wanted behavior
 			// This will be a problem if we allow ACK to be passed as transaction request
 			cseq.SeqNo++
@@ -340,6 +341,34 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 func ClientRequestAddVia(c *Client, r *sip.Request) error {
 	via := clientRequestCreateVia(c, r)
 	r.PrependHeader(via)
+	return nil
+}
+
+// ClientRequestRegisterBuild builds correctly REGISTER request based on RFC
+// Whenever you send REGISTER request you should pass this option
+// https://datatracker.ietf.org/doc/html/rfc3261#section-10.2
+//
+// Experimental
+func ClientRequestRegisterBuild(c *Client, r *sip.Request) error {
+	// Register generally run in a loop
+	if cseq := r.CSeq(); cseq != nil {
+		// Increase cseq if this is existing transaction
+		// WriteRequest for ex ACK will not increase and this is wanted behavior
+		// This will be a problem if we allow ACK to be passed as transaction request
+		cseq.SeqNo++
+	}
+
+	if err := clientRequestBuildReq(c, r); err != nil {
+		return err
+	}
+
+	// address-of-record MUST
+	// be a SIP URI or SIPS URI.
+	// NOTE for now we expect client will build TO and From header correctly
+
+	// The "userinfo" and "@" components of the
+	//        SIP URI MUST NOT be present.
+	r.Recipient.User = ""
 	return nil
 }
 

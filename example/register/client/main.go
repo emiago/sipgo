@@ -65,7 +65,7 @@ func main() {
 	// req.SetDestination(*dst)
 	log.Info().Msg(req.StartLine())
 	ctx := context.Background()
-	tx, err := client.TransactionRequest(ctx, req)
+	tx, err := client.TransactionRequest(ctx, req, sipgo.ClientRequestRegisterBuild)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Fail to create transaction")
 	}
