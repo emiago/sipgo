@@ -127,10 +127,15 @@ Server transaction is passed on handler
 ```go
 // Incoming request
 srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
-    res := sip.NewResponseFromRequest(req, code, reason, body)
-    // Send response
+    // Send provisional
+    res := sip.NewResponseFromRequest(req, 100, "Trying", nil)
+    tx.Respond(res)
+    
+    // Send OK. TODO: some body like SDP
+    res := sip.NewResponseFromRequest(req, 200, "OK", body)
     tx.Respond(res)
 
+    // Wait transaction termination.
     select {
         case m := <-tx.Acks(): // Handle ACK for response . ACKs on 2xx are send as different request
         case <-tx.Done():
@@ -138,7 +143,6 @@ srv.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
             // Check any errors with tx.Err() to have more info why terminated
             return
     }
-
     // terminating handler terminates Server transaction automaticaly
 })
 
@@ -156,6 +160,14 @@ func ackHandler(req *sip.Request, tx sip.ServerTransaction) {
 srv.OnACK(ackHandler)
 ```
 
+## Client Do request
+
+Unless you need more control over [Client Transaction](#client-transaction) you can simply go with client `Do` request and wait final response (following std http package).
+
+```go
+req := sip.NewRequest(sip.INVITE, sip.Uri{User:"bob", Host: "example.com"})
+res, err := client.Do(req)
+```
 
 ## Client Transaction
 
@@ -168,8 +180,7 @@ Here is full example:
 ctx := context.Background()
 client, _ := sipgo.NewClient(ua) // Creating client handle
 
-// Request is either from server request handler or created
-req.SetDestination("10.1.2.3") // Change sip.Request destination
+req := sip.NewRequest(sip.INVITE, sip.Uri{User:"bob", Host: "example.com"})
 tx, err := client.TransactionRequest(ctx, req) // Send request and get client transaction handle
 
 defer tx.Terminate() // Client Transaction must be terminated for cleanup
@@ -185,20 +196,11 @@ select {
 
 ```
 
-## Client Do request
-
-Unless you need more control over [Client Transaction](#client-transaction) you can simply go with client `Do` request and wait final response.
-
-```go
-req := sip.NewRequest(sip.INVITE, sip.Uri{User:"bob", Host: "example.com"})
-res, err := client.Do(req)
-```
-
 ## Client stateless request
 
 ```go
 client, _ := sipgo.NewClient(ua) // Creating client handle
-req := sip.NewRequest(method, recipient)
+req := sip.NewRequest(sip.ACK, sip.Uri{User:"bob", Host: "example.com"})
 // Send request and forget
 client.WriteRequest(req)
 ```
