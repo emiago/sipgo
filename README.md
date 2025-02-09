@@ -120,6 +120,8 @@ srv.OnBye(func(req *sip.Request, tx sip.ServerTransaction)) {
 tx, err := client.TransactionRequest(ctx, sip.NewRequest(sip.INVITE, recipient)) 
 ```
 
+
+
 ## Server Transaction
 
 Server transaction is passed on handler
@@ -195,6 +197,11 @@ select {
 }
 
 ```
+
+#### CSEQ Header increase rule: 
+1. Every new transaction will have **implicitely** CSEQ increase if present -> [Issue 160](https://github.com/emiago/sipgo/issues/160). This fixes problem when you are passing same request like ex. REGISTER
+2. Above rule does not apply for In Dialog cases
+2. To avoid 1. pass option `client.TransactionRequest(ctx, req, sipgo.ClientRequestBuild)` or more better used `DialogClient`
 
 ## Client stateless request
 
