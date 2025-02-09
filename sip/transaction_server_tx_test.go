@@ -58,6 +58,59 @@ func TestServerTransactionFSM(t *testing.T) {
 
 }
 
+func TestServerTransactionNonInviteFSM(t *testing.T) {
+	// SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
+
+	incoming := bytes.NewBuffer([]byte{})
+	outgoing := bytes.NewBuffer([]byte{})
+
+	conn := &UDPConnection{
+		PacketConn: &fakes.UDPConn{
+			Reader:  incoming,
+			Writers: map[string]io.Writer{"127.0.0.1:5060": outgoing},
+		},
+	}
+
+	t.Run("UDP", func(t *testing.T) {
+		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "UDP", "127.0.0.1:5060")
+		tx := NewServerTx("123", req, conn, log.Logger)
+		err := tx.Init()
+		require.NoError(t, err)
+
+		err = tx.Receive(req)
+		require.NoError(t, err)
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateTrying))
+
+		// passing 200 response
+		err = tx.Respond(NewResponseFromRequest(req, 200, "OK", nil))
+		require.NoError(t, err)
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateCompleted))
+
+		// Timer j must be started
+		require.NotNil(t, tx.timer_j)
+	})
+
+	t.Run("TCP", func(t *testing.T) {
+		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "TCP", "127.0.0.1:5060")
+		tx := NewServerTx("123", req, conn, log.Logger)
+		err := tx.Init()
+		require.NoError(t, err)
+
+		err = tx.Receive(req)
+		require.NoError(t, err)
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateTrying))
+
+		// passing 200 response
+		err = tx.Respond(NewResponseFromRequest(req, 200, "OK", nil))
+		require.NoError(t, err)
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateCompleted))
+
+		// timer J should be zero
+		require.Zero(t, tx.timer_j_time)
+		require.Zero(t, <-tx.done)
+	})
+}
+
 func TestServerTransactionFSMInvite(t *testing.T) {
 	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
 

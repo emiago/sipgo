@@ -232,12 +232,14 @@ func (tx *ServerTx) actFinal() fsmInput {
 		return server_input_transport_err
 	}
 
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-17.2.2
+	//  When the server transaction enters the "Completed" state, it MUST set
+	//    Timer J to fire in 64*T1 seconds for unreliable transports, and zero
+	//    seconds for reliable transports.
 	tx.mu.Lock()
-	tx.timer_j = time.AfterFunc(Timer_J, func() {
-		// tx.Log().Trace("timer_j fired")
+	tx.timer_j = time.AfterFunc(tx.timer_j_time, func() {
 		tx.spinFsm(server_input_timer_j)
 	})
-
 	tx.mu.Unlock()
 
 	return FsmInputNone

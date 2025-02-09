@@ -19,6 +19,7 @@ type ServerTx struct {
 	timer_i      *time.Timer
 	timer_i_time time.Duration
 	timer_j      *time.Timer
+	timer_j_time time.Duration
 	timer_1xx    *time.Timer
 	timer_l      *time.Timer
 	reliable     bool
@@ -47,15 +48,16 @@ func (tx *ServerTx) Init() error {
 	tx.mu.Lock()
 	if tx.reliable {
 		tx.timer_i_time = 0
+		tx.timer_j_time = 0
 	} else {
 		tx.timer_g_time = Timer_G
 		tx.timer_i_time = Timer_I
+		tx.timer_j_time = Timer_J
 	}
 	tx.mu.Unlock()
 
 	// RFC 3261 - 17.2.1
 	if tx.Origin().IsInvite() {
-		// tx.Log().Tracef("set timer_1xx to %v", Timer_1xx)
 		tx.mu.Lock()
 		tx.timer_1xx = time.AfterFunc(Timer_1xx, func() {
 			trying := NewResponseFromRequest(

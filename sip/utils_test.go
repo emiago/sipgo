@@ -19,6 +19,23 @@ func testCreateMessage(t testing.TB, rawMsg []string) Message {
 	return msg
 }
 
+func testCreateRequest(t testing.TB, method string, targetSipUri string, transport, fromAddr string) (r *Request) {
+	branch := GenerateBranch()
+	callid := "gotest-" + time.Now().Format(time.RFC3339Nano)
+	ftag := fmt.Sprintf("%d", time.Now().UnixNano())
+	return testCreateMessage(t, []string{
+		method + " " + targetSipUri + " SIP/2.0",
+		"Via: SIP/2.0/" + transport + " " + fromAddr + ";branch=" + branch,
+		"From: \"Alice\" <sip:alice@" + fromAddr + ">;tag=" + ftag,
+		"To: \"Bob\" <" + targetSipUri + ">",
+		"Call-ID: " + callid,
+		"CSeq: 1 INVITE",
+		"Content-Length: 0",
+		"",
+		"",
+	}).(*Request)
+}
+
 func testCreateInvite(t testing.TB, targetSipUri string, transport, fromAddr string) (r *Request, callid string, ftag string) {
 	branch := GenerateBranch()
 	callid = "gotest-" + time.Now().Format(time.RFC3339Nano)
