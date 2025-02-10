@@ -190,7 +190,7 @@ func (tx *ServerTx) TerminateGracefully() {
 		tx.Terminate()
 		return
 	}
-	tx.log.Debug().Msg("Server transaction waiting termination")
+	tx.log.Debug("Server transaction waiting termination")
 	<-tx.Done()
 }
 
