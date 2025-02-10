@@ -133,13 +133,6 @@ func (tx *ServerTx) Acks() <-chan *Request {
 	return tx.acks
 }
 
-func (tx *ServerTx) Finalized() bool {
-	tx.fsmMu.Lock()
-	finalized := tx.fsmResp != nil && !tx.fsmResp.IsProvisional()
-	tx.fsmMu.Unlock()
-	return finalized
-}
-
 func (tx *ServerTx) Context() context.Context {
 	return tx
 }
@@ -170,33 +163,6 @@ func (tx *ServerTx) ackSendAsync(r *Request) {
 	// Go routines should be cheap and it will prevent blocking
 	go tx.ackSend(r)
 }
-
-// func (tx *ServerTx) Cancels() <-chan *Request {
-// 	if tx.cancels != nil {
-// 		return tx.cancels
-// 	}
-// 	tx.cancels = make(chan *Request)
-// 	return tx.cancels
-// }
-
-// func (tx *ServerTx) cancelSend(r *Request) {
-// 	select {
-// 	case <-tx.done:
-// 		tx.log.Warn().Str("callid", r.CallID().Value()).Msg("CANCEL missed")
-// 	case tx.cancels <- r:
-// 	}
-// }
-
-// func (tx *ServerTx) cancelSendAsync(r *Request) {
-// 	tx.onCancel(r)
-
-// 	// select {
-// 	// case tx.cancels <- r:
-// 	// default:
-// 	// 	// Go routines should be cheap and it will prevent blocking
-// 	// 	go tx.cancelSend(r)
-// 	// }
-// }
 
 func (tx *ServerTx) OnCancel(f func(r *Request)) {
 	tx.mu.Lock()
