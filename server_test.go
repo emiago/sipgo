@@ -111,7 +111,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestUDPUAS(t *testing.T) {
-	// Detect any goleaks
+	// Set this timer so that we avoid long retransmissions
+	sip.Timer_J = 10 * time.Millisecond
+	sip.Timer_L = 10 * time.Millisecond
+
 	ua, err := NewUA()
 	require.Nil(t, err)
 

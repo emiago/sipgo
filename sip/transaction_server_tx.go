@@ -1,6 +1,7 @@
 package sip
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -46,10 +47,7 @@ func (tx *ServerTx) Init() error {
 	tx.initFSM()
 
 	tx.mu.Lock()
-	if tx.reliable {
-		tx.timer_i_time = 0
-		tx.timer_j_time = 0
-	} else {
+	if !tx.reliable {
 		tx.timer_g_time = Timer_G
 		tx.timer_i_time = Timer_I
 		tx.timer_j_time = Timer_J
@@ -135,6 +133,25 @@ func (tx *ServerTx) Acks() <-chan *Request {
 	return tx.acks
 }
 
+func (tx *ServerTx) Finalized() bool {
+	tx.fsmMu.Lock()
+	finalized := tx.fsmResp != nil && !tx.fsmResp.IsProvisional()
+	tx.fsmMu.Unlock()
+	return finalized
+}
+
+func (tx *ServerTx) Context() context.Context {
+	return tx
+}
+
+// This adding this to be context compatible
+func (tx *ServerTx) Deadline() (deadline time.Time, ok bool) {
+	return time.Time{}, false
+}
+func (tx *ServerTx) Value(v any) (k any) {
+	return nil
+}
+
 func (tx *ServerTx) ackSend(r *Request) {
 	select {
 	case <-tx.done:
@@ -192,9 +209,25 @@ func (tx *ServerTx) Terminate() {
 	tx.delete()
 }
 
-// func (tx *ServerTx) OnTerminate(f func()) {
-// 	// NOT YET EXPOSED
-// }
+// TerminateGracefully allows retransmission to happen before shuting down transaction
+func (tx *ServerTx) TerminateGracefully() {
+	if tx.reliable {
+		// reliable transports have no retransmission, so it is better just to terminate
+		tx.Terminate()
+		return
+	}
+
+	// Check did we receive final response
+	tx.fsmMu.Lock()
+	finalized := tx.fsmResp != nil && !tx.fsmResp.IsProvisional()
+	tx.fsmMu.Unlock()
+	if !finalized {
+		tx.Terminate()
+		return
+	}
+	tx.log.Debug().Msg("Server transaction waiting termination")
+	<-tx.Done()
+}
 
 // Choose the right FSM init function depending on request method.
 func (tx *ServerTx) initFSM() {

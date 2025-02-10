@@ -8,11 +8,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type RequestHandler func(req *Request, tx ServerTransaction)
+type TransactionRequestHandler func(req *Request, tx *ServerTx)
 type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
-func defaultRequestHandler(r *Request, tx ServerTransaction) {
+func defaultRequestHandler(r *Request, tx *ServerTx) {
 	log.Info().Str("caller", "transactionLayer").Str("msg", r.Short()).Msg("Unhandled sip request. OnRequest handler not added")
 }
 
@@ -22,7 +22,7 @@ func defaultUnhandledRespHandler(r *Response) {
 
 type TransactionLayer struct {
 	tpl           *TransportLayer
-	reqHandler    RequestHandler
+	reqHandler    TransactionRequestHandler
 	unRespHandler UnhandledResponseHandler
 
 	clientTransactions *transactionStore
@@ -46,7 +46,7 @@ func NewTransactionLayer(tpl *TransportLayer) *TransactionLayer {
 	return txl
 }
 
-func (txl *TransactionLayer) OnRequest(h RequestHandler) {
+func (txl *TransactionLayer) OnRequest(h TransactionRequestHandler) {
 	txl.reqHandler = h
 }
 

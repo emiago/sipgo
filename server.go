@@ -71,7 +71,7 @@ func NewServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 	}
 
 	// Handle our transaction layer requests
-	s.tx.OnRequest(s.onRequest)
+	s.tx.OnRequest(s.handleRequest)
 	return s, nil
 }
 
@@ -261,14 +261,8 @@ func (srv *Server) ServeWSS(l net.Listener) error {
 	return srv.tp.ServeWSS(l)
 }
 
-// onRequest gets request from Transaction layer
-func (srv *Server) onRequest(req *sip.Request, tx sip.ServerTransaction) {
-	// Transaction layer is the one who controls concurency execution of every request
-	// so in this case we should avoid adding more concurency
-	srv.handleRequest(req, tx)
-}
-
-func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
+// handleRequest is handling transaction layer
+func (srv *Server) handleRequest(req *sip.Request, tx *sip.ServerTx) {
 	for _, mid := range srv.requestMiddlewares {
 		mid(req)
 	}
@@ -277,7 +271,7 @@ func (srv *Server) handleRequest(req *sip.Request, tx sip.ServerTransaction) {
 	handler(req, tx)
 	if tx != nil {
 		// Must be called to prevent any transaction leaks
-		tx.Terminate()
+		tx.TerminateGracefully()
 	}
 }
 
@@ -394,8 +388,7 @@ func (srv *Server) getHandler(method sip.RequestMethod) (handler RequestHandler)
 func (srv *Server) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransaction) {
 	srv.log.Warn().Msg("SIP request handler not found")
 	res := sip.NewResponseFromRequest(req, 405, "Method Not Allowed", nil)
-	// Send response directly and let transaction terminate
-	if err := srv.WriteResponse(res); err != nil {
+	if err := tx.Respond(res); err != nil {
 		srv.log.Error().Err(err).Msg("respond '405 Method Not Allowed' failed")
 	}
 }
