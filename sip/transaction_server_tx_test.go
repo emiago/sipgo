@@ -73,7 +73,7 @@ func TestServerTransactionNonInviteFSM(t *testing.T) {
 
 	t.Run("UDP", func(t *testing.T) {
 		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "UDP", "127.0.0.1:5060")
-		tx := NewServerTx("123", req, conn, log.Logger)
+		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestServerTransactionNonInviteFSM(t *testing.T) {
 
 	t.Run("TCP", func(t *testing.T) {
 		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "TCP", "127.0.0.1:5060")
-		tx := NewServerTx("123", req, conn, log.Logger)
+		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
 
