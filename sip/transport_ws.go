@@ -14,8 +14,6 @@ import (
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
-
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -275,7 +273,7 @@ func (c *WSConnection) Ref(i int) int {
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS reference increment")
+	slog.Debug("WS reference increment", "ip", c.RemoteAddr().String(), "ref", ref)
 	return ref
 
 }
@@ -284,7 +282,7 @@ func (c *WSConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Msg("WS doing hard close")
+	slog.Debug("WS doing hard close", "ip", c.RemoteAddr().String())
 	return c.Conn.Close()
 }
 
@@ -293,16 +291,16 @@ func (c *WSConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS reference decrement")
+	slog.Debug("WS reference decrement", "ip", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		log.Warn().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS ref went negative")
+		slog.Warn("WS ref went negative", "ip", c.RemoteAddr().String(), "ref", ref)
 		return 0, nil
 	}
-	log.Debug().Str("ip", c.RemoteAddr().String()).Int("ref", ref).Msg("WS closing")
+	slog.Debug("WS closing", "ip", c.RemoteAddr().String(), "ref", ref)
 	return ref, c.Conn.Close()
 }
 
@@ -322,7 +320,8 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		}
 
 		if SIPDebug {
-			log.Debug().Str("caller", c.RemoteAddr().String()).Msgf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
+			str := fmt.Sprintf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
+			slog.Debug(str, "caller", c.RemoteAddr().String())
 		}
 
 		if header.OpCode.IsControl() {
