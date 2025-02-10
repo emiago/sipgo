@@ -98,7 +98,9 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Error("Failed to accept connection", "error", err)
+			if !errors.Is(err, net.ErrClosed) {
+				log.Error("Failed to accept connection", "error", err)
+			}
 			return err
 		}
 
