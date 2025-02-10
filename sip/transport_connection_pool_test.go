@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/emiago/sipgo/fakes"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestConnectionPool(t *testing.T) {
@@ -29,7 +27,6 @@ func TestConnectionPool(t *testing.T) {
 }
 
 func BenchmarkConnectionPool(b *testing.B) {
-	log.Logger = log.Logger.Level(zerolog.WarnLevel)
 	pool := NewConnectionPool()
 
 	for i := 0; i < b.N; i++ {
