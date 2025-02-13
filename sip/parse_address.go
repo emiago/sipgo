@@ -51,7 +51,28 @@ func parseNameAddress(addressText string, a *nameAddress) (err error) {
 
 func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, error) {
 	var startQuote, endQuote int = -1, -1
+	var escaped bool = false
 	for i, c := range s {
+		if c == '\\' {
+			// https://datatracker.ietf.org/doc/html/rfc3261#section-25.1
+			// The backslash character ("\") MAY be used as a single-character
+			// quoting mechanism only within quoted-string and comment constructs.
+			if startQuote > endQuote {
+				escaped = !escaped
+			}
+
+			continue
+		}
+
+		if escaped {
+			if c == 0xA || c == 0x0D {
+				// quoted-pair  =  "\" (%x00-09 / %x0B-0C / %x0E-7F)
+				return nil, s, fmt.Errorf("invalid dipslay name, not allowed to escape '0x%02X' in '%s'", c, s)
+			}
+			escaped = false
+			continue
+		}
+
 		if c == '"' {
 			if startQuote < 0 {
 				startQuote = i
@@ -67,6 +88,11 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		// and ">" are present, all parameters after the URI are header
 		// parameters, not URI parameters.
 		if c == '<' {
+			if startQuote > endQuote {
+				// within quotes, still part of display name
+				continue
+			}
+
 			if endQuote > 0 {
 				a.displayName = s[startQuote+1 : endQuote]
 			} else {
@@ -76,7 +102,8 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		}
 
 		if c == ';' {
-			if startQuote > 0 {
+			if startQuote > endQuote {
+				// within quotes, still part of display name
 				continue
 			}
 			// detect early

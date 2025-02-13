@@ -1,6 +1,8 @@
 package sip
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,6 +60,49 @@ func TestParseAddressValue(t *testing.T) {
 		assert.Equal(t, "", displayName)
 		assert.Equal(t, "*", uri.Host)
 		assert.Equal(t, true, uri.Wildcard)
+	})
+
+	t.Run("quoted-pairs", func(t *testing.T) {
+		address := "\"!\\\"#$%&/'()*+-.,0123456789:;<=>? @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_'abcdefghijklmnopqrstuvwxyz{|}\" <sip:bob@127.0.0.1:5060;user=phone>;tag=1234"
+		uri := Uri{}
+		params := NewParams()
+		displayName, err := ParseAddressValue(address, &uri, params)
+		require.NoError(t, err)
+
+		assert.Equal(t, "sip:bob@127.0.0.1:5060;user=phone", uri.String())
+		assert.Equal(t, "tag=1234", params.String())
+
+		assert.Equal(t, "!\\\"#$%&/'()*+-.,0123456789:;<=>? @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_'abcdefghijklmnopqrstuvwxyz{|}", displayName)
+		assert.Equal(t, "bob", uri.User)
+		assert.Equal(t, "", uri.Password)
+		assert.Equal(t, "127.0.0.1", uri.Host)
+		assert.Equal(t, 5060, uri.Port)
+		assert.Equal(t, false, uri.IsEncrypted())
+		assert.Equal(t, false, uri.Wildcard)
+
+		user, ok := uri.UriParams.Get("user")
+		assert.True(t, ok)
+		assert.Equal(t, 1, uri.UriParams.Length())
+		assert.Equal(t, "phone", user)
+	})
+
+	t.Run("quoted-pairs-escape-range", func(t *testing.T) {
+		for c := 0x00; c <= 0x7F; c++ {
+			uri := Uri{}
+			params := NewParams()
+
+			builder := strings.Builder{}
+			builder.WriteString("\\")
+			builder.WriteByte(byte(c))
+			displayName, err := ParseAddressValue(fmt.Sprintf("\"%s\" <sip:bob@127.0.0.1:5060;user=phone>;tag=1234", builder.String()), &uri, params)
+
+			if c == 0xA || c == 0xD {
+				require.ErrorContains(t, err, fmt.Sprintf("not allowed to escape '0x%02X'", c))
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, builder.String(), displayName)
+			}
+		}
 	})
 }
 
