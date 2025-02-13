@@ -18,33 +18,6 @@ type transportWSS struct {
 	// rootPool *x509.CertPool
 }
 
-// newWSSTransport needs dialTLSConf for creating connections when dialing
-// tls.Config must not be nil
-func newWSSTransport(par *Parser, dialTLSConf *tls.Config) *transportWSS {
-	tcptrans := newWSTransport(par)
-	tcptrans.transport = TransportWSS
-	// Set our TLS config
-	p := &transportWSS{
-		transportWS: tcptrans,
-	}
-
-	p.dialer.TLSConfig = dialTLSConf
-	p.dialer.TLSClient = func(conn net.Conn, hostname string) net.Conn {
-		// This is just extracted from tls dialer code
-		config := dialTLSConf
-
-		if config.ServerName == "" {
-			config = config.Clone()
-			config.ServerName = hostname
-		}
-		return tls.Client(conn, config)
-	}
-
-	// p.tlsConf = dialTLSConf
-	// p.log = log.Logger.With().Str("caller", "transport<WSS>").Logger()
-	return p
-}
-
 func (t *transportWSS) init(par *Parser, dialTLSConf *tls.Config) {
 	t.transportWS.init(par)
 	t.transportWS.transport = TransportWSS
@@ -62,7 +35,7 @@ func (t *transportWSS) init(par *Parser, dialTLSConf *tls.Config) {
 	}
 
 	if t.log == nil {
-		t.log = slog.With("caller", "transport<WSS>")
+		t.log = slog.Default()
 	}
 }
 

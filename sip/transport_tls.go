@@ -19,29 +19,6 @@ type transportTLS struct {
 	tlsClient func(conn net.Conn, hostname string) *tls.Conn
 }
 
-// newTLSTransport needs dialTLSConf for creating connections when dialing
-// tls.Config must not be nil
-func newTLSTransport(par *Parser, dialTLSConf *tls.Config) *transportTLS {
-	tcptrans := newTCPTransport(par)
-	tcptrans.transport = TransportTLS //Override transport
-	p := &transportTLS{
-		transportTCP: tcptrans,
-	}
-
-	// p.rootPool = roots
-	p.tlsConf = dialTLSConf
-	p.tlsClient = func(conn net.Conn, hostname string) *tls.Conn {
-		config := dialTLSConf
-
-		if config.ServerName == "" {
-			config = config.Clone()
-			config.ServerName = hostname
-		}
-		return tls.Client(conn, config)
-	}
-	return p
-}
-
 func (t *transportTLS) init(par *Parser, dialTLSConf *tls.Config) {
 	t.transportTCP.init(par)
 	t.transport = TransportTLS
@@ -58,12 +35,12 @@ func (t *transportTLS) init(par *Parser, dialTLSConf *tls.Config) {
 	}
 
 	if t.log == nil {
-		t.log = slog.With("caller", "transport<TLS>")
+		t.log = slog.Default()
 	}
 }
 
 func (t *transportTLS) String() string {
-	return "transport<TLS>"
+	return "Transport<TLS>"
 }
 
 // CreateConnection creates TLS connection for TCP transport

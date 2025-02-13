@@ -46,7 +46,7 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
 	}
-	txl.log = slog.With("caller", "transactionLayer")
+	txl.log = slog.With("caller", "TransactionLayer")
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 	return txl
