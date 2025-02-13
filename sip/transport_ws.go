@@ -52,7 +52,7 @@ func (t *transportWS) init(par *Parser) {
 	t.dialer.Protocols = WebSocketProtocols
 
 	if t.log == nil {
-		t.log = slog.With("caller", "transport<WS>")
+		t.log = slog.Default()
 	}
 }
 
