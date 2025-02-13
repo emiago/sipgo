@@ -74,10 +74,10 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		}
 
 		if c == '"' {
-			if startQuote > endQuote {
-				endQuote = i
-			} else {
+			if startQuote < 0 {
 				startQuote = i
+			} else {
+				endQuote = i
 			}
 			continue
 		}
