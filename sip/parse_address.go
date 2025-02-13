@@ -65,6 +65,10 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		}
 
 		if escaped {
+			if c == 0xA || c == 0x0D {
+				// quoted-pair  =  "\" (%x00-09 / %x0B-0C / %x0E-7F)
+				return nil, s, fmt.Errorf("invalid dipslay name, not allowed to escape '0x%02X' in '%s'", c, s)
+			}
 			escaped = false
 			continue
 		}
