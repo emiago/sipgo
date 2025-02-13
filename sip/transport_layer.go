@@ -81,13 +81,13 @@ func NewTransportLayer(
 	// Exporting transport configuration
 	// UDP
 	l.udp = &transportUDP{
-		log: l.log.With("caller", "transport<UDP>"),
+		log: l.log.With("caller", "Transport<UDP>"),
 	}
 	l.udp.init(sipparser)
 
 	// TCP
 	l.tcp = &transportTCP{
-		log: l.log.With("caller", "transport<TCP>"),
+		log: l.log.With("caller", "Transport<TCP>"),
 	}
 	l.tcp.init(sipparser)
 
@@ -95,14 +95,14 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.tls = &transportTLS{
 		transportTCP: &transportTCP{
-			log: l.log.With("caller", "transport<TLS>"),
+			log: l.log.With("caller", "Transport<TLS>"),
 		},
 	}
 	l.tls.init(sipparser, tlsConfig)
 
 	// WS
 	l.ws = &transportWS{
-		log: l.log.With("caller", "transport<WS>"),
+		log: l.log.With("caller", "Transport<WS>"),
 	}
 	l.ws.init(sipparser)
 
@@ -110,7 +110,7 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.wss = &transportWSS{
 		transportWS: &transportWS{
-			log: l.log.With("caller", "transport<WSS>"),
+			log: l.log.With("caller", "Transport<WSS>"),
 		},
 	}
 	l.wss.init(sipparser, tlsConfig)

@@ -21,26 +21,17 @@ type transportTCP struct {
 	pool *ConnectionPool
 }
 
-func newTCPTransport(par *Parser) *transportTCP {
-	p := &transportTCP{
-		parser:    par,
-		pool:      NewConnectionPool(),
-		transport: TransportTCP,
-	}
-	return p
-}
-
 func (t *transportTCP) init(par *Parser) {
 	t.parser = par
 	t.pool = NewConnectionPool()
 	t.transport = TransportTCP
 	if t.log == nil {
-		t.log = slog.With("caller", "transport<TCP>")
+		t.log = slog.Default()
 	}
 }
 
 func (t *transportTCP) String() string {
-	return "transport<TCP>"
+	return "Transport<TCP>"
 }
 
 func (t *transportTCP) Network() string {

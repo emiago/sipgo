@@ -27,20 +27,11 @@ type transportUDP struct {
 	log    *slog.Logger
 }
 
-func newUDPTransport(par *Parser) *transportUDP {
-	p := &transportUDP{
-		parser: par,
-		pool:   NewConnectionPool(),
-		log:    slog.With("caller", "transport<UDP>"),
-	}
-	return p
-}
-
 func (t *transportUDP) init(par *Parser) {
 	t.parser = par
 	t.pool = NewConnectionPool()
 	if t.log == nil {
-		t.log = slog.With("caller", "transport<TCP>")
+		t.log = slog.Default()
 	}
 }
 
