@@ -116,7 +116,7 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 		}
 	}
 
-	// TODO Use Content Legnth header
+	// TODO Use Content Length header
 	contentLength := getBodyLength(data)
 	if contentLength <= 0 {
 		return msg, nil
