@@ -48,6 +48,8 @@ type headers struct {
 	cseq          *CSeqHeader
 	contentLength *ContentLengthHeader
 	contentType   *ContentTypeHeader
+	subject       *SubjectHeader
+	userAgent     *UserAgentHeader
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 	maxForwards   *MaxForwardsHeader
@@ -86,6 +88,10 @@ func (hs *headers) setHeaderRef(header Header) {
 		hs.cseq = m
 	case *ContactHeader:
 		hs.contact = m
+	case *SubjectHeader:
+		hs.subject = m
+	case *UserAgentHeader:
+		hs.userAgent = m
 	case *RouteHeader:
 		hs.route = m
 	case *RecordRouteHeader:
@@ -113,6 +119,10 @@ func (hs *headers) unref(header Header) {
 		hs.cseq = nil
 	case *ContactHeader:
 		hs.contact = nil
+	case *SubjectHeader:
+		hs.subject = nil
+	case *UserAgentHeader:
+		hs.userAgent = nil
 	case *RouteHeader:
 		hs.route = nil
 	case *RecordRouteHeader:
@@ -927,6 +937,50 @@ func (h *ViaHeader) Clone() *ViaHeader {
 
 	return newHop
 }
+
+// SubjectHeader is Subject header representation
+type SubjectHeader string
+
+func (h *SubjectHeader) String() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *SubjectHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
+// func (h **SubjectHeader) Name() string { return "Subject" }
+func (h *SubjectHeader) Name() string { return "Subject" }
+
+func (h *SubjectHeader) Value() string { return string(*h) }
+
+func (h *SubjectHeader) headerClone() Header { return h }
+
+// UserAgentHeader is Subject header representation
+type UserAgentHeader string
+
+func (h *UserAgentHeader) String() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *UserAgentHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
+// func (h **UserAgentHeader) Name() string { return "User-Agent" }
+func (h *UserAgentHeader) Name() string { return "User-Agent" }
+
+func (h *UserAgentHeader) Value() string { return string(*h) }
+
+func (h *UserAgentHeader) headerClone() Header { return h }
 
 // ContentTypeHeader  is Content-Type header representation.
 type ContentTypeHeader string
