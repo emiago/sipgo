@@ -15,7 +15,7 @@ type DialogClientSession struct {
 	Dialog
 	// dc       *DialogClient
 	inviteTx sip.ClientTransaction
-	ua       *DialogUA
+	UA       *DialogUA
 
 	// onClose triggers when user calls Close
 	onClose func()
@@ -91,12 +91,12 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
 	s.buildReq(req)
 	// Passing option to avoid CSEQ apply
-	return s.ua.Client.TransactionRequest(ctx, req, s.addVia)
+	return s.UA.Client.TransactionRequest(ctx, req, s.addVia)
 }
 
 func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 	s.buildReq(req)
-	return s.ua.Client.WriteRequest(req, s.addVia)
+	return s.UA.Client.WriteRequest(req, s.addVia)
 }
 
 func (s *DialogClientSession) addVia(c *Client, req *sip.Request) error {
@@ -165,13 +165,13 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 				// this is strict routing
 				req.Recipient = rh.Address
 			}
-		} else if s.ua.RewriteContact {
+		} else if s.UA.RewriteContact {
 			req.SetDestination(s.InviteResponse.Source())
 		}
 	}
 
 	if h := req.Contact(); h == nil {
-		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
+		req.AppendHeader(sip.HeaderClone(&s.UA.ContactHDR))
 	}
 
 	s.lastCSeqNo.Store(cseq.SeqNo)

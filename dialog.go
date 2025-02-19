@@ -54,8 +54,10 @@ func (d *Dialog) Init() {
 	d.state = atomic.Int32{}
 	d.lastCSeqNo = atomic.Uint32{}
 
-	cseq := d.InviteRequest.CSeq().SeqNo
-	d.lastCSeqNo.Store(cseq)
+	// We may have sequence number initialized
+	if cseq := d.InviteRequest.CSeq(); cseq != nil {
+		d.lastCSeqNo.Store(cseq.SeqNo)
+	}
 	d.onStatePointer = atomic.Pointer[DialogStateFn]{}
 }
 

@@ -84,26 +84,32 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 }
 
 func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request, options ...ClientRequestOption) (*DialogClientSession, error) {
-	cli := c.Client
-
 	if inviteReq.Contact() == nil {
 		// Set contact only if not exists
 		inviteReq.AppendHeader(&c.ContactHDR)
-	}
-
-	tx, err := cli.TransactionRequest(ctx, inviteReq, options...)
-	if err != nil {
-		return nil, err
 	}
 
 	dtx := &DialogClientSession{
 		Dialog: Dialog{
 			InviteRequest: inviteReq,
 		},
-		ua:       c,
-		inviteTx: tx,
+		UA: c,
 	}
-	dtx.Init()
+	// Init our dialog
+	dtx.Dialog.Init()
 
-	return dtx, nil
+	return dtx, dtx.Invite(ctx, options...)
+}
+
+func (d *DialogClientSession) Invite(ctx context.Context, options ...ClientRequestOption) error {
+	cli := d.UA.Client
+	inviteReq := d.InviteRequest
+
+	var err error
+	d.inviteTx, err = cli.TransactionRequest(ctx, inviteReq, options...)
+	if err == nil {
+		d.lastCSeqNo.Store(inviteReq.CSeq().SeqNo)
+	}
+
+	return err
 }

@@ -41,7 +41,7 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 		resp.AppendHeader(sip.NewHeader("Record-Route", "<sip:p1.com;lr>"))
 
 		s := DialogClientSession{
-			ua: &DialogUA{
+			UA: &DialogUA{
 				Client: client,
 			},
 			Dialog: Dialog{
@@ -76,7 +76,7 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 		resp.AppendHeader(sip.NewHeader("Record-Route", "<sip:p1.com>"))
 
 		s := DialogClientSession{
-			ua: &DialogUA{
+			UA: &DialogUA{
 				Client: client,
 			},
 			Dialog: Dialog{

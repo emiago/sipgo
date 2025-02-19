@@ -142,7 +142,6 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 	if rr := req.Route(); rr != nil {
 		req.SetDestination(rr.Address.HostPort())
 	}
-
 	// TODO check correct behavior strict routing vs loose routing
 	// recordRoute := req.RecordRoute()
 	// if recordRoute != nil {
