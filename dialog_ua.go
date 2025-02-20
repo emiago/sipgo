@@ -22,10 +22,14 @@ type DialogUA struct {
 }
 
 func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
-	cont := inviteReq.Contact()
-	if cont == nil {
+	// do some minimal validation
+	if inviteReq.Contact() == nil {
 		return nil, ErrDialogInviteNoContact
 	}
+	if inviteReq.CSeq() == nil {
+		return nil, fmt.Errorf("no CSEQ header present")
+	}
+
 	// Prebuild already to tag for response as it must be same for all responds
 	// NewResponseFromRequest will skip this for all 100
 	uuid, err := uuid.NewV4()
@@ -36,15 +40,6 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	id, err := sip.UASReadRequestDialogID(inviteReq)
 	if err != nil {
 		return nil, err
-	}
-
-	// do some minimal validation
-	if inviteReq.CSeq() == nil {
-		return nil, fmt.Errorf("no CSEQ header present")
-	}
-
-	if inviteReq.Contact() == nil {
-		return nil, fmt.Errorf("no Contact header present")
 	}
 
 	dtx := &DialogServerSession{
