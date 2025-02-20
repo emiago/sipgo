@@ -59,7 +59,7 @@ func (tx *ServerTx) Init() error {
 		tx.timer_1xx = time.AfterFunc(Timer_1xx, func() {
 			trying := NewResponseFromRequest(
 				tx.Origin(),
-				100,
+				StatusTrying,
 				"Trying",
 				nil,
 			)
@@ -79,7 +79,7 @@ func (tx *ServerTx) Init() error {
 // therefore running in seperate goroutine is needed
 func (tx *ServerTx) Receive(req *Request) error {
 	tx.mu.Lock()
-	if tx.timer_1xx != nil {
+	if tx.timer_1xx != nil && !req.IsInvite() {
 		tx.timer_1xx.Stop()
 		tx.timer_1xx = nil
 	}

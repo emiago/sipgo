@@ -28,11 +28,14 @@ func TestServerTransactionFSM(t *testing.T) {
 		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
+		require.NoError(t, tx.Err())
 
 		err = tx.Receive(req)
 		require.NoError(t, err)
-
 		require.NoError(t, tx.Err())
+
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.inviteStateProcceeding))
+		require.NotNil(t, tx.timer_1xx)
 		select {
 		case <-tx.Done():
 			t.Error("Transaction should not terminate")
