@@ -13,7 +13,7 @@ import (
 
 func TestServerTransactionFSM(t *testing.T) {
 	// SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
-	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "UDP", "127.0.0.2:5060")
 
 	incoming := bytes.NewBuffer([]byte{})
 	outgoing := bytes.NewBuffer([]byte{})
@@ -31,6 +31,13 @@ func TestServerTransactionFSM(t *testing.T) {
 
 		err = tx.Receive(req)
 		require.NoError(t, err)
+
+		require.NoError(t, tx.Err())
+		select {
+		case <-tx.Done():
+			t.Error("Transaction should not terminate")
+		default:
+		}
 	})
 
 	t.Run("OutOfOrderResponse", func(t *testing.T) {

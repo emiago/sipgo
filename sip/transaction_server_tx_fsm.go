@@ -2,7 +2,6 @@
 package sip
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -346,7 +345,9 @@ func (tx *ServerTx) passResp() error {
 	lastResp := tx.fsmResp
 
 	if lastResp == nil {
-		return fmt.Errorf("none response")
+		// We may have received multiple request but without any response
+		// placed yet in transaction
+		return nil
 	}
 
 	// tx.Log().Debug("actFinal")
