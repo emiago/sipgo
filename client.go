@@ -193,9 +193,33 @@ type DigestAuth struct {
 	Password string
 }
 
-// DoDigestAuth will apply digest authentication if initial request is chalenged by 401 or 407.
+// DoDigestAuth  will apply digest authentication if initial request is chalenged by 401 or 407.
+func (c *Client) DoDigestAuth(ctx context.Context, req *sip.Request, res *sip.Response, auth DigestAuth) (*sip.Response, error) {
+	tx, err := c.TransactionDigestAuth(ctx, req, res, auth)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Terminate()
+	for {
+		select {
+		case res := <-tx.Responses():
+			if res.IsProvisional() {
+				continue
+			}
+			return res, nil
+
+		case <-tx.Done():
+			return nil, tx.Err()
+
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// TransactionDigestAuth will apply digest authentication if initial request is chalenged by 401 or 407.
 // It returns new transaction that is created for this request
-func (c *Client) DoDigestAuth(ctx context.Context, req *sip.Request, res *sip.Response, auth DigestAuth) (sip.ClientTransaction, error) {
+func (c *Client) TransactionDigestAuth(ctx context.Context, req *sip.Request, res *sip.Response, auth DigestAuth) (sip.ClientTransaction, error) {
 	if res.StatusCode == sip.StatusProxyAuthRequired {
 		return digestProxyAuthRequest(ctx, c, req, res, digest.Options{
 			Method:   req.Method.String(),
