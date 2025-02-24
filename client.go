@@ -163,8 +163,8 @@ func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.
 // It returns on final response.
 // NOTE: Canceling ctx WILL not send Cancel Request which is needed for INVITE. Use dialog API for dealing with dialogs
 // For more lower API use TransactionRequest directly
-func (c *Client) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
-	tx, err := c.TransactionRequest(ctx, req)
+func (c *Client) Do(ctx context.Context, req *sip.Request, opts ...ClientRequestOption) (*sip.Response, error) {
+	tx, err := c.TransactionRequest(ctx, req, opts...)
 	if err != nil {
 		return nil, err
 	}
