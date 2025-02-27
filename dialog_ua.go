@@ -54,13 +54,26 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 
 	// Temporarly fix
 	if stx, ok := tx.(*sip.ServerTx); ok {
-		stx.OnTerminate(func(key string) {
+		registered := stx.OnTerminate(func(key string, err error) {
+			// NOTE: do not call any here tx FSM related functions as they can cause deadlock
 			state := dtx.LoadState()
 			if state < sip.DialogStateEstablished {
-				// It is canceled if transaction died before answer
-				dtx.setState(sip.DialogStateEnded)
+				// It is mostly canceled if transaction died before answer
+				// NOTE this only happens if we sent provisional and before final response
+				if err == sip.ErrTransactionCanceled {
+					dtx.endWithCause(sip.ErrTransactionCanceled)
+					return
+				}
+				dtx.endWithCause(nil)
 			}
 		})
+		// Transaction already terminated
+		if !registered {
+			if err := tx.Err(); err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("transaction terminated already")
+		}
 	}
 
 	return dtx, nil

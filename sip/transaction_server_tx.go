@@ -163,15 +163,17 @@ func (tx *ServerTx) ackSendAsync(r *Request) {
 	go tx.ackSend(r)
 }
 
+// OnCancel is experimental
+// It is racy thing if not registered after transaction creation
 func (tx *ServerTx) OnCancel(f func(r *Request)) {
-	tx.mu.Lock()
-	defer tx.mu.Unlock()
+	tx.fsmMu.Lock()
+	defer tx.fsmMu.Unlock()
 	tx.onCancel = f
 }
 
 func (tx *ServerTx) Terminate() {
 	tx.log.Debug("Server transaction terminating", "tx", tx.Key())
-	tx.delete()
+	tx.delete(nil)
 }
 
 // TerminateGracefully allows retransmission to happen before shuting down transaction
@@ -203,14 +205,14 @@ func (tx *ServerTx) initFSM() {
 	}
 }
 
-func (tx *ServerTx) delete() {
+func (tx *ServerTx) delete(err error) {
 	tx.closeOnce.Do(func() {
 		tx.mu.Lock()
 		close(tx.done)
 		onterm := tx.onTerminate
 		tx.mu.Unlock()
 		if onterm != nil {
-			onterm(tx.key)
+			onterm(tx.key, err)
 		}
 		// TODO with ref this can be added, but normally we expect client does closing
 		// if _, err := tx.conn.TryClose(); err != nil {

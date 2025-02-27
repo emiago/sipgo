@@ -155,18 +155,30 @@ func (tx *baseTx) Done() <-chan struct{} {
 	return tx.done
 }
 
-func (tx *baseTx) OnTerminate(f FnTxTerminate) {
+// OnTerminate is experimental
+// Callback function can not call any fsm related functions as it will cause deadlock like.
+// Err must not be called,instead error is passed
+func (tx *baseTx) OnTerminate(f FnTxTerminate) bool {
 	tx.mu.Lock()
+	select {
+	case <-tx.done:
+		tx.mu.Unlock()
+		// Already terminated
+		return false
+	default:
+	}
 	defer tx.mu.Unlock()
+
 	if tx.onTerminate != nil {
 		prev := tx.onTerminate
-		tx.onTerminate = func(key string) {
-			prev(key)
-			f(key)
+		tx.onTerminate = func(key string, err error) {
+			prev(key, err)
+			f(key, err)
 		}
-		return
+		return true
 	}
 	tx.onTerminate = f
+	return true
 }
 
 // TODO
@@ -198,14 +210,7 @@ func (tx *baseTx) spinFsmUnsafe(in fsmInput) {
 // Choose the right FSM init function depending on request method.
 func (tx *baseTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Lock()
-	for i := in; i != FsmInputNone; {
-		if TransactionFSMDebug {
-			fname := runtime.FuncForPC(reflect.ValueOf(tx.fsmState).Pointer()).Name()
-			fname = fname[strings.LastIndex(fname, ".")+1:]
-			tx.log.Debug("Changing transaction state", "key", tx.key, "input", fsmString(i), "state", fname)
-		}
-		i = tx.fsmState(i)
-	}
+	tx.spinFsmUnsafe(in)
 	tx.fsmMu.Unlock()
 }
 
@@ -243,7 +248,7 @@ func (tx *baseTx) Err() error {
 	return err
 }
 
-type FnTxTerminate func(key string)
+type FnTxTerminate func(key string, err error)
 
 func isRFC3261(branch string) bool {
 	return branch != "" &&

@@ -203,7 +203,7 @@ func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*Client
 	txl.clientTransactions.put(tx.Key(), tx)
 
 	if err := tx.Init(); err != nil {
-		txl.clientTxTerminate(tx.key) //Force termination here
+		txl.clientTxTerminate(tx.key, nil) //Force termination here
 		return nil, err
 	}
 
@@ -229,13 +229,13 @@ func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
 	return tx, nil
 }
 
-func (txl *TransactionLayer) clientTxTerminate(key string) {
+func (txl *TransactionLayer) clientTxTerminate(key string, err error) {
 	if !txl.clientTransactions.drop(key) {
 		txl.log.Info("Non existing client tx was removed", "tx", key)
 	}
 }
 
-func (txl *TransactionLayer) serverTxTerminate(key string) {
+func (txl *TransactionLayer) serverTxTerminate(key string, err error) {
 	if !txl.serverTransactions.drop(key) {
 		txl.log.Info("Non existing server tx was removed", "tx", key)
 	}

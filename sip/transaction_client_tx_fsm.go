@@ -408,7 +408,7 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 }
 
 func (tx *ClientTx) actDelete() fsmInput {
-	tx.delete()
+	tx.delete(tx.fsmErr)
 	return FsmInputNone
 }
 

@@ -258,23 +258,7 @@ func (tx *ServerTx) actTimeout() fsmInput {
 
 // Just delete the transaction.
 func (tx *ServerTx) actDelete() fsmInput {
-	tx.delete()
-
-	return FsmInputNone
-}
-
-// Send response and delete the transaction.
-func (tx *ServerTx) actRespondDelete() fsmInput {
-	// tx.Log().Debug("actRespondDelete")
-	tx.delete()
-	err := tx.conn.WriteMsg(tx.fsmResp)
-
-	if err != nil {
-		tx.fsmErr = wrapTransportError(err)
-		tx.log.Debug("fail to actRespondDelete", "error", err, "tx", tx.Key())
-		return server_input_transport_err
-	}
-
+	tx.delete(tx.fsmErr)
 	return FsmInputNone
 }
 

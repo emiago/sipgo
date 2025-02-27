@@ -101,7 +101,7 @@ func (tx *ClientTx) Terminate() {
 	// default:
 	// }
 
-	tx.delete()
+	tx.delete(nil)
 }
 
 // Receive will process response in safe way and change transaction state
@@ -190,7 +190,7 @@ func (tx *ClientTx) resend() {
 	}
 }
 
-func (tx *ClientTx) delete() {
+func (tx *ClientTx) delete(err error) {
 	tx.closeOnce.Do(func() {
 		tx.mu.Lock()
 
@@ -200,7 +200,7 @@ func (tx *ClientTx) delete() {
 
 		// Maybe there is better way
 		if onterm != nil {
-			tx.onTerminate(tx.key)
+			tx.onTerminate(tx.key, err)
 		}
 
 		if _, err := tx.conn.TryClose(); err != nil {

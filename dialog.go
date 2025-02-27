@@ -13,8 +13,9 @@ var (
 	ErrDialogOutsideDialog   = errors.New("Call/Transaction Outside Dialog")
 	ErrDialogDoesNotExists   = errors.New("Call/Transaction Does Not Exist")
 	ErrDialogInviteNoContact = errors.New("No Contact header")
-	ErrDialogCanceled        = errors.New("Dialog canceled")
 	ErrDialogInvalidCseq     = errors.New("Invalid CSEQ number")
+	// ErrDialogCanceled matches invite transaction canceled
+	ErrDialogCanceled = sip.ErrTransactionCanceled
 )
 
 type ErrDialogResponse struct {
@@ -43,14 +44,14 @@ type Dialog struct {
 	state atomic.Int32
 
 	ctx    context.Context
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 
 	onStatePointer atomic.Pointer[DialogStateFn]
 }
 
 // Init setups dialog state
 func (d *Dialog) Init() {
-	d.ctx, d.cancel = context.WithCancel(context.Background())
+	d.ctx, d.cancel = context.WithCancelCause(context.Background())
 	d.state = atomic.Int32{}
 	d.lastCSeqNo = atomic.Uint32{}
 
@@ -89,8 +90,25 @@ func (d *Dialog) setState(s sip.DialogState) {
 	}
 
 	if s == sip.DialogStateEnded {
-		d.cancel()
+		d.cancel(nil)
 	}
+
+	if f := d.onStatePointer.Load(); f != nil {
+		cb := *f
+		cb(s)
+	}
+}
+
+// endWithCause sets dialog state ended and place context cause error
+// Experimental
+func (d *Dialog) endWithCause(err error) {
+	s := sip.DialogStateEnded
+	old := d.state.Swap(int32(s))
+	if old == int32(s) {
+		// Safety
+		return
+	}
+	d.cancel(err)
 
 	if f := d.onStatePointer.Load(); f != nil {
 		cb := *f
