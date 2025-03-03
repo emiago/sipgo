@@ -1,12 +1,10 @@
 package sip
 
 import (
-	"fmt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTorture(t *testing.T) {
@@ -27,6 +25,8 @@ func TestTorture(t *testing.T) {
 		"unreason",
 		//"wsinv",
 	}
+
+	// TODO these should fail with specific error we should validate against
 	invalidTests := []string{
 		"badaspec",
 		//"badbranch",
@@ -69,24 +69,20 @@ func TestTorture(t *testing.T) {
 	for _, test := range validTests {
 		t.Run(test, func(t *testing.T) {
 			data, err := os.ReadFile("testdata/torture/valid/" + test + ".dat")
-			assert.NoError(t, err)
+			require.NoErrorf(t, err, "Error reading torture file %s", test)
 
 			_, err = parser.ParseSIP(data)
-			if err != nil {
-				require.NoErrorf(t, err, fmt.Sprintf("error parsing %s", test))
-			}
+			require.NoErrorf(t, err, "error parsing %s", test)
 		})
 	}
 
 	for _, test := range invalidTests {
 		t.Run(test, func(t *testing.T) {
 			data, err := os.ReadFile("testdata/torture/invalid/" + test + ".dat")
-			assert.NoError(t, err)
+			require.NoErrorf(t, err, "Error reading torture file %s", test)
 
 			_, err = parser.ParseSIP(data)
-			if err == nil {
-				require.Fail(t, "test %f should be failing", test)
-			}
+			require.Errorf(t, err, "test %s should be failing", test)
 		})
 	}
 }
