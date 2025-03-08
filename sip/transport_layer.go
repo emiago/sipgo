@@ -385,7 +385,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	// Always check does connection exists if full IP:port provided
 	// This is probably client forcing host:port
 	if laddr.IP != nil && laddr.Port > 0 {
-		c, _ = transport.GetConnection(laddr.String())
+		c = transport.GetConnection(laddr.String())
 		if c != nil {
 			return c, nil
 		}
@@ -393,7 +393,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 
-		c, _ := transport.GetConnection(addr)
+		c = transport.GetConnection(addr)
 		if c != nil {
 			// Update Via sent by
 			la := c.LocalAddr()
@@ -575,12 +575,12 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 	}
 
 	l.log.Debug("getting connection", "network", network, "addr", addr)
-	c, err := transport.GetConnection(addr)
-	if err == nil && c == nil {
+	c := transport.GetConnection(addr)
+	if c == nil {
 		return nil, fmt.Errorf("connection %q does not exist", addr)
 	}
 
-	return c, err
+	return c, nil
 }
 
 func (l *TransportLayer) Close() error {

@@ -47,7 +47,7 @@ type Transport interface {
 
 	// GetConnection returns connection from transport
 	// addr must be resolved to IP:port
-	GetConnection(addr string) (Connection, error)
+	GetConnection(addr string) Connection
 	CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error)
 	String() string
 	Close() error
@@ -83,6 +83,14 @@ func (a *Addr) String() string {
 	}
 
 	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
+}
+
+func (a *Addr) parseAddr(addr string) error {
+	host, port, err := ParseAddr(addr)
+	a.IP = net.ParseIP(host)
+	a.Port = port
+	a.Hostname = host
+	return err
 }
 
 func ParseAddr(addr string) (host string, port int, err error) {

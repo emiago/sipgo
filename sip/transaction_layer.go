@@ -23,8 +23,8 @@ type TransactionLayer struct {
 	reqHandler    TransactionRequestHandler
 	unRespHandler UnhandledResponseHandler
 
-	clientTransactions *transactionStore
-	serverTransactions *transactionStore
+	clientTransactions *transactionStore[*ClientTx]
+	serverTransactions *transactionStore[*ServerTx]
 
 	log *slog.Logger
 }
@@ -40,8 +40,8 @@ func WithTransactionLayerLogger(l *slog.Logger) TransactionLayerOption {
 func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption) *TransactionLayer {
 	txl := &TransactionLayer{
 		tpl:                tpl,
-		clientTransactions: newTransactionStore(),
-		serverTransactions: newTransactionStore(),
+		clientTransactions: newTransactionStore[*ClientTx](),
+		serverTransactions: newTransactionStore[*ServerTx](),
 
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
@@ -119,32 +119,46 @@ func (txl *TransactionLayer) handleRequest(req *Request) error {
 		return fmt.Errorf("make key failed: %w", err)
 	}
 
-	tx, exists := txl.getServerTx(key)
+	return txl.serverTxRequest(req, key)
+}
+
+func (txl *TransactionLayer) serverTxRequest(req *Request, key string) error {
+	txl.serverTransactions.lock()
+	tx, exists := txl.serverTransactions.items[key]
 	if exists {
+		txl.serverTransactions.unlock()
 		if err := tx.Receive(req); err != nil {
 			return fmt.Errorf("failed to receive req: %w", err)
 		}
 		return nil
 	}
 
-	// Connection must exist by transport layer.
-	// TODO: What if we are gettinb BYE and client closed connection
-	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
+	tx, err := txl.serverTxCreate(req, key)
 	if err != nil {
-		return fmt.Errorf("get connection failed: %w", err)
+		txl.serverTransactions.unlock()
+		return err
 	}
 
-	tx = NewServerTx(key, req, conn, txl.log)
-
-	if err := tx.Init(); err != nil {
-		return fmt.Errorf("init failed: %w", err)
-	}
-	// put tx to store, to match retransmitting requests later
-	txl.serverTransactions.put(tx.Key(), tx)
+	// put tx to store
+	txl.serverTransactions.items[key] = tx
 	tx.OnTerminate(txl.serverTxTerminate)
+	txl.serverTransactions.unlock()
 
+	// pass request and transaction to handler
 	txl.reqHandler(req, tx)
 	return nil
+}
+
+func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx, error) {
+	// Connection must exist by transport layer.
+	// TODO: What if we are getting BYE and client closed connection
+	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
+	if err != nil {
+		return nil, fmt.Errorf("server tx get connection failed: %w", err)
+	}
+
+	tx := NewServerTx(key, req, conn, txl.log)
+	return tx, tx.Init()
 }
 
 func (txl *TransactionLayer) handleResponseBackground(res *Response) {
@@ -181,33 +195,37 @@ func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*Client
 		return nil, err
 	}
 
-	if _, exists := txl.clientTransactions.get(key); exists {
-		return nil, fmt.Errorf("transaction %q already exists", key)
+	return txl.clientTxRequest(ctx, req, key)
+}
+
+func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, key string) (*ClientTx, error) {
+	txl.clientTransactions.lock()
+	tx, exists := txl.clientTransactions.items[key]
+	if exists {
+		txl.clientTransactions.unlock()
+		return nil, fmt.Errorf("client transaction %q already exists", key)
 	}
 
+	tx, err := txl.clientTxCreate(ctx, req, key)
+	if err != nil {
+		txl.clientTransactions.unlock()
+		return nil, fmt.Errorf("failed to create client transaction: %w", err)
+	}
+
+	txl.clientTransactions.items[key] = tx
+	tx.OnTerminate(txl.clientTxTerminate)
+	txl.clientTransactions.unlock()
+	return tx, nil
+}
+
+func (txl *TransactionLayer) clientTxCreate(ctx context.Context, req *Request, key string) (*ClientTx, error) {
 	conn, err := txl.tpl.ClientRequestConnection(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO remove this check
-	if conn == nil {
-		return nil, fmt.Errorf("connection is nil")
-	}
-
-	// TODO
 	tx := NewClientTx(key, req, conn, txl.log)
-
-	// Avoid allocations of anonymous functions
-	tx.OnTerminate(txl.clientTxTerminate)
-	txl.clientTransactions.put(tx.Key(), tx)
-
-	if err := tx.Init(); err != nil {
-		txl.clientTxTerminate(tx.key, nil) //Force termination here
-		return nil, err
-	}
-
-	return tx, nil
+	return tx, tx.Init()
 }
 
 func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
@@ -243,20 +261,22 @@ func (txl *TransactionLayer) serverTxTerminate(key string, err error) {
 
 // RFC 17.1.3.
 func (txl *TransactionLayer) getClientTx(key string) (*ClientTx, bool) {
-	tx, ok := txl.clientTransactions.get(key)
-	if !ok {
-		return nil, false
-	}
-	return tx.(*ClientTx), true
+	return txl.clientTransactions.get(key)
+	// tx, ok := txl.clientTransactions.get(key)
+	// if !ok {
+	// 	return nil, false
+	// }
+	// return tx.(*ClientTx), true
 }
 
 // RFC 17.2.3.
 func (txl *TransactionLayer) getServerTx(key string) (*ServerTx, bool) {
-	tx, ok := txl.serverTransactions.get(key)
-	if !ok {
-		return nil, false
-	}
-	return tx.(*ServerTx), true
+	return txl.serverTransactions.get(key)
+	// tx, ok := txl.serverTransactions.get(key)
+	// if !ok {
+	// 	return nil, false
+	// }
+	// return tx.(*ServerTx), true
 }
 
 func (txl *TransactionLayer) Close() {

@@ -74,16 +74,12 @@ func (t *transportUDP) ResolveAddr(addr string) (net.Addr, error) {
 }
 
 // GetConnection will return same listener connection
-func (t *transportUDP) GetConnection(addr string) (Connection, error) {
+func (t *transportUDP) GetConnection(addr string) Connection {
 	// Single udp connection as listener can only be used as long IP of a packet in same network
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
 	// Pool consists either of every new packet From addr or client created connection
-	if conn := t.pool.Get(addr); conn != nil {
-		return conn, nil
-	}
-
-	return nil, nil
+	return t.pool.Get(addr)
 }
 
 // CreateConnection will create new connection

@@ -58,9 +58,9 @@ func (t *transportTCP) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *transportTCP) GetConnection(addr string) (Connection, error) {
+func (t *transportTCP) GetConnection(addr string) Connection {
 	c := t.pool.Get(addr)
-	return c, nil
+	return c
 }
 
 func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {

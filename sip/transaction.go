@@ -382,42 +382,50 @@ func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	return builder.String(), nil
 }
 
-type transactionStore struct {
-	transactions map[string]Transaction
-	mu           sync.RWMutex
+type transactionStore[T Transaction] struct {
+	items map[string]T
+	mu    sync.RWMutex
 }
 
-func newTransactionStore() *transactionStore {
-	return &transactionStore{
-		transactions: make(map[string]Transaction),
+func newTransactionStore[T Transaction]() *transactionStore[T] {
+	return &transactionStore[T]{
+		items: make(map[string]T),
 	}
 }
 
-func (store *transactionStore) put(key string, tx Transaction) {
+func (store *transactionStore[T]) lock() {
 	store.mu.Lock()
-	defer store.mu.Unlock()
-	store.transactions[key] = tx
 }
 
-func (store *transactionStore) get(key string) (Transaction, bool) {
+func (store *transactionStore[T]) unlock() {
+	store.mu.Unlock()
+}
+
+func (store *transactionStore[T]) put(key string, tx T) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.items[key] = tx
+}
+
+func (store *transactionStore[T]) get(key string) (T, bool) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	tx, ok := store.transactions[key]
+	tx, ok := store.items[key]
 	return tx, ok
 }
 
-func (store *transactionStore) drop(key string) bool {
+func (store *transactionStore[T]) drop(key string) bool {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	_, exists := store.transactions[key]
-	delete(store.transactions, key)
+	_, exists := store.items[key]
+	delete(store.items, key)
 	return exists
 }
 
-func (store *transactionStore) terminateAll() {
+func (store *transactionStore[T]) terminateAll() {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	for _, tx := range store.transactions {
+	for _, tx := range store.items {
 		store.mu.RUnlock()
 		tx.Terminate() // Calls on terminate to be deleted from store. It is deadlock if called inside loop
 		store.mu.RLock()

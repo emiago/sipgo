@@ -208,15 +208,8 @@ func (t *transportWS) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveTCPAddr("tcp", addr)
 }
 
-func (t *transportWS) GetConnection(addr string) (Connection, error) {
-	raddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	addr = raddr.String()
-
-	c := t.pool.Get(addr)
-	return c, nil
+func (t *transportWS) GetConnection(addr string) Connection {
+	return t.pool.Get(addr)
 }
 
 func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
