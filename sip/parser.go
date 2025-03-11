@@ -291,7 +291,7 @@ func parseRequestLine(requestLine string, recipient *Uri) (
 //	SIP/2.0 200 OK
 //	SIP/1.0 403 Forbidden
 func parseStatusLine(statusLine string) (
-	sipVersion string, statusCode StatusCode, reasonPhrase string, err error) {
+	sipVersion string, statusCode int, reasonPhrase string, err error) {
 	parts := strings.Split(statusLine, " ")
 	if len(parts) < 3 {
 		err = fmt.Errorf("status line has too few spaces: '%s'", statusLine)
@@ -300,7 +300,7 @@ func parseStatusLine(statusLine string) (
 
 	sipVersion = parts[0]
 	statusCodeRaw, err := strconv.ParseUint(parts[1], 10, 16)
-	statusCode = StatusCode(statusCodeRaw)
+	statusCode = int(statusCodeRaw)
 	reasonPhrase = strings.Join(parts[2:], " ")
 
 	return

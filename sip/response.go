@@ -14,13 +14,13 @@ import (
 type Response struct {
 	MessageData
 
-	Reason     string     // e.g. "200 OK"
-	StatusCode StatusCode // e.g. 200
+	Reason     string // e.g. "200 OK"
+	StatusCode int    // e.g. 200
 }
 
 // NewResponse creates base structure of response.
 func NewResponse(
-	statusCode StatusCode,
+	statusCode int,
 	reason string,
 ) *Response {
 	res := &Response{}
@@ -192,7 +192,7 @@ func (res *Response) Destination() string {
 // RFC 3261 - 8.2.6
 func NewResponseFromRequest(
 	req *Request,
-	statusCode StatusCode,
+	statusCode int,
 	reason string,
 	body []byte,
 ) *Response {

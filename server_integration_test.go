@@ -167,7 +167,7 @@ func TestIntegrationClientServer(t *testing.T) {
 			require.NoError(t, err)
 
 			res := <-tx.Responses()
-			assert.Equal(t, sip.StatusCode(200), res.StatusCode)
+			assert.Equal(t, 200, res.StatusCode)
 
 			tx.Terminate()
 		})
@@ -288,7 +288,7 @@ func BenchmarkIntegrationClientServer(t *testing.B) {
 					require.NoError(t, err)
 
 					res := <-tx.Responses()
-					assert.Equal(t, sip.StatusCode(200), res.StatusCode)
+					assert.Equal(t, 200, res.StatusCode)
 
 					tx.Terminate()
 				}

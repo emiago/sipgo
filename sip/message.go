@@ -10,64 +10,61 @@ type RequestMethod string
 
 func (r RequestMethod) String() string { return string(r) }
 
-// StatusCode - response status code: 1xx - 6xx
-type StatusCode int
-
 const (
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-21
-	StatusTrying            StatusCode = 100
-	StatusRinging           StatusCode = 180
-	StatusCallIsForwarded   StatusCode = 181
-	StatusQueued            StatusCode = 182
-	StatusSessionInProgress StatusCode = 183
+	StatusTrying            = 100
+	StatusRinging           = 180
+	StatusCallIsForwarded   = 181
+	StatusQueued            = 182
+	StatusSessionInProgress = 183
 
-	StatusOK       StatusCode = 200
-	StatusAccepted StatusCode = 202
+	StatusOK       = 200
+	StatusAccepted = 202
 
-	StatusMovedPermanently StatusCode = 301
-	StatusMovedTemporarily StatusCode = 302
-	StatusUseProxy         StatusCode = 305
+	StatusMovedPermanently = 301
+	StatusMovedTemporarily = 302
+	StatusUseProxy         = 305
 
-	StatusBadRequest                   StatusCode = 400
-	StatusUnauthorized                 StatusCode = 401
-	StatusPaymentRequired              StatusCode = 402
-	StatusForbidden                    StatusCode = 403
-	StatusNotFound                     StatusCode = 404
-	StatusMethodNotAllowed             StatusCode = 405
-	StatusNotAcceptable                StatusCode = 406
-	StatusProxyAuthRequired            StatusCode = 407
-	StatusRequestTimeout               StatusCode = 408
-	StatusConflict                     StatusCode = 409
-	StatusGone                         StatusCode = 410
-	StatusRequestEntityTooLarge        StatusCode = 413
-	StatusRequestURITooLong            StatusCode = 414
-	StatusUnsupportedMediaType         StatusCode = 415
-	StatusRequestedRangeNotSatisfiable StatusCode = 416
-	StatusBadExtension                 StatusCode = 420
-	StatusExtensionRequired            StatusCode = 421
-	StatusIntervalToBrief              StatusCode = 423
-	StatusTemporarilyUnavailable       StatusCode = 480
-	StatusCallTransactionDoesNotExists StatusCode = 481
-	StatusLoopDetected                 StatusCode = 482
-	StatusTooManyHops                  StatusCode = 483
-	StatusAddressIncomplete            StatusCode = 484
-	StatusAmbiguous                    StatusCode = 485
-	StatusBusyHere                     StatusCode = 486
-	StatusRequestTerminated            StatusCode = 487
-	StatusNotAcceptableHere            StatusCode = 488
+	StatusBadRequest                   = 400
+	StatusUnauthorized                 = 401
+	StatusPaymentRequired              = 402
+	StatusForbidden                    = 403
+	StatusNotFound                     = 404
+	StatusMethodNotAllowed             = 405
+	StatusNotAcceptable                = 406
+	StatusProxyAuthRequired            = 407
+	StatusRequestTimeout               = 408
+	StatusConflict                     = 409
+	StatusGone                         = 410
+	StatusRequestEntityTooLarge        = 413
+	StatusRequestURITooLong            = 414
+	StatusUnsupportedMediaType         = 415
+	StatusRequestedRangeNotSatisfiable = 416
+	StatusBadExtension                 = 420
+	StatusExtensionRequired            = 421
+	StatusIntervalToBrief              = 423
+	StatusTemporarilyUnavailable       = 480
+	StatusCallTransactionDoesNotExists = 481
+	StatusLoopDetected                 = 482
+	StatusTooManyHops                  = 483
+	StatusAddressIncomplete            = 484
+	StatusAmbiguous                    = 485
+	StatusBusyHere                     = 486
+	StatusRequestTerminated            = 487
+	StatusNotAcceptableHere            = 488
 
-	StatusInternalServerError StatusCode = 500
-	StatusNotImplemented      StatusCode = 501
-	StatusBadGateway          StatusCode = 502
-	StatusServiceUnavailable  StatusCode = 503
-	StatusGatewayTimeout      StatusCode = 504
-	StatusVersionNotSupported StatusCode = 505
-	StatusMessageTooLarge     StatusCode = 513
+	StatusInternalServerError = 500
+	StatusNotImplemented      = 501
+	StatusBadGateway          = 502
+	StatusServiceUnavailable  = 503
+	StatusGatewayTimeout      = 504
+	StatusVersionNotSupported = 505
+	StatusMessageTooLarge     = 513
 
-	StatusGlobalBusyEverywhere       StatusCode = 600
-	StatusGlobalDecline              StatusCode = 603
-	StatusGlobalDoesNotExistAnywhere StatusCode = 604
-	StatusGlobalNotAcceptable        StatusCode = 606
+	StatusGlobalBusyEverywhere       = 600
+	StatusGlobalDecline              = 603
+	StatusGlobalDoesNotExistAnywhere = 604
+	StatusGlobalNotAcceptable        = 606
 )
 
 // method names are defined here as constants for convenience.

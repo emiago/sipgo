@@ -194,7 +194,7 @@ func (s *DialogServerSession) Close() error {
 // 2xx for creating dialog or other code in case failure
 //
 // In case Cancel request received: ErrDialogCanceled is responded
-func (s *DialogServerSession) Respond(statusCode sip.StatusCode, reason string, body []byte, headers ...sip.Header) error {
+func (s *DialogServerSession) Respond(statusCode int, reason string, body []byte, headers ...sip.Header) error {
 	// Must copy Record-Route headers. Done by this command
 	res := sip.NewResponseFromRequest(s.InviteRequest, statusCode, reason, body)
 
