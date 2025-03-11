@@ -88,6 +88,15 @@ func wrapTimeoutError(err error) error {
 type Transaction interface {
 	// Terminate will terminate transaction
 	Terminate()
+
+	// OnTerminate can be registered to be called when transaction terminates.
+	// It is alternative to tx.Done where you avoid creating more goroutines.
+	// It returns false if transaction already terminated.
+	// NOTE: calling tx methods inside this func can DEADLOCK
+	//
+	// Experimental
+	OnTerminate(f FnTxTerminate) bool
+
 	// Done when transaction fsm terminates. Can be called multiple times
 	Done() <-chan struct{}
 	// Last error. Useful to check when transaction terminates

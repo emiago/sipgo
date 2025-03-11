@@ -53,7 +53,6 @@ func (t *transportTCP) Serve(l net.Listener, handler MessageHandler) error {
 			t.log.Debug("Fail to accept conenction", "error", err)
 			return err
 		}
-
 		t.initConnection(conn, conn.RemoteAddr().String(), handler)
 	}
 }

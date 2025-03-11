@@ -210,7 +210,6 @@ func (l *TransportLayer) ServeWSS(c net.Listener) error {
 	if err != nil {
 		return err
 	}
-
 	l.addListenPort("wss", port)
 
 	return l.wss.Serve(c, l.handleMessage)
