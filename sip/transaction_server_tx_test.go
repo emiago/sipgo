@@ -2,6 +2,7 @@ package sip
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"testing"
@@ -160,4 +161,13 @@ func TestServerTransactionFSMInvite(t *testing.T) {
 			return compareFunctions(tx.currentFsmState(), tx.inviteStateTerminated) == nil
 		}, 10*Timer_I, Timer_I)
 	})
+}
+
+func TestServerTransactionContext(t *testing.T) {
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	tx := NewServerTx("123", req, nil, slog.Default())
+	ctx := ServerTransactionContext(tx)
+	tx.Terminate()
+	require.Equal(t, context.Canceled, ctx.Err())
+	require.Equal(t, ErrTransactionTerminated, tx.Err())
 }

@@ -49,6 +49,8 @@ func TestDialogServerByeRequest(t *testing.T) {
 }
 
 func TestDialogServerTransactionCanceled(t *testing.T) {
+	sip.Timer_H = 0
+
 	ua, _ := NewUA()
 	defer ua.Close()
 	cli, _ := NewClient(ua)
@@ -66,6 +68,7 @@ func TestDialogServerTransactionCanceled(t *testing.T) {
 		tx.Terminate()
 		_, err := dialogSrv.ReadInvite(invite, tx)
 		require.Error(t, err)
+		require.ErrorIs(t, err, sip.ErrTransactionTerminated)
 	})
 
 	t.Run("TerminatedByCancel", func(t *testing.T) {
@@ -80,9 +83,10 @@ func TestDialogServerTransactionCanceled(t *testing.T) {
 		tx.Init()
 		err := tx.Receive(newCancelRequest(invite))
 		require.NoError(t, err)
-		tx.Terminate()
-		_, err = dialogSrv.ReadInvite(invite, tx)
-		require.ErrorIs(t, err, sip.ErrTransactionCanceled)
+		d, err := dialogSrv.ReadInvite(invite, tx)
+		require.NoError(t, err)
+		<-d.Context().Done()
+		require.ErrorIs(t, context.Cause(d.Context()), sip.ErrTransactionCanceled)
 	})
 
 }

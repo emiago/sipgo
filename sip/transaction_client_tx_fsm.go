@@ -408,6 +408,9 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 }
 
 func (tx *ClientTx) actDelete() fsmInput {
+	if tx.fsmErr == nil {
+		tx.fsmErr = ErrTransactionTerminated
+	}
 	tx.delete(tx.fsmErr)
 	return FsmInputNone
 }

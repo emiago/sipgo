@@ -101,7 +101,11 @@ func (tx *ClientTx) Terminate() {
 	// default:
 	// }
 
-	tx.delete(nil)
+	if tx.delete(ErrTransactionTerminated) {
+		tx.fsmMu.Lock()
+		tx.fsmErr = ErrTransactionCanceled
+		tx.fsmMu.Unlock()
+	}
 }
 
 // Receive will process response in safe way and change transaction state
@@ -190,25 +194,17 @@ func (tx *ClientTx) resend() {
 	}
 }
 
-func (tx *ClientTx) delete(err error) {
-	tx.closeOnce.Do(func() {
-		tx.mu.Lock()
-
-		close(tx.done)
-		onterm := tx.onTerminate
-		tx.mu.Unlock()
-
-		// Maybe there is better way
-		if onterm != nil {
-			tx.onTerminate(tx.key, err)
-		}
-
-		if _, err := tx.conn.TryClose(); err != nil {
-			tx.log.Info("Closing connection returned error", "error", err, "tx", tx.Key())
-		}
-	})
-
+func (tx *ClientTx) delete(err error) bool {
 	tx.mu.Lock()
+	if tx.closed {
+		tx.mu.Unlock()
+		return false
+	}
+	tx.closed = true
+
+	close(tx.done)
+	onterm := tx.onTerminate
+
 	if tx.timer_a != nil {
 		tx.timer_a.Stop()
 		tx.timer_a = nil
@@ -222,5 +218,14 @@ func (tx *ClientTx) delete(err error) {
 		tx.timer_d = nil
 	}
 	tx.mu.Unlock()
+	// Maybe there is better way
+	if onterm != nil {
+		tx.onTerminate(tx.key, err)
+	}
+
+	if _, err := tx.conn.TryClose(); err != nil {
+		tx.log.Info("Closing connection returned error", "error", err, "tx", tx.Key())
+	}
 	tx.log.Debug("Client transaction destroyed", "tx", tx.Key())
+	return true
 }

@@ -258,6 +258,9 @@ func (tx *ServerTx) actTimeout() fsmInput {
 
 // Just delete the transaction.
 func (tx *ServerTx) actDelete() fsmInput {
+	if tx.fsmErr == nil {
+		tx.fsmErr = ErrTransactionTerminated
+	}
 	tx.delete(tx.fsmErr)
 	return FsmInputNone
 }

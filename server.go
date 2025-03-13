@@ -222,7 +222,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 
 		connCloser = listener
 		listenReadyCtx(ctx, network, listener.Addr().String())
-		
+
 		if network == "wss" {
 			return srv.tp.ServeWSS(listener)
 		}

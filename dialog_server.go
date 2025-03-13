@@ -89,6 +89,22 @@ func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
 // This ensures that you have proper request done within dialog
 func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	s.buildReq(req)
+	// Passing option to avoid CSEQ apply
+	return s.ua.Client.TransactionRequest(ctx, req, func(c *Client, req *sip.Request) error {
+		if req.Via() == nil {
+			ClientRequestAddVia(c, req)
+		}
+		return nil
+	})
+}
+
+func (s *DialogServerSession) WriteRequest(req *sip.Request) error {
+	s.buildReq(req)
+	return s.ua.Client.WriteRequest(req)
+}
+
+func (s *DialogServerSession) buildReq(req *sip.Request) {
 	// Keep any request inside dialog
 	mustHaveHeaders := make([]sip.Header, 0, 5)
 	if h, invH := req.From(), s.InviteResponse; h == nil && invH != nil {
@@ -172,13 +188,6 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 
 	// TODO check is contact header routable
 	// If not then we should force destination as source address
-
-	// Passing option to avoid CSEQ apply
-	return s.ua.Client.TransactionRequest(ctx, req, ClientRequestBuild)
-}
-
-func (s *DialogServerSession) WriteRequest(req *sip.Request) error {
-	return s.ua.Client.WriteRequest(req)
 }
 
 // Close is always good to call for cleanup or terminating dialog state

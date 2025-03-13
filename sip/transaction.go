@@ -1,6 +1,7 @@
 package sip
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -72,9 +73,10 @@ func SetTimers(t1, t2, t4 time.Duration) {
 var (
 	// Transaction Layer Errors can be detected and handled with different response on caller side
 	// https://www.rfc-editor.org/rfc/rfc3261#section-8.1.3.1
-	ErrTransactionTimeout   = errors.New("transaction timeout")
-	ErrTransactionTransport = errors.New("transaction transport error")
-	ErrTransactionCanceled  = errors.New("transaction canceled")
+	ErrTransactionTimeout    = errors.New("transaction timeout")
+	ErrTransactionTransport  = errors.New("transaction transport error")
+	ErrTransactionCanceled   = errors.New("transaction canceled")
+	ErrTransactionTerminated = errors.New("transaction terminated")
 )
 
 func wrapTransportError(err error) error {
@@ -113,6 +115,20 @@ type ServerTransaction interface {
 	Acks() <-chan *Request
 }
 
+// ServerTransactionContext creates server transaction cancelation via context.Context
+// This is useful if you want to pass this on underhood APIs
+// Should not be called more than once per transaction
+func ServerTransactionContext(tx ServerTransaction) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := tx.OnTerminate(func(key string, err error) {
+		cancel()
+	})
+	if done {
+		cancel()
+	}
+	return ctx
+}
+
 type ClientTransaction interface {
 	Transaction
 	// Responses returns channel with all responses for transaction
@@ -125,8 +141,9 @@ type baseTx struct {
 	key    string
 	origin *Request
 
-	conn Connection
-	done chan struct{}
+	conn   Connection
+	done   chan struct{}
+	closed bool
 
 	//State machine control
 	fsmMu    sync.Mutex
