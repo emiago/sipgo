@@ -13,6 +13,7 @@ const (
 
 var (
 	SIPDebug  bool
+	AllowUDPFragmentation bool = false
 	siptracer SIPTracer
 )
 
