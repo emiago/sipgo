@@ -418,7 +418,7 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	msg.StringWrite(buf)
 	data := buf.Bytes()
 
-	if len(data) > UDPMTUSize-200 {
+	if !AllowUDPFragmentation && len(data) > UDPMTUSize-200 {
 		return ErrUDPMTUCongestion
 	}
 
