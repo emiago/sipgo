@@ -91,17 +91,21 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
 	s.buildReq(req)
 	// Passing option to avoid CSEQ apply
-	return s.UA.Client.TransactionRequest(ctx, req, s.addVia)
+	return s.UA.Client.TransactionRequest(ctx, req, s.requestValidate)
 }
 
 func (s *DialogClientSession) WriteRequest(req *sip.Request) error {
 	s.buildReq(req)
-	return s.UA.Client.WriteRequest(req, s.addVia)
+	return s.UA.Client.WriteRequest(req, s.requestValidate)
 }
 
-func (s *DialogClientSession) addVia(c *Client, req *sip.Request) error {
+func (s *DialogClientSession) requestValidate(c *Client, req *sip.Request) error {
 	if req.Via() == nil {
 		ClientRequestAddVia(c, req)
+	}
+	// Makes sure Content-Length is present
+	if req.Body() == nil {
+		req.SetBody(nil)
 	}
 	return nil
 }
