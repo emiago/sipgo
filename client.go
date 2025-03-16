@@ -149,6 +149,15 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 			return nil, err
 		}
 	}
+
+	// Do some request validation, but only place as warning
+	// The Content-Length header field value is used to locate the end of
+	//   each SIP message in a stream.  It will always be present when SIP
+	//   messages are sent over stream-oriented transports.
+	if sip.IsReliable(req.Transport()) && req.ContentLength() == nil {
+		c.log.Warn("Missing Content-Length for reliable transport")
+	}
+
 	return c.requestTransaction(ctx, req)
 }
 
