@@ -131,8 +131,9 @@ type MessageData struct {
 	tp         string
 
 	// This is for internal routing
-	src  string
-	dest string
+	src    string
+	dest   string
+	ViaNAT bool
 }
 
 func (msg *MessageData) Body() []byte {

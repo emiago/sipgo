@@ -132,7 +132,7 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		return dst
 	}
 
-	var reply = func(tx sip.ServerTransaction, req *sip.Request, code sip.StatusCode, reason string) {
+	var reply = func(tx sip.ServerTransaction, req *sip.Request, code int, reason string) {
 		resp := sip.NewResponseFromRequest(req, code, reason, nil)
 		resp.SetDestination(req.Source()) //This is optional, but can make sure not wrong via is read
 		if err := tx.Respond(resp); err != nil {

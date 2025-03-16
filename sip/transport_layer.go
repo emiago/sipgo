@@ -376,9 +376,13 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	laddr := Addr{
-		IP: net.ParseIP(viaHop.Host),
-		// IP:   lIP,
+		IP:   nil,
 		Port: viaHop.Port,
+	}
+
+	// If request is sent behind NAT, we need to avoid binding this to IP
+	if !req.ViaNAT {
+		laddr.IP = net.ParseIP(viaHop.Host)
 	}
 
 	// Always check does connection exists if full IP:port provided
