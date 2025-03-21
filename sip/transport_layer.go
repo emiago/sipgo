@@ -385,6 +385,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
 		if c != nil {
+			if req.AdvertisedHost != "" {
+				viaHop.Host = req.AdvertisedHost
+			}
 			return c, nil
 		}
 	} else if l.ConnectionReuse {
@@ -467,10 +470,6 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 			viaHop.Host = host
 		}
 		viaHop.Port = port
-	}
-
-	if req.AdvertisedHost != "" {
-		viaHop.Host = req.AdvertisedHost
 	}
 	return c, nil
 }
