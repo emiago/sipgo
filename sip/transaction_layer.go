@@ -29,11 +29,13 @@ type TransactionLayer struct {
 	log *slog.Logger
 }
 
-type TransactionLayerOption func(tpl *TransportLayer)
+type TransactionLayerOption func(tpl *TransactionLayer)
 
 func WithTransactionLayerLogger(l *slog.Logger) TransactionLayerOption {
-	return func(tpl *TransportLayer) {
-		tpl.log = l
+	return func(txl *TransactionLayer) {
+		if l != nil {
+			txl.log = l.With("caller", "TransactionLayer")
+		}
 	}
 }
 
@@ -47,6 +49,11 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 		unRespHandler: defaultUnhandledRespHandler,
 	}
 	txl.log = slog.With("caller", "TransactionLayer")
+
+	for _, o := range options {
+		o(txl)
+	}
+
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 	return txl

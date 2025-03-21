@@ -47,7 +47,9 @@ type TransportLayerOption func(l *TransportLayer)
 
 func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 	return func(l *TransportLayer) {
-		l.log = logger
+		if logger != nil {
+			l.log = logger.With("caller", "TransportLayer")
+		}
 	}
 }
 
