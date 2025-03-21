@@ -417,6 +417,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 				viaHop.Host = host
 			}
 			viaHop.Port = port
+			if req.AdvertisedHost != "" {
+				viaHop.Host = req.AdvertisedHost
+			}
 			return c, nil
 		}
 
@@ -470,6 +473,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 			viaHop.Host = host
 		}
 		viaHop.Port = port
+	}
+	if req.AdvertisedHost != "" {
+		viaHop.Host = req.AdvertisedHost
 	}
 	return c, nil
 }
