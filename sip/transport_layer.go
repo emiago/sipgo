@@ -378,13 +378,8 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	laddr := Addr{
-		IP:   nil,
+		IP:   net.ParseIP(viaHop.Host),
 		Port: viaHop.Port,
-	}
-
-	// If request is sent behind NAT, we need to avoid binding this to IP
-	if !req.ViaNAT {
-		laddr.IP = net.ParseIP(viaHop.Host)
 	}
 
 	// Always check does connection exists if full IP:port provided
@@ -392,6 +387,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
 		if c != nil {
+			if req.AdvertisedHost != "" {
+				viaHop.Host = req.AdvertisedHost
+			}
 			return c, nil
 		}
 	} else if l.ConnectionReuse {
@@ -421,6 +419,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 				viaHop.Host = host
 			}
 			viaHop.Port = port
+			if req.AdvertisedHost != "" {
+				viaHop.Host = req.AdvertisedHost
+			}
 			return c, nil
 		}
 
@@ -474,6 +475,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 			viaHop.Host = host
 		}
 		viaHop.Port = port
+	}
+	if req.AdvertisedHost != "" {
+		viaHop.Host = req.AdvertisedHost
 	}
 	return c, nil
 }
