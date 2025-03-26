@@ -322,8 +322,19 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 
 func (s *DialogServerSession) Bye(ctx context.Context) error {
 	req := s.Dialog.InviteRequest
+	via := s.Dialog.InviteRequest.Via()
+
 	cont := s.Dialog.InviteRequest.Contact()
-	bye := sip.NewRequest(sip.BYE, cont.Address)
+
+	destination := cont.Address
+	if _, ok := via.Params.Get("rport"); ok {
+		destination = sip.Uri{
+			Host: via.Host,
+			Port: via.Port,
+		}
+	}
+
+	bye := sip.NewRequest(sip.BYE, destination)
 	bye.SetTransport(req.Transport())
 
 	return s.WriteBye(ctx, bye)
