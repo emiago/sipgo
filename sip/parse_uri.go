@@ -120,7 +120,7 @@ func uriStatePort(uri *Uri, s string) (uriFSM, string, error) {
 	}
 
 	uri.Port, err = strconv.Atoi(s)
-	return nil, s, err
+	return uriStateUriParams, "", err
 }
 
 func uriStateUriParams(uri *Uri, s string) (uriFSM, string, error) {
