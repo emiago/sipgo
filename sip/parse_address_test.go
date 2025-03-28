@@ -48,6 +48,20 @@ func TestParseAddressValue(t *testing.T) {
 		assert.Equal(t, false, uri.IsEncrypted())
 	})
 
+	t.Run("nil uri params", func(t *testing.T) {
+		address := "sip:1215174826@222.222.222.222:5066"
+		uri := Uri{}
+		params := NewParams()
+		displayName, err := ParseAddressValue(address, &uri, params)
+		require.NoError(t, err)
+
+		assert.Equal(t, "", displayName)
+		assert.Equal(t, "1215174826", uri.User)
+		assert.Equal(t, "222.222.222.222", uri.Host)
+		assert.Equal(t, HeaderParams{}, uri.UriParams)
+		assert.Equal(t, false, uri.IsEncrypted())
+	})
+
 	t.Run("wildcard", func(t *testing.T) {
 		address := "*"
 		uri := Uri{}
