@@ -10,15 +10,17 @@
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)|[RFC6026](https://datatracker.ietf.org/doc/html/rfc6026) optimized for fast parsing.
 
 ---
-**NOTE**: LIBRARY IS IN PROCESS GETTING TO 1.0. THIS MAY TAKE TIME UNTIL WE CLOSE ALL ISSUES. PLEASE OPEN ISSUES FOR DISCUSSION FIRST INSTEAD PULL REQUESTS. OTHER NOTES:
-- dialog managment may be refactored or reduced only to keep some basic functionality handling dialogs per RFC. Rest is moved to diago project
-- only small optimizations/refactoring is considered to happen.
-- if something is missing before 1.0 and it is good to have, it will be moved to sipgox package.
+**NOTE**: LIBRARY IS IN PROCESS GETTING TO 1.0. THIS MAY TAKE TIME UNTIL WE CLOSE ALL ISSUES. PLEASE OPEN ISSUES FOR DISCUSSION FIRST INSTEAD PULL REQUESTS.
 ---
 
 **Libs on top of sipgo:**
 - ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack 
 - ***sipgox*** [github.com/emiago/sipgox](https://github.com/emiago/sipgox): Fast building SIP phone or SIP helpers (It is recomended to switch to **Diago**)
+
+**Tools/Service:**
+- <img width="20" src="https://github.com/emiago/diagox/raw/main/images/diagox-icon-blue.png"> [github.com/emiago/diagox](https://github.com/emiago/diagox) simple Ingress/Egress and Registrar for SIP/RTP scaling
+- <img width="20" src="https://github.com/emiago/gophone/raw/main/images/g2.png"> [github.com/emiago/gophone](https://github.com/emiago/gophone) CLI softphone for easy testing 
+
 
 Fetch lib with:
 
@@ -50,10 +52,6 @@ Also thanks to [pion](https://github.com/pion/webrtc) project sharing this examp
 
 
 
-## Tools developed:
-- CLI softphone for easy testing [gophone](https://github.com/emiago/gophone)
-- Simple proxy where NAT is problem [psip](https://github.com/emiago/psip)
-- ... *your tool can be here*
 
 ## Performance
 
