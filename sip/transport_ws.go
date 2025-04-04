@@ -56,6 +56,22 @@ func (t *transportWS) init(par *Parser) {
 	}
 }
 
+func (t *transportWS) getDialer(laddr net.Addr) ws.Dialer {
+	if laddr == nil {
+		return t.dialer
+	}
+
+	netDialer := net.Dialer{
+		LocalAddr: laddr,
+	}
+
+	dialer := ws.Dialer{
+		NetDial: netDialer.DialContext,
+	}
+	dialer.Protocols = WebSocketProtocols
+	return dialer
+}
+
 func (t *transportWS) String() string {
 	return "transport<WS>"
 }
@@ -238,12 +254,13 @@ func (t *transportWS) createConnection(ctx context.Context, laddr *net.TCPAddr, 
 	addr := raddr.String()
 	log.Debug("Dialing new connection", "raddr", addr)
 
+	dialer := t.getDialer(laddr)
 	// How to define local interface
 	if laddr != nil {
-		log.Error("Dialing with local IP is not supported on ws", "laddr", laddr.String())
+		log.Debug("Dialing with local IP is not supported on ws", "laddr", laddr.String())
 	}
 
-	conn, _, _, err := t.dialer.Dial(ctx, "ws://"+addr)
+	conn, _, _, err := dialer.Dial(ctx, "ws://"+addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
