@@ -179,6 +179,8 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 	}
 
 	s.lastCSeqNo.Store(cseq.SeqNo)
+	// Make sure transport matches original invite
+	req.SetTransport(s.InviteRequest.Transport())
 }
 
 // Close must be always called in order to cleanup some internal resources

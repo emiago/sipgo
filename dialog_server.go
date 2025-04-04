@@ -188,6 +188,7 @@ func (s *DialogServerSession) buildReq(req *sip.Request) {
 
 	// TODO check is contact header routable
 	// If not then we should force destination as source address
+	req.SetTransport(s.InviteRequest.Transport())
 }
 
 // Close is always good to call for cleanup or terminating dialog state

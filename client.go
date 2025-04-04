@@ -409,7 +409,7 @@ func clientRequestCreateVia(c *Client, r *sip.Request) *sip.ViaHeader {
 	// A client that sends a request to a multicast address MUST add the
 	// "maddr" parameter to its Via header field value containing the
 	// destination multicast address
-
+	fmt.Println("HEEERE", r.Transport(), r.StartLine())
 	newvia := &sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
