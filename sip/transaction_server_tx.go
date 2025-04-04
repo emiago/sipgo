@@ -147,14 +147,6 @@ func (tx *ServerTx) ackSendAsync(r *Request) {
 	go tx.ackSend(r)
 }
 
-// OnCancel is experimental
-// It is racy thing if not registered after transaction creation
-func (tx *ServerTx) OnCancel(f func(r *Request)) {
-	tx.fsmMu.Lock()
-	defer tx.fsmMu.Unlock()
-	tx.onCancel = f
-}
-
 func (tx *ServerTx) Terminate() {
 	tx.log.Debug("Server transaction terminating", "tx", tx.Key())
 	if tx.delete(ErrTransactionTerminated) {
@@ -183,6 +175,39 @@ func (tx *ServerTx) TerminateGracefully() {
 	}
 	tx.log.Debug("Server transaction waiting termination")
 	<-tx.Done()
+}
+
+// OnCancel is experimental
+// It is racy thing if not registered after transaction creation
+func (tx *ServerTx) OnCancel(f FnTxCancel) bool {
+	tx.mu.Lock()
+	if tx.closed {
+		tx.mu.Unlock()
+		return false
+	}
+	tx.registerOnCancel(f)
+	tx.mu.Unlock()
+
+	// Check is transaction already canceled
+	// Problem is that transaction is marked canceled but not terminated yet
+	// TODO move this check under single lock after removing this double locks
+	if tx.Err() == ErrTransactionCanceled {
+		return false
+	}
+
+	return true
+}
+
+func (tx *ServerTx) registerOnCancel(f FnTxCancel) {
+	if tx.onCancel != nil {
+		prev := tx.onCancel
+		tx.onCancel = func(r *Request) {
+			prev(r)
+			f(r)
+		}
+		return
+	}
+	tx.onCancel = f
 }
 
 // Choose the right FSM init function depending on request method.

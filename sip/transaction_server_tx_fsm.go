@@ -296,13 +296,19 @@ func (tx *ServerTx) actCancel() fsmInput {
 	if r == nil {
 		return FsmInputNone
 	}
-	// Check is there some listener on cancel
-	if tx.onCancel != nil {
-		tx.onCancel(r)
-	}
+
 	tx.log.Debug("Passing 487 on CANCEL", "tx", tx.Key())
 	tx.fsmResp = NewResponseFromRequest(tx.origin, StatusRequestTerminated, "Request Terminated", nil)
 	tx.fsmErr = ErrTransactionCanceled // For now only informative
+
+	// Check is there some listener on cancel
+	tx.mu.Lock()
+	onCancel := tx.onCancel
+	tx.mu.Unlock()
+	if onCancel != nil {
+		onCancel(r)
+	}
+
 	return server_input_user_300_plus
 }
 

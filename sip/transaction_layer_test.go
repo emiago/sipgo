@@ -26,7 +26,7 @@ func TestIntegrationTransactionLayerServerTx(t *testing.T) {
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 	txl := NewTransactionLayer(tp)
 
-	req := testCreateRequest(t, "OPTIONS", "sip:192.168.0.1", "UDP", "127.0.0.1:5069")
+	req := testCreateRequest(t, "OPTIONS", "sip:192.168.0.1", "UDP", "127.0.0.1:15069")
 	key, _ := MakeServerTxKey(req)
 
 	var count int32 = 0
@@ -41,7 +41,7 @@ func TestIntegrationTransactionLayerServerTx(t *testing.T) {
 
 	// Now create connection and test multiple concurent received request
 	tp.udp.CreateConnection(context.TODO(),
-		testCreateAddr(t, "127.0.0.1:5069"),
+		testCreateAddr(t, "127.0.0.1:15069"),
 		testCreateAddr(t, "192.168.0.1:1234"),
 		tp.handleMessage,
 	)
@@ -77,7 +77,7 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 	txl := NewTransactionLayer(tp)
 
-	req := testCreateRequest(t, "OPTIONS", "sip:127.0.0.1:9876", "UDP", "127.0.0.1:5069")
+	req := testCreateRequest(t, "OPTIONS", "sip:127.0.0.1:9876", "UDP", "127.0.0.1:15070")
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)

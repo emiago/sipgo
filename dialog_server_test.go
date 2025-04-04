@@ -49,7 +49,7 @@ func TestDialogServerByeRequest(t *testing.T) {
 }
 
 func TestDialogServerTransactionCanceled(t *testing.T) {
-	sip.Timer_H = 0
+	// sip.Timer_H = 0
 
 	ua, _ := NewUA()
 	defer ua.Close()
@@ -81,12 +81,31 @@ func TestDialogServerTransactionCanceled(t *testing.T) {
 		}
 		tx := sip.NewServerTx("test", invite, conn, slog.Default())
 		tx.Init()
-		err := tx.Receive(newCancelRequest(invite))
-		require.NoError(t, err)
 		d, err := dialogSrv.ReadInvite(invite, tx)
 		require.NoError(t, err)
+
+		err = tx.Receive(newCancelRequest(invite))
+		require.NoError(t, err)
+		// Context dialog will be terminated and in this case
+		// cause of context cancelation could be found
 		<-d.Context().Done()
-		require.ErrorIs(t, context.Cause(d.Context()), sip.ErrTransactionCanceled)
+		require.ErrorIs(t, d.err(), sip.ErrTransactionCanceled)
+	})
+
+	t.Run("TerminatedByCancelBeforeReadingInvite", func(t *testing.T) {
+		conn := &sip.UDPConnection{
+			PacketConn: &fakes.UDPConn{
+				Writers: map[string]io.Writer{
+					"127.0.0.1:5090": bytes.NewBuffer(make([]byte, 0)),
+				},
+			},
+		}
+		tx := sip.NewServerTx("test", invite, conn, slog.Default())
+		tx.Init()
+		err := tx.Receive(newCancelRequest(invite))
+		require.NoError(t, err)
+		_, err = dialogSrv.ReadInvite(invite, tx)
+		require.ErrorIs(t, err, sip.ErrTransactionCanceled)
 	})
 
 }

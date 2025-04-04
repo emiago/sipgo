@@ -113,6 +113,14 @@ type ServerTransaction interface {
 	Respond(res *Response) error
 	// Acks returns ACK during transaction.
 	Acks() <-chan *Request
+
+	// OnCancel will be fired when CANCEL request is received
+	// It allows you to detect CANCEL request, which will be followed by termination.
+	// It returns false in case transaction already terminated
+	// NOTE: You must not block here too long. In that case fire go routine.
+	//
+	// Experimental
+	OnCancel(f FnTxCancel) bool
 }
 
 // ServerTransactionContext creates server transaction cancelation via context.Context
@@ -275,6 +283,7 @@ func (tx *baseTx) Err() error {
 }
 
 type FnTxTerminate func(key string, err error)
+type FnTxCancel func(r *Request)
 
 func isRFC3261(branch string) bool {
 	return branch != "" &&

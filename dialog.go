@@ -116,6 +116,11 @@ func (d *Dialog) endWithCause(err error) {
 	}
 }
 
+// Err returns error that caused dialog termination
+func (d *Dialog) err() error {
+	return context.Cause(d.Context())
+}
+
 func (d *Dialog) LoadState() sip.DialogState {
 	return sip.DialogState(d.state.Load())
 }
