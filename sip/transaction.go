@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -103,6 +104,9 @@ type Transaction interface {
 	Done() <-chan struct{}
 	// Last error. Useful to check when transaction terminates
 	Err() error
+
+	// LocalAddr returns the local network address
+	LocalAddr() net.Addr
 }
 
 type ServerTransaction interface {
@@ -183,6 +187,10 @@ func (tx *baseTx) Origin() *Request {
 
 func (tx *baseTx) Key() string {
 	return tx.key
+}
+
+func (tx *baseTx) LocalAddr() net.Addr {
+	return tx.conn.LocalAddr()
 }
 
 func (tx *baseTx) Done() <-chan struct{} {
