@@ -15,7 +15,7 @@ func defaultRequestHandler(r *Request, tx *ServerTx) {
 }
 
 func defaultUnhandledRespHandler(r *Response) {
-	slog.Info("Unhandled sip response. UnhandledResponseHandler handler not added", "caller", "transactionLayer", "msg", r.Short())
+	slog.Info("TransactionLayer: Unhandled sip response. Possible retransmissions. Set UnhandledResponseHandler", "caller", "transactionLayer", "msg", r.Short())
 }
 
 type TransactionLayer struct {
@@ -36,6 +36,12 @@ func WithTransactionLayerLogger(l *slog.Logger) TransactionLayerOption {
 		if l != nil {
 			txl.log = l.With("caller", "TransactionLayer")
 		}
+	}
+}
+
+func WithTransactionLayerUnhandledResponseHandler(f func(r *Response)) TransactionLayerOption {
+	return func(txl *TransactionLayer) {
+		txl.unRespHandler = f
 	}
 }
 
@@ -61,12 +67,6 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 
 func (txl *TransactionLayer) OnRequest(h TransactionRequestHandler) {
 	txl.reqHandler = h
-}
-
-// UnhandledResponseHandler can be used in case missing client transactions for handling response
-// ServerTransaction handle responses by state machine
-func (txl *TransactionLayer) UnhandledResponseHandler(f UnhandledResponseHandler) {
-	txl.unRespHandler = f
 }
 
 // handleMessage is entry for handling requests and responses from transport
