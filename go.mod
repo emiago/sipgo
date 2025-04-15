@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/gobwas/ws v1.3.2
 	github.com/google/uuid v1.6.0
-	github.com/icholy/digest v0.1.22
+	github.com/icholy/digest v1.1.0
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b
 	github.com/stretchr/testify v1.9.0
 )
@@ -21,5 +21,4 @@ require (
 	golang.org/x/sys v0.24.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gotest.tools/v3 v3.5.0 // indirect
 )
