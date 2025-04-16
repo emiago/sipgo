@@ -70,6 +70,10 @@ func (tx *ServerTx) Init() error {
 	return nil
 }
 
+func (tx *ServerTx) Connection() Connection {
+	return tx.conn
+}
+
 // Receive is endpoint for handling received server requests.
 // NOTE: it could block while passing request to client,
 // therefore running in seperate goroutine is needed
