@@ -258,6 +258,7 @@ func TestIntegrationClientViaBindHost(t *testing.T) {
 	client, err := NewClient(ua,
 		WithClientHostname("127.0.0.1"),
 		WithClientPort(15090),
+		WithClientConnectionAddr("127.0.0.1:15099"),
 	)
 	require.NoError(t, err)
 
@@ -269,7 +270,7 @@ func TestIntegrationClientViaBindHost(t *testing.T) {
 	conn := clientTx.Connection()
 
 	laddr := conn.LocalAddr()
-	assert.Equal(t, "127.0.0.1:15090", laddr.String())
+	assert.Equal(t, "127.0.0.1:15099", laddr.String())
 
 	via := options.Via()
 	assert.Equal(t, "127.0.0.1", via.Host)

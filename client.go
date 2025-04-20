@@ -26,6 +26,8 @@ type Client struct {
 	rport bool
 	log   *slog.Logger
 
+	connAddr sip.Addr
+
 	// TxRequester allows you to use your transaction requester instead default from transaction layer
 	// Useful only for testing
 	//
@@ -44,8 +46,6 @@ func WithClientLogger(logger *slog.Logger) ClientOption {
 }
 
 // WithClientHost allows setting default route host or IP on Via
-// in case of IP it will enforce transport layer to create/reuse connection with this IP
-// This is useful when you need to act as client first and avoid creating server handle listeners.
 // NOTE: From header hostname is WithUserAgentHostname option on UA or modify request manually
 func WithClientHostname(hostname string) ClientOption {
 	return func(s *Client) error {
@@ -55,13 +55,28 @@ func WithClientHostname(hostname string) ClientOption {
 }
 
 // WithClientPort allows setting default route Via port
-// it will enforce transport layer to create connection with this port if does NOT exist
-// transport layer will choose existing connection by default unless
 // TransportLayer.ConnectionReuse is set to false
 // default: ephemeral port
 func WithClientPort(port int) ClientOption {
 	return func(s *Client) error {
 		s.port = port
+		return nil
+	}
+}
+
+// WithClientConnectionAddr forces request to send connection with this local addr.
+// This is useful when you need to act as client first and avoid creating server handle listeners.
+func WithClientConnectionAddr(hostPort string) ClientOption {
+	return func(s *Client) error {
+		host, port, err := sip.ParseAddr(hostPort)
+		if err != nil {
+			return err
+		}
+		s.connAddr = sip.Addr{
+			IP:       net.ParseIP(host),
+			Port:     port,
+			Hostname: host,
+		}
 		return nil
 	}
 }
@@ -365,6 +380,12 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		req.SetBody(nil)
 	}
 
+	// Set local addr, transport layer will check is present
+	if c.connAddr.IP != nil {
+		// Doing a copy to avoid dangling ip
+		c.connAddr.Copy(&req.Laddr)
+	}
+
 	return nil
 }
 
@@ -465,7 +486,6 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	maxfwd := r.MaxForwards()
 	if maxfwd == nil {
-		// TODO, should we return error here
 		return nil
 	}
 

@@ -85,6 +85,15 @@ func (a *Addr) String() string {
 	return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
 }
 
+func (a *Addr) Copy(d *Addr) {
+	d.Hostname = a.Hostname
+	d.Port = a.Port
+	if a.IP != nil {
+		d.IP = make(net.IP, len(a.IP))
+		copy(d.IP, a.IP)
+	}
+}
+
 func (a *Addr) parseAddr(addr string) error {
 	host, port, err := ParseAddr(addr)
 	a.IP = net.ParseIP(host)

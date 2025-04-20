@@ -12,6 +12,9 @@ type Request struct {
 	MessageData
 	Method    RequestMethod
 	Recipient Uri
+
+	// Laddr is Connection local Addr used to sent request
+	Laddr Addr
 }
 
 // NewRequest creates base for building sip Request

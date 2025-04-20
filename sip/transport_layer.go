@@ -377,105 +377,71 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		return nil, fmt.Errorf("missing Via Header")
 	}
 
-	laddr := Addr{
-		IP:   nil,
-		Port: viaHop.Port,
-	}
+	// Clients need to be able to bind request to IP:port.
+	// Via host and port may not be same, as client would use some advertised host:port if present
+	// In case not present in VIA, transport will override with real connection and IP
+	// This makes sure that alwasy valid Via Header is set.
+	// Client must guarantee that Via Header is added and present in each request.
 
-	// If request is sent behind NAT, we need to avoid binding this to IP
-	if !req.ViaNAT {
-		laddr.IP = net.ParseIP(viaHop.Host)
-	}
+	// Should we use default transport ports here?
+	laddr := req.Laddr
 
-	// Always check does connection exists if full IP:port provided
 	// This is probably client forcing host:port
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
-		if c != nil {
-			return c, nil
-		}
 	} else if l.ConnectionReuse {
 		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
-
 		c = transport.GetConnection(addr)
-		if c != nil {
-			// Update Via sent by
-			la := c.LocalAddr()
-			network := la.Network()
-			laStr := la.String()
-
-			// TODO handle broadcast address
-			// TODO avoid this parsing
-			host, port, err := ParseAddr(laStr)
-			if err != nil {
-				return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laStr, err)
-			}
-
-			// https://datatracker.ietf.org/doc/html/rfc3261#section-18
-			// Before a request is sent, the client transport MUST insert a value of
-			// the "sent-by" field into the Via header field.  This field contains
-			// an IP address or host name, and port.  The usage of an FQDN is
-			// RECOMMENDED.
-			if viaHop.Host == "" {
-				viaHop.Host = host
-			}
-			viaHop.Port = port
-			return c, nil
-		}
-
-		// In case client handle sets address same as UDP listen addr
-		// try grabbing listener for udp and send packet connectionless
-		/* if c == nil && network == "udp" && laddr.IP != nil && laddr.Port > 0 {
-			c, _ = transport.GetConnection(laddr.String())
-
-			if c != nil {
-				viaHop.Host = laddr.IP.String()
-				viaHop.Port = laddr.Port
-
-				// DO NOT USE unspecified IP with client handle
-				// switch {
-				// case laddr.IP.IsUnspecified():
-				// 	l.log.Warn().Msg("External Via IP address is unspecified for UDP. Using 127.0.0.1")
-				// 	viaHop.Host = "127.0.0.1" // TODO use resolve IP
-				// }
-				return c, nil
-			}
-		} */
-		l.log.Debug("Active connection not found", "addr", addr, "raddr", raddr.String())
 	}
-	l.log.Debug("Via header used for creating connection", "host", viaHop.Host, "port", viaHop.Port, "network", network)
 
-	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
-	if err != nil {
+	if c == nil {
+		if l.log.Enabled(ctx, slog.LevelDebug) {
+			// printing laddr adds some execution
+			l.log.Debug("Creating connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
+		}
+		c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := l.overrideSentBy(c, viaHop); err != nil {
 		return nil, err
 	}
 
-	// TODO refactor this
-	switch {
-	case viaHop.Host == "" || laddr.IP == nil: // If not specified by UAC we will override Via sent-by
-		fallthrough
-	case viaHop.Port == 0: // We still may need to rewrite sent-by port
-		// TODO avoid this parsing
-		la := c.LocalAddr()
-		laStr := la.String()
+	return c, nil
+}
 
-		host, port, err = ParseAddr(laStr)
-		if err != nil {
-			return nil, fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", network, laStr, err)
-		}
+func (l *TransportLayer) overrideSentBy(c Connection, viaHop *ViaHeader) error {
+	if viaHop.Host != "" && viaHop.Port > 0 {
+		// avoids underhood parsing
+		return nil
+	}
 
-		// https://datatracker.ietf.org/doc/html/rfc3261#section-18
-		// Before a request is sent, the client transport MUST insert a value of
-		// the "sent-by" field into the Via header field.  This field contains
-		// an IP address or host name, and port.  The usage of an FQDN is
-		// RECOMMENDED.
-		if viaHop.Host == "" {
-			viaHop.Host = host
-		}
+	// TODO: can we have non string LAddr to avoid parsing
+	la := c.LocalAddr()
+	laStr := la.String()
+
+	host, port, err := ParseAddr(laStr)
+	if err != nil {
+		return fmt.Errorf("fail to parse local connection address network=%s addr=%s: %w", la.Network(), laStr, err)
+	}
+
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-18
+	// Before a request is sent, the client transport MUST insert a value of
+	// the "sent-by" field into the Via header field.  This field contains
+	// an IP address or host name, and port.  The usage of an FQDN is
+	// RECOMMENDED.
+	// We are overriding only if client did not set this
+	if viaHop.Host == "" {
+		viaHop.Host = host
+	}
+
+	if viaHop.Port == 0 {
 		viaHop.Port = port
 	}
-	return c, nil
+	return nil
 }
 
 func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
