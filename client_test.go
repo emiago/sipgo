@@ -1,11 +1,14 @@
 package sipgo
 
 import (
+	"context"
+	"os"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/siptest"
 	"github.com/icholy/digest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -203,6 +206,75 @@ func TestClientRequestOptions(t *testing.T) {
 	conn, err := tp.ClientRequestConnection(context.TODO(), req)
 }
 */
+
+func TestClientViaRouting(t *testing.T) {
+	ua, _ := NewUA()
+	client, err := NewClient(ua,
+		WithClientHostname("myhost.xy"),
+		WithClientPort(5060),
+	)
+	require.NoError(t, err)
+
+	client.TxRequester = &siptest.ClientTxRequesterResponder{
+		OnRequest: func(req *sip.Request, w *siptest.ClientTxResponder) {
+			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+			w.Receive(res)
+		},
+	}
+
+	options := sip.NewRequest(sip.OPTIONS, sip.Uri{User: "test", Host: "localhost"})
+	_, err = client.Do(context.TODO(), options)
+	require.NoError(t, err)
+
+	via := options.Via()
+	assert.Equal(t, "myhost.xy", via.Host)
+	assert.Equal(t, 5060, via.Port)
+}
+
+func TestIntegrationClientViaBindHost(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	{
+		ua, _ := NewUA()
+		defer ua.Close()
+		srv, err := NewServer(ua)
+		require.NoError(t, err)
+
+		startTestServer(ctx, srv, "127.0.0.1:5099")
+		srv.OnOptions(func(req *sip.Request, tx sip.ServerTransaction) {
+			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+			tx.Respond(res)
+		})
+	}
+
+	ua, _ := NewUA()
+	defer ua.Close()
+	client, err := NewClient(ua,
+		WithClientHostname("127.0.0.1"),
+		WithClientPort(15090),
+	)
+	require.NoError(t, err)
+
+	options := sip.NewRequest(sip.OPTIONS, sip.Uri{User: "test", Host: "localhost"})
+	tx, err := client.TransactionRequest(context.TODO(), options)
+	require.NoError(t, err)
+
+	clientTx := tx.(*sip.ClientTx)
+	conn := clientTx.Connection()
+
+	laddr := conn.LocalAddr()
+	assert.Equal(t, "127.0.0.1:15090", laddr.String())
+
+	via := options.Via()
+	assert.Equal(t, "127.0.0.1", via.Host)
+	assert.Equal(t, 15090, via.Port)
+}
 
 func TestDigestAuthLowerCase(t *testing.T) {
 	challenge := `Digest username="user", realm="asterisk", nonce="662d65a084b88c6d2a745a9de086fa91", uri="sip:+user@example.com", algorithm=sha-256, response="3681b63e5d9c3bb80e5350e2783d7b88"`

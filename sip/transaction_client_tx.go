@@ -132,6 +132,10 @@ func (tx *ClientTx) Receive(res *Response) {
 	tx.spinFsmWithResponse(input, res)
 }
 
+func (tx *ClientTx) Connection() Connection {
+	return tx.conn
+}
+
 // func (tx *ClientTx) cancel() {
 // 	if !tx.origin.IsInvite() {
 // 		return
