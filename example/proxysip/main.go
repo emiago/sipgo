@@ -29,8 +29,6 @@ import (
 	// _ "go.uber.org/automaxprocs"
 )
 
-var ()
-
 func main() {
 	defer pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 
