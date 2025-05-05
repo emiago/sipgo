@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -154,4 +155,16 @@ func TestTransportLayerDefaultPort(t *testing.T) {
 			require.Equal(t, "127.0.0.99:5060", req.Destination())
 		})
 	}
+}
+
+func TestTransportLayerResolving(t *testing.T) {
+	// NOTE it creates real network connection
+
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	addr := Addr{}
+	err := tp.resolveAddr(context.TODO(), "udp", "localhost", &addr)
+	require.NoError(t, err)
+
+	assert.True(t, addr.IP.To4() != nil)
+	assert.Equal(t, "127.0.0.1:0", addr.String())
 }

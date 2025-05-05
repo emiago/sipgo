@@ -130,8 +130,8 @@ func TestParseUri(t *testing.T) {
 		branch, _ := uri.UriParams.Get("branch")
 		assert.Equal(t, "", rport)
 		assert.Equal(t, "z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9", branch)
-
 	})
+
 }
 
 func TestParseUriBad(t *testing.T) {
@@ -140,5 +140,67 @@ func TestParseUriBad(t *testing.T) {
 		uri := Uri{}
 		err := ParseUri(str, &uri)
 		require.Error(t, err)
+	})
+}
+
+func TestParseUriIPV6(t *testing.T) {
+	t.Run("partial", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[fe80::dc45:996b:6de9:9746"
+		err := ParseUri(str, &uri)
+		require.Error(t, err)
+	})
+
+	t.Run("too long", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[fe80::dc45:996b:6de9:9746:ffff:ffff:ffff:ffff]"
+		err := ParseUri(str, &uri)
+		require.Error(t, err)
+	})
+
+	t.Run("smallest", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[fe80::dc45:996b:6de9:9746]"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+
+		assert.Equal(t, "[fe80::dc45:996b:6de9:9746]", uri.Host)
+		assert.Equal(t, 0, uri.Port)
+		assert.Equal(t, "", uri.User)
+	})
+	t.Run("with port", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[fe80::dc45:996b:6de9:9746]:5060"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+
+		assert.Equal(t, "[fe80::dc45:996b:6de9:9746]", uri.Host)
+		assert.Equal(t, 5060, uri.Port)
+	})
+
+	t.Run("with params", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[fe80::dc45:996b:6de9:9746]:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+
+		assert.Equal(t, "[fe80::dc45:996b:6de9:9746]", uri.Host)
+		assert.Equal(t, 5060, uri.Port)
+
+		rport, _ := uri.UriParams.Get("rport")
+		branch, _ := uri.UriParams.Get("branch")
+		assert.Equal(t, "", rport)
+		assert.Equal(t, "z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9", branch)
+	})
+
+	t.Run("with params", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:user@[fe80::dc45:996b:6de9:9746]:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+
+		assert.Equal(t, "[fe80::dc45:996b:6de9:9746]", uri.Host)
+		assert.Equal(t, 5060, uri.Port)
+		assert.Equal(t, "user", uri.User)
 	})
 }

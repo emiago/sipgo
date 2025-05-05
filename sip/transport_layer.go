@@ -484,7 +484,9 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 	}
 
 	for _, ip := range ips {
-		if len(ip.IP) == net.IPv4len {
+		// This is only correct way to check is ipv4.
+		//  len(ip.IP) == net.IPv4len IS NOT working in all cases
+		if ip.IP.To4() != nil {
 			addr.IP = ip.IP
 			return nil
 		}
