@@ -2,6 +2,8 @@ package sipgo
 
 import (
 	"context"
+	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -59,6 +61,7 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 				InviteRequest:  invite,
 				InviteResponse: resp,
 			},
+			inviteTx: sip.NewClientTx("test", invite, nil, slog.Default()),
 		}
 		// Send canceled request
 		ctx, cancel := context.WithCancel(context.Background())
@@ -94,6 +97,7 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 				InviteRequest:  invite,
 				InviteResponse: resp,
 			},
+			inviteTx: sip.NewClientTx("test", invite, nil, slog.Default()),
 		}
 
 		// Send canceled request
@@ -146,7 +150,13 @@ func TestDialogClientMultiRequest(t *testing.T) {
 }
 
 func TestDialogClientACKRetransmission(t *testing.T) {
+	var acks int32
 	client := testClientResponder(t, func(req *sip.Request, w *siptest.ClientTxResponder) {
+		if req.IsAck() {
+			atomic.AddInt32(&acks, 1)
+			return
+		}
+
 		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 		w.Receive(res)
 		time.Sleep(sip.T1)
@@ -167,7 +177,11 @@ func TestDialogClientACKRetransmission(t *testing.T) {
 	if err := d.Ack(context.TODO()); err != nil {
 		t.Error(err)
 	}
-	time.Sleep(3 * sip.T1)
+	time.Sleep(4 * sip.T1)
+	// It should retransmit
+	state := d.LoadState()
+	assert.Equal(t, sip.DialogStateConfirmed, state)
+	assert.EqualValues(t, 3, atomic.LoadInt32(&acks))
 }
 
 func BenchmarkDialogDo(b *testing.B) {

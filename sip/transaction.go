@@ -141,6 +141,9 @@ type ClientTransaction interface {
 	Transaction
 	// Responses returns channel with all responses for transaction
 	Responses() <-chan *Response
+
+	// Register response retransmission hook.
+	OnRetransmission(f FnTxResponse) bool
 }
 
 type baseTx struct {
@@ -284,6 +287,7 @@ func (tx *baseTx) Err() error {
 
 type FnTxTerminate func(key string, err error)
 type FnTxCancel func(r *Request)
+type FnTxResponse func(r *Response)
 
 func isRFC3261(branch string) bool {
 	return branch != "" &&

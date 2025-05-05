@@ -377,6 +377,24 @@ func (s *DialogClientSession) Ack(ctx context.Context) error {
 }
 
 func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) error {
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-13.2.2.4
+	//
+	// Once the ACK has been constructed, the procedures of [4] are used to
+	// determine the destination address, port and transport.  However, the
+	// request is passed to the transport layer directly for transmission,
+	// rather than a client transaction.  This is because the UAC core
+	// handles retransmissions of the ACK, not the transaction layer.
+	s.inviteTx.OnRetransmission(func(r *sip.Response) {
+		// Detect retransmission
+		if r.StatusCode != 200 {
+			return
+		}
+
+		if err := s.WriteRequest(ack); err != nil {
+			s.endWithCause(fmt.Errorf("ACK retransmission failed: %w", err))
+		}
+	})
+
 	if err := s.WriteRequest(ack); err != nil {
 		// Make sure we close our error
 		// s.Close()

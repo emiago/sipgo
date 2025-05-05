@@ -445,13 +445,28 @@ func (tx *ClientTx) passUpRetransmission() {
 		return
 	}
 
+	// Only hook based should handle retransmission
+	tx.mu.Lock()
+	onResp := tx.onRetransmission
+	tx.mu.Unlock()
+
+	// To consider: passing via hook can be better to avoid deadlock
+	if onResp != nil {
+		tx.fsmMu.Unlock() // Avoids potential deadlock
+		onResp(lastResp)
+		tx.fsmMu.Lock()
+		return
+	}
+
+	tx.log.Debug("skipped response. Retransimission", "tx", tx.Key())
+
 	// Client probably left or not interested, so therefore we must not block here
 	// For proxies they should handle this retransmission
-	select {
-	case <-tx.done:
-	case tx.responses <- lastResp:
-		// TODO is T1 best here option? This can take Timer_M as 64*T1
-	case <-time.After(T1):
-		tx.log.Debug("skipped response. Retransimission", "tx", tx.Key())
-	}
+	// select {
+	// case <-tx.done:
+	// case tx.responses <- lastResp:
+	// 	// TODO is T1 best here option? This can take Timer_M as 64*T1
+	// case <-time.After(T1):
+	// 	tx.log.Debug("skipped response. Retransimission", "tx", tx.Key())
+	// }
 }

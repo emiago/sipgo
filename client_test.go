@@ -246,7 +246,7 @@ func TestIntegrationClientViaBindHost(t *testing.T) {
 		srv, err := NewServer(ua)
 		require.NoError(t, err)
 
-		startTestServer(ctx, srv, "127.0.0.1:5099")
+		startTestServer(ctx, srv, "127.0.0.1:15099")
 		srv.OnOptions(func(req *sip.Request, tx sip.ServerTransaction) {
 			res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 			tx.Respond(res)
@@ -258,7 +258,7 @@ func TestIntegrationClientViaBindHost(t *testing.T) {
 	client, err := NewClient(ua,
 		WithClientHostname("127.0.0.1"),
 		WithClientPort(15090),
-		WithClientConnectionAddr("127.0.0.1:15099"),
+		WithClientConnectionAddr("127.0.0.1:16099"),
 	)
 	require.NoError(t, err)
 
@@ -270,7 +270,7 @@ func TestIntegrationClientViaBindHost(t *testing.T) {
 	conn := clientTx.Connection()
 
 	laddr := conn.LocalAddr()
-	assert.Equal(t, "127.0.0.1:15099", laddr.String())
+	assert.Equal(t, "127.0.0.1:16099", laddr.String())
 
 	via := options.Via()
 	assert.Equal(t, "127.0.0.1", via.Host)

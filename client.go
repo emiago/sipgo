@@ -281,13 +281,21 @@ func (c *Client) digestTransactionRequest(ctx context.Context, req *sip.Request,
 func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) error {
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
-		return c.tp.WriteMsg(req)
+		return c.writeReq(req)
 	}
 
 	for _, o := range options {
 		if err := o(c, req); err != nil {
 			return err
 		}
+	}
+	return c.writeReq(req)
+}
+
+func (c *Client) writeReq(req *sip.Request) error {
+	if c.TxRequester != nil {
+		_, err := c.TxRequester.Request(context.TODO(), req)
+		return err
 	}
 	return c.tp.WriteMsg(req)
 }
