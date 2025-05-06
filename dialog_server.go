@@ -318,6 +318,32 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return err
 	}
 
+	// Wait now for ACK for our 2xx
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-13.3.1.4
+
+	// We are following RFC 6026, which states that this is TU thing and not Transaction layer.
+	timer := time.NewTimer(sip.T1)
+	defer timer.Stop()
+
+	state := sip.DialogStateEstablished
+	readStateCh := s.StateRead()
+	for state == sip.DialogStateEstablished {
+		select {
+		case <-timer.C:
+			if err := tx.Respond(res); err != nil {
+				return err
+			}
+			// 2xx response is passed to the transport with an
+			//    interval that starts at T1 seconds and doubles for each
+			//    retransmission until it reaches T2 seconds (T1 and T2 are defined in
+			//    Section 17).
+			timer.Reset(max(2*sip.T1, sip.T2))
+		case state = <-readStateCh:
+		}
+	}
+	if state != sip.DialogStateConfirmed {
+		return fmt.Errorf("No ACK received")
+	}
 	return nil
 }
 

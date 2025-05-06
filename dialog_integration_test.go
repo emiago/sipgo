@@ -70,19 +70,26 @@ func TestIntegrationDialog(t *testing.T) {
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
 		require.NoError(t, err)
 
-		// ctx, _ := context.WithTimeout(ctx, 3*time.Second)
-		for state := range dlg.StateRead() {
-			if state == sip.DialogStateEnded {
-				return
-			}
-
-			if state == sip.DialogStateConfirmed {
-				time.Sleep(1 * time.Second)
-				ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-				dlg.Bye(ctx)
-				return
-			}
+		state := dlg.LoadState()
+		if state == sip.DialogStateEnded {
+			return
 		}
+
+		time.Sleep(1 * time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		dlg.Bye(ctx)
+
+		// ctx, _ := context.WithTimeout(ctx, 3*time.Second)
+		// for state := range dlg.StateRead() {
+		// 	if state == sip.DialogStateEnded {
+		// 		return
+		// 	}
+
+		// 	time.Sleep(1 * time.Second)
+		// 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		// 	dlg.Bye(ctx)
+		// 	return
+		// }
 	})
 
 	srv.OnAck(func(req *sip.Request, tx sip.ServerTransaction) {
@@ -214,14 +221,20 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		// defer dlg.Close()
 
 		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
-		require.Nil(t, err)
-
+		if err != nil {
+			t.Log("Error OnInvite", err)
+			return
+		}
 		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
-		require.Nil(t, err)
-
+		if err != nil {
+			t.Log("Error OnInvite", err)
+			return
+		}
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
-		require.Nil(t, err)
-
+		if err != nil {
+			t.Log("Error OnInvite", err)
+			return
+		}
 		<-dlg.Context().Done()
 	})
 

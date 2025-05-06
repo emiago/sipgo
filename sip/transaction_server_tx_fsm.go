@@ -73,6 +73,10 @@ func (tx *ServerTx) inviteStateAccepted(s fsmInput) fsmInput {
 	case server_input_ack:
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actPassupAck
 	case server_input_user_2xx:
+		// The server transaction MUST NOT generate 2xx retransmissions on its
+		// own.  Any retransmission of the 2xx response passed from the TU to
+		// the transaction while in the "Accepted" state MUST be passed to the
+		// transport layer for transmission.
 		tx.fsmState, spinfn = tx.inviteStateAccepted, tx.actRespond
 	case server_input_timer_l:
 		tx.fsmState, spinfn = tx.inviteStateTerminated, tx.actDelete

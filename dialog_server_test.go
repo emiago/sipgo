@@ -6,9 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/emiago/sipgo/fakes"
 	"github.com/emiago/sipgo/sip"
+	"github.com/emiago/sipgo/siptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,4 +110,40 @@ func TestDialogServerTransactionCanceled(t *testing.T) {
 		require.ErrorIs(t, err, sip.ErrTransactionCanceled)
 	})
 
+}
+
+func TestDialogServer2xxRetransmission(t *testing.T) {
+	// sip.T1 = 1
+	ua, _ := NewUA()
+	defer ua.Close()
+	cli, _ := NewClient(ua)
+
+	uasContact := sip.ContactHeader{
+		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+	}
+	dialogSrv := NewDialogServerCache(cli, uasContact)
+
+	invite, _, _ := createTestInvite(t, "sip:uas@127.0.0.1", "udp", "127.0.0.1:5090")
+	invite.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uas", Port: 1234}})
+
+	// Create a server transcation
+	tx := siptest.NewServerTxRecorder(invite)
+
+	// Read Invite
+	d, err := dialogSrv.ReadInvite(invite, tx)
+	require.NoError(t, err)
+
+	res200 := sip.NewResponseFromRequest(invite, 200, "OK", nil)
+	go func() {
+		// Delay ACK receiving
+		time.Sleep(2 * sip.T1)
+		d.ReadAck(newAckRequestUAC(invite, res200, nil), tx)
+	}()
+	// Respond 200
+	// This will block until ACK
+	err = d.WriteResponse(res200)
+
+	// We must have at least 2 responses
+	resps := tx.Result()
+	require.Len(t, resps, 2)
 }
