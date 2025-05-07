@@ -153,7 +153,9 @@ func addressStateHeaderParams(a *nameAddress, s string) (addressFSM, string, err
 		if equal > 0 {
 			name := s[:equal]
 			val := s[equal+1:]
-			a.headerParams.Add(name, val)
+			if a.headerParams != nil {
+				a.headerParams.Add(name, val)
+			}
 			return
 		}
 
@@ -164,7 +166,9 @@ func addressStateHeaderParams(a *nameAddress, s string) (addressFSM, string, err
 
 		// Case when we have key name but not value. ex ;+siptag;
 		name := s[:]
-		a.headerParams.Add(name, "")
+		if a.headerParams != nil {
+			a.headerParams.Add(name, "")
+		}
 	}
 
 	equal := -1
