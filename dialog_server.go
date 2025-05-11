@@ -338,6 +338,13 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 			//    retransmission until it reaches T2 seconds (T1 and T2 are defined in
 			//    Section 17).
 			timer.Reset(max(2*sip.T1, sip.T2))
+
+		case <-time.After(64 * sip.T1):
+			// If the server retransmits the 2xx response for 64*T1 seconds without
+			// receiving an ACK, the dialog is confirmed, but the session SHOULD be
+			// terminated.  This is accomplished with a BYE, as described in Section
+			// 15.
+			state = sip.DialogStateConfirmed
 		case state = <-readStateCh:
 		}
 	}
