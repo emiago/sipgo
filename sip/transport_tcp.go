@@ -17,6 +17,7 @@ type transportTCP struct {
 	transport string
 	parser    *Parser
 	log       *slog.Logger
+	dialer    *net.Dialer
 
 	pool *ConnectionPool
 }
@@ -87,8 +88,14 @@ func (t *transportTCP) createConnection(ctx context.Context, laddr *net.TCPAddr,
 	addr := raddr.String()
 	t.log.Debug("Dialing new connection", "raddr", addr)
 
-	d := net.Dialer{
-		LocalAddr: laddr,
+	var d *net.Dialer
+	if t.dialer != nil {
+		d = t.dialer
+		d.LocalAddr = laddr
+	} else {
+		d = &net.Dialer{
+			LocalAddr: laddr,
+		}
 	}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {

@@ -26,6 +26,8 @@ type TransportLayer struct {
 	ws  *transportWS
 	wss *transportWSS
 
+	tcpDialer *net.Dialer
+
 	transports map[string]Transport
 
 	listenPorts   map[string][]int
@@ -50,6 +52,12 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 		if logger != nil {
 			l.log = logger.With("caller", "TransportLayer")
 		}
+	}
+}
+
+func WithTransportLayerTCPDialer(dialer *net.Dialer) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.tcpDialer = dialer
 	}
 }
 
@@ -89,7 +97,8 @@ func NewTransportLayer(
 
 	// TCP
 	l.tcp = &transportTCP{
-		log: l.log.With("caller", "Transport<TCP>"),
+		log:    l.log.With("caller", "Transport<TCP>"),
+		dialer: l.tcpDialer,
 	}
 	l.tcp.init(sipparser)
 
