@@ -132,7 +132,10 @@ func (uri *Uri) Addr() string {
 		scheme = "sip"
 	}
 
-	addr := uri.User + "@" + uri.Host
+	addr := uri.Host
+	if uri.User != "" {
+		addr = uri.User + "@" + addr
+	}
 	if uri.Port > 0 {
 		addr += ":" + strconv.Itoa(uri.Port)
 	}
