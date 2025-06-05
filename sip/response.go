@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 // Response RFC 3261 - 7.2.
@@ -240,7 +240,7 @@ func NewResponseFromRequest(
 		CopyHeaders("Timestamp", req, res)
 	default:
 		if _, ok := res.To().Params["tag"]; !ok {
-			uuid, _ := uuid.NewV4()
+			uuid, _ := uuid.NewRandom()
 			res.to.Params["tag"] = uuid.String()
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/emiago/sipgo/sip"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 // DialogUA defines UserAgent that will be used in controling your dialog.
@@ -32,7 +32,7 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 
 	// Prebuild already to tag for response as it must be same for all responds
 	// NewResponseFromRequest will skip this for all 100
-	uuid, err := uuid.NewV4()
+	uuid, err := uuid.NewRandom()
 	if err != nil {
 		return nil, fmt.Errorf("generating dialog to tag failed: %w", err)
 	}
