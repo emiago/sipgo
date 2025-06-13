@@ -223,7 +223,10 @@ func (tx *ClientTx) actResend() fsmInput {
 	if tx.timer_a_time > T2 {
 		tx.timer_a_time = T2
 	}
-	tx.timer_a.Reset(tx.timer_a_time)
+
+	if tx.timer_a != nil {
+		tx.timer_a.Reset(tx.timer_a_time) // https://github.com/emiago/sipgo/issues/238
+	}
 
 	tx.mu.Unlock()
 
