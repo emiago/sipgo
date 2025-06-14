@@ -178,6 +178,16 @@ func TestParseUriIPV6(t *testing.T) {
 		assert.Equal(t, 5060, uri.Port)
 	})
 
+	t.Run("max length", func(t *testing.T) {
+		uri := Uri{}
+		str := "sip:[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:5060"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+
+		assert.Equal(t, "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]", uri.Host)
+		assert.Equal(t, 5060, uri.Port)
+	})
+
 	t.Run("with params", func(t *testing.T) {
 		uri := Uri{}
 		str := "sip:[fe80::dc45:996b:6de9:9746]:5060;rport;branch=z9hG4bKPj6c65c5d9-b6d0-4a30-9383-1f9b42f97de9"
