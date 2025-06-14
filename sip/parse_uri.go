@@ -116,9 +116,9 @@ func uriStateHost(uri *Uri, s string) (uriFSM, string, error) {
 }
 
 func uriStateHostIPV6(uri *Uri, s string) (uriFSM, string, error) {
-	// ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff max 39
+	// ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff max 39 + 2 brackets
 	// Do not waste time looking end
-	maxs := min(len(s), 40)
+	maxs := min(len(s), 42)
 
 	ind := strings.Index(s[:maxs], "]")
 	if ind <= 0 {
