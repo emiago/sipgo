@@ -232,7 +232,12 @@ func (txl *TransactionLayer) clientTxCreate(ctx context.Context, req *Request, k
 	}
 
 	tx := NewClientTx(key, req, conn, txl.log)
-	return tx, tx.Init()
+	if err := tx.Init(); err != nil {
+		tx.Terminate()
+		return nil, err
+	}
+
+	return tx, nil
 }
 
 func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
