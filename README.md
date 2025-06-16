@@ -105,9 +105,31 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 ### TLS transports
 ```go 
 // TLS
-conf := GenerateTLSConfig(certFile, keyFile, rootPems)
+conf := generateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
+
+func generateTLSConfig(certFile string, keyFile string, rootPems []byte) (*tls.Config, error) {
+	roots := x509.NewCertPool()
+	if rootPems != nil {
+		ok := roots.AppendCertsFromPEM(rootPems)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate")
+		}
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("fail to load cert. err=%w", err)
+	}
+
+	conf := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      roots,
+	}
+
+	return conf, nil
+}
 ```
 
 ### UAC first
