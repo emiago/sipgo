@@ -146,15 +146,6 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 	}
 
 	if len(options) == 0 {
-		if cseq := req.CSeq(); cseq != nil {
-			// Increase cseq if this is new transaction but has cseq added.
-			// Request within dialog should not have this behavior
-			// WriteRequest for ex ACK will not increase and this is wanted behavior
-			// This will be a problem if we allow ACK to be passed as transaction request
-			cseq.SeqNo++
-			cseq.MethodName = req.Method
-		}
-
 		clientRequestBuildReq(c, req)
 		return c.requestTransaction(ctx, req)
 	}
@@ -501,6 +492,18 @@ func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 
 	if maxfwd.Val() <= 0 {
 		return fmt.Errorf("max forwards reached")
+	}
+	return nil
+}
+
+func ClientRequestIncreaseCSEQ(c *Client, req *sip.Request) error {
+	if cseq := req.CSeq(); cseq != nil {
+		// Increase cseq if this is new transaction but has cseq added.
+		// Request within dialog should not have this behavior
+		// WriteRequest for ex ACK will not increase and this is wanted behavior
+		// This will be a problem if we allow ACK to be passed as transaction request
+		cseq.SeqNo++
+		cseq.MethodName = req.Method
 	}
 	return nil
 }

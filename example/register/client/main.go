@@ -92,7 +92,7 @@ func main() {
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 		ctx := context.Background()
-		tx, err := client.TransactionRequest(ctx, newReq, sipgo.ClientRequestAddVia)
+		tx, err := client.TransactionRequest(ctx, newReq, sipgo.ClientRequestIncreaseCSEQ, sipgo.ClientRequestAddVia)
 		if err != nil {
 			log.Error("Fail to create transaction", "error", err)
 			return
