@@ -105,7 +105,7 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 ### TLS transports
 ```go 
 // TLS
-conf :=  sipgo.GenerateTLSConfig(certFile, keyFile, rootPems)
+conf := GenerateTLSConfig(certFile, keyFile, rootPems)
 srv.ListenAndServeTLS(ctx, "tcp", "127.0.0.1:5061", conf)
 srv.ListenAndServeTLS(ctx, "ws", "127.0.0.1:5081", conf)
 ```

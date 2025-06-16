@@ -3,7 +3,6 @@ package sipgo
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"log/slog"
@@ -410,28 +409,4 @@ func (srv *Server) onTransportMessage(m sip.Message) {
 // Can be used for modifying
 func (srv *Server) TransportLayer() *sip.TransportLayer {
 	return srv.tp
-}
-
-// GenerateTLSConfig creates basic tls.Config that you can pass for ServerTLS
-// It needs rootPems for client side
-func GenerateTLSConfig(certFile string, keyFile string, rootPems []byte) (*tls.Config, error) {
-	roots := x509.NewCertPool()
-	if rootPems != nil {
-		ok := roots.AppendCertsFromPEM(rootPems)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate")
-		}
-	}
-
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("fail to load cert. err=%w", err)
-	}
-
-	conf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
-	}
-
-	return conf, nil
 }
