@@ -144,3 +144,7 @@ func (d *Dialog) CSEQ() uint32 {
 func (d *Dialog) Context() context.Context {
 	return d.ctx
 }
+
+func (d *Dialog) SetCSEQ(cseq uint32) {
+	d.lastCSeqNo.Store(cseq)
+}

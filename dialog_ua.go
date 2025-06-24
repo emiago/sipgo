@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
-
 	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
 )
@@ -27,6 +25,7 @@ type DialogSessionParams struct {
 	InviteReq  *sip.Request
 	InviteResp *sip.Response
 	State      sip.DialogState
+	CSeq       uint32
 }
 
 // NewServerSession generates a DialogServerSession without creating a transaction for the initial INVITE.
@@ -52,13 +51,13 @@ func (ua *DialogUA) NewServerSession(params DialogSessionParams) (*DialogServerS
 		Dialog: Dialog{
 			ID:             dialogID,
 			InviteRequest:  params.InviteReq,
-			lastCSeqNo:     atomic.Uint32{},
 			InviteResponse: params.InviteResp,
 		},
 		inviteTx: &NoOpServerTransaction{},
 		ua:       ua,
 	}
 	dtx.InitWithState(params.State)
+	dtx.SetCSEQ(params.CSeq)
 
 	return dtx, nil
 }
