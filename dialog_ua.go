@@ -125,7 +125,7 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	return dtx, nil
 }
 
-// NewClientSession generates a DialogClientSession without creating a transaction for the initial INVITE.
+// NewClientSession generates a DialogClientSession without sending out an INVITE.
 // Only use this if the initial transaction has already been completed.
 func (ua *DialogUA) NewClientSession(params DialogSessionParams) (*DialogClientSession, error) {
 	if params.InviteReq == nil {
