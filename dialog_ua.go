@@ -2,7 +2,9 @@ package sipgo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
@@ -19,6 +21,46 @@ type DialogUA struct {
 
 	// RewriteContact sends request on source IP instead Contact. Should be used when behind NAT.
 	RewriteContact bool
+}
+
+type DialogSessionParams struct {
+	InviteReq  *sip.Request
+	InviteResp *sip.Response
+	State      sip.DialogState
+}
+
+// NewServerSession generates a DialogServerSession without creating a transaction for the initial INVITE.
+// Only use this if the initial transaction has already been completed.
+func (ua *DialogUA) NewServerSession(params DialogSessionParams) (*DialogServerSession, error) {
+	if params.InviteReq == nil {
+		return nil, errors.New("invite request is required")
+	}
+
+	if params.InviteReq.Contact() == nil {
+		return nil, ErrDialogInviteNoContact
+	}
+	if params.InviteReq.CSeq() == nil {
+		return nil, errors.New("no CSEQ header present")
+	}
+
+	dialogID, err := sip.UASReadRequestDialogID(params.InviteReq)
+	if err != nil {
+		return nil, fmt.Errorf("error reading dialog ID from request: %w", err)
+	}
+
+	dtx := &DialogServerSession{
+		Dialog: Dialog{
+			ID:             dialogID,
+			InviteRequest:  params.InviteReq,
+			lastCSeqNo:     atomic.Uint32{},
+			InviteResponse: params.InviteResp,
+		},
+		inviteTx: &NoOpServerTransaction{},
+		ua:       ua,
+	}
+	dtx.InitWithState(params.State)
+
+	return dtx, nil
 }
 
 func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
