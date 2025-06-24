@@ -34,12 +34,8 @@ func (ua *DialogUA) NewServerSession(params DialogSessionParams) (*DialogServerS
 	if params.InviteReq == nil {
 		return nil, errors.New("invite request is required")
 	}
-
-	if params.InviteReq.Contact() == nil {
-		return nil, ErrDialogInviteNoContact
-	}
-	if params.InviteReq.CSeq() == nil {
-		return nil, errors.New("no CSEQ header present")
+	if params.InviteResp == nil {
+		return nil, errors.New("invite response is required")
 	}
 
 	dialogID, err := sip.UASReadRequestDialogID(params.InviteReq)
@@ -125,6 +121,36 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 		}
 		return nil, fmt.Errorf("transaction terminated already")
 	}
+
+	return dtx, nil
+}
+
+// NewClientSession generates a DialogClientSession without creating a transaction for the initial INVITE.
+// Only use this if the initial transaction has already been completed.
+func (ua *DialogUA) NewClientSession(params DialogSessionParams) (*DialogClientSession, error) {
+	if params.InviteReq == nil {
+		return nil, errors.New("invite request is required")
+	}
+	if params.InviteResp == nil {
+		return nil, errors.New("invite response is required")
+	}
+
+	dialogID, err := sip.UASReadRequestDialogID(params.InviteReq)
+	if err != nil {
+		return nil, fmt.Errorf("error reading dialog ID from request: %w", err)
+	}
+
+	dtx := &DialogClientSession{
+		Dialog: Dialog{
+			ID:             dialogID,
+			InviteRequest:  params.InviteReq,
+			InviteResponse: params.InviteResp,
+		},
+		inviteTx: &NoOpClientTransaction{},
+		UA:       ua,
+	}
+	dtx.InitWithState(params.State)
+	dtx.SetCSEQ(params.CSeq)
 
 	return dtx, nil
 }
