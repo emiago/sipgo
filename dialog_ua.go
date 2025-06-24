@@ -135,7 +135,7 @@ func (ua *DialogUA) NewClientSession(params DialogSessionParams) (*DialogClientS
 		return nil, errors.New("invite response is required")
 	}
 
-	dialogID, err := sip.UASReadRequestDialogID(params.InviteReq)
+	dialogID, err := sip.UACReadRequestDialogID(params.InviteReq)
 	if err != nil {
 		return nil, fmt.Errorf("error reading dialog ID from request: %w", err)
 	}
