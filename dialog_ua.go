@@ -22,10 +22,14 @@ type DialogUA struct {
 }
 
 type DialogSessionParams struct {
-	InviteReq  *sip.Request
+	// InviteReq is the initial INVITE request that started the dialog.
+	InviteReq *sip.Request
+	// InviteResp is the response to the initial INVITE request.
 	InviteResp *sip.Response
-	State      sip.DialogState
-	CSeq       uint32
+	// State is the active dialog state.
+	State sip.DialogState
+	// CSeq is the last CSeq number to set in dialog.
+	CSeq uint32
 }
 
 // NewServerSession generates a DialogServerSession without creating a transaction for the initial INVITE.
