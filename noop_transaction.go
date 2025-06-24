@@ -7,6 +7,8 @@ type NoOpTransaction struct {
 	doneCh <-chan struct{}
 }
 
+var _ sip.Transaction = &NoOpTransaction{}
+
 func (t *NoOpTransaction) Terminate() {}
 
 func (t *NoOpTransaction) Done() <-chan struct{} {
@@ -32,6 +34,10 @@ func (t *NoOpTransaction) Responses() <-chan *sip.Response {
 	return respCh
 }
 
+func (t *NoOpTransaction) OnTerminate(_ sip.FnTxTerminate) bool {
+	return false
+}
+
 // setResponses sets the response channel for this transaction
 func (t *NoOpTransaction) setResponses(ch <-chan *sip.Response) {
 	t.respCh = ch
@@ -46,6 +52,8 @@ type NoOpServerTransaction struct {
 	NoOpTransaction
 }
 
+var _ sip.ServerTransaction = &NoOpServerTransaction{}
+
 func (t *NoOpServerTransaction) Respond(_ *sip.Response) error {
 	return nil
 }
@@ -54,4 +62,8 @@ func (t *NoOpServerTransaction) Acks() <-chan *sip.Request {
 	reqCh := make(chan *sip.Request)
 	close(reqCh)
 	return reqCh
+}
+
+func (t *NoOpTransaction) OnCancel(_ sip.FnTxCancel) bool {
+	return false
 }
