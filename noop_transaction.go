@@ -38,13 +38,13 @@ func (t *NoOpTransaction) OnTerminate(_ sip.FnTxTerminate) bool {
 	return false
 }
 
-// setResponses sets the response channel for this transaction
-func (t *NoOpTransaction) setResponses(ch <-chan *sip.Response) {
+// SetResponses sets the response channel for this transaction
+func (t *NoOpTransaction) SetResponses(ch <-chan *sip.Response) {
 	t.respCh = ch
 }
 
-// setDone sets the done channel for this transaction
-func (t *NoOpTransaction) setDone(ch <-chan struct{}) {
+// SetDone sets the done channel for this transaction
+func (t *NoOpTransaction) SetDone(ch <-chan struct{}) {
 	t.doneCh = ch
 }
 
