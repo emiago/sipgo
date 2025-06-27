@@ -29,7 +29,8 @@ type DialogSessionParams struct {
 	// State is the active dialog state.
 	State sip.DialogState
 	// CSeq is the last CSeq number to set in dialog.
-	CSeq uint32
+	CSeq     uint32
+	DialogID string
 }
 
 // NewServerSession generates a DialogServerSession without creating a transaction for the initial INVITE.
@@ -38,18 +39,10 @@ func (ua *DialogUA) NewServerSession(params DialogSessionParams) (*DialogServerS
 	if params.InviteReq == nil {
 		return nil, errors.New("invite request is required")
 	}
-	if params.InviteResp == nil {
-		return nil, errors.New("invite response is required")
-	}
-
-	dialogID, err := sip.UASReadRequestDialogID(params.InviteReq)
-	if err != nil {
-		return nil, fmt.Errorf("error reading dialog ID from request: %w", err)
-	}
 
 	dtx := &DialogServerSession{
 		Dialog: Dialog{
-			ID:             dialogID,
+			ID:             params.DialogID,
 			InviteRequest:  params.InviteReq,
 			InviteResponse: params.InviteResp,
 		},
@@ -135,18 +128,10 @@ func (ua *DialogUA) NewClientSession(params DialogSessionParams) (*DialogClientS
 	if params.InviteReq == nil {
 		return nil, errors.New("invite request is required")
 	}
-	if params.InviteResp == nil {
-		return nil, errors.New("invite response is required")
-	}
-
-	dialogID, err := sip.UACReadRequestDialogID(params.InviteReq)
-	if err != nil {
-		return nil, fmt.Errorf("error reading dialog ID from request: %w", err)
-	}
 
 	dtx := &DialogClientSession{
 		Dialog: Dialog{
-			ID:             dialogID,
+			ID:             params.DialogID,
 			InviteRequest:  params.InviteReq,
 			InviteResponse: params.InviteResp,
 		},
