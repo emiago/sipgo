@@ -22,9 +22,10 @@ var (
 // UDP transport implementation
 type transportUDP struct {
 	// listener *net.UDPConn
-	parser *Parser
-	pool   *ConnectionPool
-	log    *slog.Logger
+	parser      *Parser
+	pool        *ConnectionPool
+	log         *slog.Logger
+	compactHdrs bool
 }
 
 func (t *transportUDP) init(par *Parser) {
@@ -62,6 +63,7 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 		PacketConn: conn,
 		PacketAddr: conn.LocalAddr().String(),
 		Listener:   true,
+		compact:    t.compactHdrs,
 	}
 
 	t.pool.Add(c.PacketAddr, c)
@@ -110,6 +112,7 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 		PacketAddr: udpconn.LocalAddr().String(),
 		// 1 ref for current return , 2 ref for reader
 		refcount: 2 + IdleConnection,
+		compact:  t.compactHdrs,
 	}
 
 	addr := raddr.String()
@@ -306,6 +309,8 @@ type UDPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+
+	compact bool
 }
 
 func (c *UDPConnection) close() error {
@@ -415,7 +420,7 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	msg.StringWrite(buf)
+	msg.StringWrite(buf, c.compact)
 	data := buf.Bytes()
 
 	if len(data) > UDPMTUSize-200 {

@@ -69,15 +69,15 @@ func (res *Response) StartLineWrite(buffer io.StringWriter) {
 
 func (res *Response) String() string {
 	var buffer strings.Builder
-	res.StringWrite(&buffer)
+	res.StringWrite(&buffer, false)
 	return buffer.String()
 }
 
-func (res *Response) StringWrite(buffer io.StringWriter) {
+func (res *Response) StringWrite(buffer io.StringWriter, compact bool) {
 	res.StartLineWrite(buffer)
 	buffer.WriteString("\r\n")
 	// Write the headers.
-	res.headers.StringWrite(buffer)
+	res.headers.StringWrite(buffer, compact)
 	// Empty line
 	buffer.WriteString("\r\n")
 	// message body

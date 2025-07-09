@@ -89,7 +89,7 @@ type Message interface {
 	// String returns string representation of SIP message in RFC 3261 form.
 	String() string
 	// String write is same as String but lets you to provide writter and reduce allocations
-	StringWrite(io.StringWriter)
+	StringWrite(buf io.StringWriter, compact bool)
 	// GetHeaders returns slice of headers of the given type.
 	GetHeaders(name string) []Header
 	// PrependHeader prepends header to message.

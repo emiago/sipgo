@@ -73,18 +73,18 @@ func (req *Request) StartLineWrite(buffer io.StringWriter) {
 
 func (req *Request) String() string {
 	var buffer strings.Builder
-	req.StringWrite(&buffer)
+	req.StringWrite(&buffer, false)
 	return buffer.String()
 }
 
-func (req *Request) StringWrite(buffer io.StringWriter) {
+func (req *Request) StringWrite(buffer io.StringWriter, compact bool) {
 	// 	The start-line, each message-header line, and the empty line MUST be
 	//  terminated by a carriage-return line-feed sequence (CRLF).  Note that
 	//  the empty line MUST be present even if the message-body is not.
 	req.StartLineWrite(buffer)
 	buffer.WriteString("\r\n")
 	// Write the headers.
-	req.headers.StringWrite(buffer)
+	req.headers.StringWrite(buffer, compact)
 	// Empty line
 	buffer.WriteString("\r\n")
 	// message body
