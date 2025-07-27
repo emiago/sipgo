@@ -33,6 +33,7 @@ func (hp HeaderParams) Keys() []string {
 	i := 0
 	for k := range hp {
 		s[i] = k
+		i++
 	}
 	return s
 }
