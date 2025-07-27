@@ -59,24 +59,6 @@ func (p *ConnectionPool) Add(a string, c Connection) {
 	p.Unlock()
 }
 
-func (p *ConnectionPool) AddIfNotExists(a string, c Connection) {
-	// TODO how about multi connection support for same remote address
-	// We can then check ref count
-
-	p.Lock()
-	_, exists := p.m[a]
-	if !exists {
-		p.Unlock()
-		return
-	}
-	p.m[a] = c
-	p.Unlock()
-
-	if c.Ref(0) < 1 {
-		c.Ref(1) // Make 1 reference count by default
-	}
-}
-
 // Getting connection pool increases reference
 // Make sure you TryClose after finish
 func (p *ConnectionPool) Get(a string) (c Connection) {
