@@ -14,10 +14,14 @@ const ()
 type Header interface {
 	// Name returns underlying header name.
 	Name() string
+	CompactName() string
 	Value() string
 	String() string
+	CompactString() string
+
 	// StringWrite is better way to reuse single buffer
 	StringWrite(w io.StringWriter)
+	CompactStringWrite(w io.StringWriter)
 
 	// Next() Header
 	headerClone() Header
@@ -54,16 +58,20 @@ type headers struct {
 
 func (hs *headers) String() string {
 	buffer := strings.Builder{}
-	hs.StringWrite(&buffer)
+	hs.StringWrite(&buffer, false)
 	return buffer.String()
 }
 
-func (hs *headers) StringWrite(buffer io.StringWriter) {
+func (hs *headers) StringWrite(buffer io.StringWriter, compact bool) {
 	for typeIdx, header := range hs.headerOrder {
 		if typeIdx > 0 {
 			buffer.WriteString("\r\n")
 		}
-		header.StringWrite(buffer)
+		if compact {
+			header.CompactStringWrite(buffer)
+		} else {
+			header.StringWrite(buffer)
+		}
 	}
 	buffer.WriteString("\r\n")
 }
@@ -448,13 +456,29 @@ func (h *genericHeader) String() string {
 	return buffer.String()
 }
 
+func (h *genericHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *genericHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *genericHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *genericHeader) Name() string {
+	return h.HeaderName
+}
+
+func (h *genericHeader) CompactName() string {
 	return h.HeaderName
 }
 
@@ -489,13 +513,27 @@ func (h *ToHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ToHeader) CompactString() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ToHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
 
+func (h *ToHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
 func (h *ToHeader) Name() string { return "To" }
+
+func (h *ToHeader) CompactName() string { return "t" }
 
 func (h *ToHeader) Value() string {
 	var buffer strings.Builder
@@ -567,13 +605,27 @@ func (h *FromHeader) String() string {
 	return buffer.String()
 }
 
+func (h *FromHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *FromHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
 
+func (h *FromHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
 func (h *FromHeader) Name() string { return "From" }
+
+func (h *FromHeader) CompactName() string { return "f" }
 
 func (h *FromHeader) Value() string {
 	var buffer strings.Builder
@@ -642,13 +694,26 @@ func (h *ContactHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ContactHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ContactHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	h.valueWrite(buffer)
 }
 
+func (h *ContactHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	h.valueWrite(buffer)
+}
 func (h *ContactHeader) Name() string { return "Contact" }
+
+func (h *ContactHeader) CompactName() string { return "m" }
 
 func (h *ContactHeader) Value() string {
 	var buffer strings.Builder
@@ -716,13 +781,27 @@ func (h *CallIDHeader) String() string {
 	return buffer.String()
 }
 
+func (h *CallIDHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *CallIDHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *CallIDHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *CallIDHeader) Name() string { return "Call-ID" }
+
+func (h *CallIDHeader) CompactName() string { return "i" }
 
 func (h *CallIDHeader) Value() string { return string(*h) }
 
@@ -742,13 +821,27 @@ func (h *CSeqHeader) String() string {
 	return buffer.String()
 }
 
+func (h *CSeqHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *CSeqHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
 
+func (h *CSeqHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
 func (h *CSeqHeader) Name() string { return "CSeq" }
+
+func (h *CSeqHeader) CompactName() string { return "CSeq" }
 
 func (h *CSeqHeader) Value() string {
 	return fmt.Sprintf("%d %s", h.SeqNo, h.MethodName)
@@ -781,13 +874,27 @@ func (h *MaxForwardsHeader) String() string {
 	return buffer.String()
 }
 
+func (h *MaxForwardsHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *MaxForwardsHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *MaxForwardsHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *MaxForwardsHeader) Name() string { return "Max-Forwards" }
+
+func (h *MaxForwardsHeader) CompactName() string { return "Max-Forwards" }
 
 func (h *MaxForwardsHeader) Value() string { return strconv.Itoa(int(*h)) }
 
@@ -808,13 +915,25 @@ func (h *ExpiresHeader) String() string {
 	return fmt.Sprintf("%s: %s", h.Name(), h.Value())
 }
 
+func (h *ExpiresHeader) CompactString() string {
+	return fmt.Sprintf("%s: %s", h.CompactName(), h.Value())
+}
+
 func (h *ExpiresHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *ExpiresHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *ExpiresHeader) Name() string { return "Expires" }
+
+func (h *ExpiresHeader) CompactName() string { return "Expires" }
 
 func (h ExpiresHeader) Value() string { return strconv.Itoa(int(h)) }
 
@@ -829,13 +948,27 @@ func (h ContentLengthHeader) String() string {
 	return buffer.String()
 }
 
+func (h ContentLengthHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h ContentLengthHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h ContentLengthHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *ContentLengthHeader) Name() string { return "Content-Length" }
+
+func (h *ContentLengthHeader) CompactName() string { return "l" }
 
 func (h ContentLengthHeader) Value() string { return strconv.Itoa(int(h)) }
 
@@ -871,13 +1004,27 @@ func (h *ViaHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ViaHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ViaHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *ViaHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 func (h *ViaHeader) Name() string { return "Via" }
+
+func (h *ViaHeader) CompactName() string { return "v" }
 
 func (h *ViaHeader) Value() string {
 	var buffer strings.Builder
@@ -936,14 +1083,28 @@ func (h *ContentTypeHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ContentTypeHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ContentTypeHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
 	buffer.WriteString(h.Value())
 }
 
+func (h *ContentTypeHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
 // func (h **ContentTypeHeader) Name() string { return "Content-Type" }
 func (h *ContentTypeHeader) Name() string { return "Content-Type" }
+
+func (h *ContentTypeHeader) CompactName() string { return "c" }
 
 func (h *ContentTypeHeader) Value() string { return string(*h) }
 
@@ -955,6 +1116,8 @@ type RouteHeader struct {
 }
 
 func (h *RouteHeader) Name() string { return "Route" }
+
+func (h *RouteHeader) CompactName() string { return "Route" }
 
 func (h *RouteHeader) Value() string {
 	var buffer strings.Builder
@@ -974,8 +1137,20 @@ func (h *RouteHeader) String() string {
 	return buffer.String()
 }
 
+func (h *RouteHeader) CompactString() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *RouteHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
+func (h *RouteHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
@@ -998,6 +1173,8 @@ type RecordRouteHeader struct {
 
 func (h *RecordRouteHeader) Name() string { return "Record-Route" }
 
+func (h *RecordRouteHeader) CompactName() string { return "Record-Route" }
+
 func (h *RecordRouteHeader) Value() string {
 	var buffer strings.Builder
 	h.ValueStringWrite(&buffer)
@@ -1016,8 +1193,20 @@ func (h *RecordRouteHeader) String() string {
 	return buffer.String()
 }
 
+func (h *RecordRouteHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *RecordRouteHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
+func (h *RecordRouteHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
@@ -1040,6 +1229,8 @@ type ReferToHeader struct {
 
 func (h *ReferToHeader) Name() string { return "Refer-To" }
 
+func (h *ReferToHeader) CompactName() string { return "Refer-To" }
+
 func (h *ReferToHeader) Value() string {
 	var buffer strings.Builder
 	h.ValueStringWrite(&buffer)
@@ -1058,8 +1249,20 @@ func (h *ReferToHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ReferToHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ReferToHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
+func (h *ReferToHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }
@@ -1083,6 +1286,8 @@ type ReferredByHeader struct {
 }
 
 func (h *ReferredByHeader) Name() string { return "Referred-By" }
+
+func (h *ReferredByHeader) CompactName() string { return "Referred-By" }
 
 func (h *ReferredByHeader) Value() string {
 	var buffer strings.Builder
@@ -1113,8 +1318,20 @@ func (h *ReferredByHeader) String() string {
 	return buffer.String()
 }
 
+func (h *ReferredByHeader) CompactString() string {
+	var buffer strings.Builder
+	h.CompactStringWrite(&buffer)
+	return buffer.String()
+}
+
 func (h *ReferredByHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.ValueStringWrite(buffer)
+}
+
+func (h *ReferredByHeader) CompactStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.CompactName())
 	buffer.WriteString(": ")
 	h.ValueStringWrite(buffer)
 }

@@ -13,10 +13,11 @@ import (
 
 // TCP transport implementation
 type transportTCP struct {
-	addr      string
-	transport string
-	parser    *Parser
-	log       *slog.Logger
+	addr        string
+	transport   string
+	parser      *Parser
+	log         *slog.Logger
+	compactHdrs bool
 
 	pool *ConnectionPool
 }
@@ -117,6 +118,7 @@ func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	c := &TCPConnection{
 		Conn:     conn,
 		refcount: 1 + IdleConnection,
+		compact:  t.compactHdrs,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
@@ -200,6 +202,8 @@ type TCPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+
+	compact bool
 }
 
 func (c *TCPConnection) Ref(i int) int {
@@ -260,7 +264,7 @@ func (c *TCPConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	msg.StringWrite(buf)
+	msg.StringWrite(buf, c.compact)
 	data := buf.Bytes()
 
 	n, err := c.Write(data)

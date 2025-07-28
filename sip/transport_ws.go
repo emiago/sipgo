@@ -24,9 +24,10 @@ var (
 
 // WS transport implementation
 type transportWS struct {
-	parser    *Parser
-	log       *slog.Logger
-	transport string
+	parser      *Parser
+	log         *slog.Logger
+	transport   string
+	compactHdrs bool
 
 	pool   *ConnectionPool
 	dialer ws.Dialer
@@ -144,6 +145,7 @@ func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 		Conn:       conn,
 		refcount:   1 + IdleConnection,
 		clientSide: clientSide,
+		compact:    t.compactHdrs,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
@@ -276,6 +278,8 @@ type WSConnection struct {
 	clientSide bool
 	mu         sync.RWMutex
 	refcount   int
+
+	compact bool
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -406,7 +410,7 @@ func (c *WSConnection) WriteMsg(msg Message) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	msg.StringWrite(buf)
+	msg.StringWrite(buf, c.compact)
 	data := buf.Bytes()
 
 	n, err := c.Write(data)

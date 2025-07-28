@@ -36,6 +36,8 @@ type TransportLayer struct {
 
 	log *slog.Logger
 
+	compactHdrs bool
+
 	// ConnectionReuse will force connection reuse when passing request
 	ConnectionReuse bool
 
@@ -50,6 +52,12 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 		if logger != nil {
 			l.log = logger.With("caller", "TransportLayer")
 		}
+	}
+}
+
+func WithTransportCompactheaders(enabled bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.compactHdrs = enabled
 	}
 }
 
@@ -83,13 +91,15 @@ func NewTransportLayer(
 	// Exporting transport configuration
 	// UDP
 	l.udp = &transportUDP{
-		log: l.log.With("caller", "Transport<UDP>"),
+		log:         l.log.With("caller", "Transport<UDP>"),
+		compactHdrs: l.compactHdrs,
 	}
 	l.udp.init(sipparser)
 
 	// TCP
 	l.tcp = &transportTCP{
-		log: l.log.With("caller", "Transport<TCP>"),
+		log:         l.log.With("caller", "Transport<TCP>"),
+		compactHdrs: l.compactHdrs,
 	}
 	l.tcp.init(sipparser)
 
@@ -97,14 +107,16 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.tls = &transportTLS{
 		transportTCP: &transportTCP{
-			log: l.log.With("caller", "Transport<TLS>"),
+			log:         l.log.With("caller", "Transport<TLS>"),
+			compactHdrs: l.compactHdrs,
 		},
 	}
 	l.tls.init(sipparser, tlsConfig)
 
 	// WS
 	l.ws = &transportWS{
-		log: l.log.With("caller", "Transport<WS>"),
+		log:         l.log.With("caller", "Transport<WS>"),
+		compactHdrs: l.compactHdrs,
 	}
 	l.ws.init(sipparser)
 
@@ -112,7 +124,8 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.wss = &transportWSS{
 		transportWS: &transportWS{
-			log: l.log.With("caller", "Transport<WSS>"),
+			log:         l.log.With("caller", "Transport<WSS>"),
+			compactHdrs: l.compactHdrs,
 		},
 	}
 	l.wss.init(sipparser, tlsConfig)
