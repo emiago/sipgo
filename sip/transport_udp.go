@@ -22,9 +22,10 @@ var (
 // UDP transport implementation
 type transportUDP struct {
 	// listener *net.UDPConn
-	parser *Parser
-	pool   *ConnectionPool
-	log    *slog.Logger
+	parser          *Parser
+	pool            *ConnectionPool
+	log             *slog.Logger
+	connectionReuse bool
 }
 
 func (t *transportUDP) init(par *Parser) {
@@ -87,6 +88,7 @@ func (t *transportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// if UDPUseConnectedConnection {
 	// 	return t.createConnectedConnection(ctx, laddr, raddr, handler)
 	// }
+
 	return t.createConnection(ctx, laddr, raddr, handler)
 }
 
@@ -99,29 +101,36 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 		// Use IPV4 if remote is same
 		protocol = "udp4"
 	}
+	addr := raddr.String()
 
-	udpconn, err := lc.ListenPacket(ctx, protocol, laddrStr)
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+		udpconn, err := lc.ListenPacket(ctx, protocol, laddrStr)
+		if err != nil {
+			return nil, err
+		}
+
+		c := &UDPConnection{
+			PacketConn: udpconn,
+			PacketAddr: udpconn.LocalAddr().String(),
+			// 1 ref for current return , 2 ref for reader
+			refcount: 2 + IdleConnection,
+		}
+		return c, nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	c := conn.(*UDPConnection)
 
-	c := &UDPConnection{
-		PacketConn: udpconn,
-		PacketAddr: udpconn.LocalAddr().String(),
-		// 1 ref for current return , 2 ref for reader
-		refcount: 2 + IdleConnection,
-	}
-
-	addr := raddr.String()
 	t.log.Debug("New connection", "raddr", addr)
+	// We need to also have mapping remote add to this connection
+	// t.pool.Add(addr, c)
 
 	// Add in pool but as listen connection
 	// Reason is that UDP connection can be reused.
 	// Notice this can only be reused if VIA header is set explicitly like WithClientAddr()
-	t.pool.Add(c.PacketAddr, c)
+	// t.pool.Add(c.PacketAddr, c)
 
-	// We need to also have mapping remote add to this connection
-	t.pool.Add(addr, c)
 	// t.listeners = append(t.listeners, c)
 	go t.readUDPConnection(c, addr, c.PacketAddr, handler)
 	return c, err

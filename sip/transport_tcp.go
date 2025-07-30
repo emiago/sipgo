@@ -13,10 +13,12 @@ import (
 
 // TCP transport implementation
 type transportTCP struct {
-	addr      string
-	transport string
-	parser    *Parser
-	log       *slog.Logger
+	addr            string
+	transport       string
+	parser          *Parser
+	log             *slog.Logger
+	createMu        sync.Mutex
+	connectionReuse bool
 
 	pool *ConnectionPool
 }
@@ -68,44 +70,55 @@ func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// if err != nil {
 	// 	return nil, err
 	// }
-	var tladdr *net.TCPAddr = nil
-	if laddr.IP != nil {
-		tladdr = &net.TCPAddr{
-			IP:   laddr.IP,
-			Port: laddr.Port,
+	// We do singleflight if laddr is required or connection reuse
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+		var tladdr *net.TCPAddr = nil
+		if laddr.IP != nil {
+			tladdr = &net.TCPAddr{
+				IP:   laddr.IP,
+				Port: laddr.Port,
+			}
 		}
-	}
 
-	traddr := &net.TCPAddr{
-		IP:   raddr.IP,
-		Port: raddr.Port,
-	}
-	return t.createConnection(ctx, tladdr, traddr, handler)
-}
+		traddr := &net.TCPAddr{
+			IP:   raddr.IP,
+			Port: raddr.Port,
+		}
 
-func (t *transportTCP) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
-	addr := raddr.String()
-	t.log.Debug("Dialing new connection", "raddr", addr)
+		addr := traddr.String()
+		t.log.Debug("Dialing new connection", "raddr", addr)
 
-	d := net.Dialer{
-		LocalAddr: laddr,
-	}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+		d := net.Dialer{
+			LocalAddr: tladdr,
+		}
+		conn, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("%s dial err=%w", t, err)
+		}
+
+		// if err := conn.SetKeepAlive(true); err != nil {
+		// 	return nil, fmt.Errorf("%s keepalive err=%w", t, err)
+		// }
+
+		// if err := conn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+		// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
+		// }
+
+		t.log.Debug("New connection", "raddr", raddr)
+		c := &TCPConnection{
+			Conn:     conn,
+			refcount: 2 + IdleConnection,
+		}
+
+		// Increase ref by 1 before returnin
+		// c.Ref(1)
+		return c, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("%s dial err=%w", t, err)
+		return nil, err
 	}
-
-	// if err := conn.SetKeepAlive(true); err != nil {
-	// 	return nil, fmt.Errorf("%s keepalive err=%w", t, err)
-	// }
-
-	// if err := conn.SetKeepAlivePeriod(30 * time.Second); err != nil {
-	// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
-	// }
-	c := t.initConnection(conn, addr, handler)
-
-	// Increase ref by 1 before returnin
-	c.Ref(1)
+	c := conn.(*TCPConnection)
+	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }
 

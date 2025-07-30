@@ -28,6 +28,9 @@ type transportWS struct {
 	log       *slog.Logger
 	transport string
 
+	createMu        sync.Mutex
+	connectionReuse bool
+
 	pool   *ConnectionPool
 	dialer ws.Dialer
 }
@@ -229,44 +232,48 @@ func (t *transportWS) GetConnection(addr string) Connection {
 }
 
 func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	// raddr, err := net.ResolveTCPAddr("tcp", addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	var tladdr *net.TCPAddr = nil
-	if laddr.IP != nil {
-		tladdr = &net.TCPAddr{
-			IP:   laddr.IP,
-			Port: laddr.Port,
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+		var tladdr *net.TCPAddr = nil
+		if laddr.IP != nil {
+			tladdr = &net.TCPAddr{
+				IP:   laddr.IP,
+				Port: laddr.Port,
+			}
 		}
-	}
 
-	traddr := &net.TCPAddr{
-		IP:   raddr.IP,
-		Port: raddr.Port,
-	}
-	return t.createConnection(ctx, tladdr, traddr, handler)
-}
+		traddr := &net.TCPAddr{
+			IP:   raddr.IP,
+			Port: raddr.Port,
+		}
 
-func (t *transportWS) createConnection(ctx context.Context, laddr *net.TCPAddr, raddr *net.TCPAddr, handler MessageHandler) (Connection, error) {
-	log := t.log
-	addr := raddr.String()
-	log.Debug("Dialing new connection", "raddr", addr)
+		log := t.log
+		addr := traddr.String()
+		log.Debug("Dialing new connection", "raddr", addr)
 
-	dialer := t.getDialer(laddr)
-	// How to define local interface
-	if laddr != nil {
-		log.Debug("Dialing with local IP is not supported on ws", "laddr", laddr.String())
-	}
+		dialer := t.getDialer(tladdr)
+		// How to define local interface
+		if tladdr != nil {
+			log.Debug("Dialing with local IP is not supported on ws", "laddr", tladdr.String())
+		}
 
-	conn, _, _, err := dialer.Dial(ctx, "ws://"+addr)
+		conn, _, _, err := dialer.Dial(ctx, "ws://"+addr)
+		if err != nil {
+			return nil, fmt.Errorf("%s dial err=%w", t, err)
+		}
+
+		t.log.Debug("New WS connection", "raddr", raddr)
+		c := &WSConnection{
+			Conn:       conn,
+			refcount:   2 + IdleConnection,
+			clientSide: true,
+		}
+		return c, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("%s dial err=%w", t, err)
+		return nil, err
 	}
-
-	c := t.initConnection(conn, addr, true, handler)
-	c.Ref(1)
+	c := conn.(*WSConnection)
+	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }
 

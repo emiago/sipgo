@@ -36,8 +36,8 @@ type TransportLayer struct {
 
 	log *slog.Logger
 
-	// ConnectionReuse will force connection reuse when passing request
-	ConnectionReuse bool
+	// connectionReuse will force connection reuse when passing request
+	connectionReuse bool
 
 	// PreferSRV does always SRV lookup first
 	DNSPreferSRV bool
@@ -50,6 +50,12 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 		if logger != nil {
 			l.log = logger.With("caller", "TransportLayer")
 		}
+	}
+}
+
+func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.connectionReuse = f
 	}
 }
 
@@ -67,7 +73,7 @@ func NewTransportLayer(
 		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
-		ConnectionReuse: true,
+		connectionReuse: true,
 		log:             slog.With("caller", "TransportLayer"),
 	}
 
@@ -83,13 +89,15 @@ func NewTransportLayer(
 	// Exporting transport configuration
 	// UDP
 	l.udp = &transportUDP{
-		log: l.log.With("caller", "Transport<UDP>"),
+		log:             l.log.With("caller", "Transport<UDP>"),
+		connectionReuse: l.connectionReuse,
 	}
 	l.udp.init(sipparser)
 
 	// TCP
 	l.tcp = &transportTCP{
-		log: l.log.With("caller", "Transport<TCP>"),
+		log:             l.log.With("caller", "Transport<TCP>"),
+		connectionReuse: l.connectionReuse,
 	}
 	l.tcp.init(sipparser)
 
@@ -97,7 +105,8 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.tls = &transportTLS{
 		transportTCP: &transportTCP{
-			log: l.log.With("caller", "Transport<TLS>"),
+			log:             l.log.With("caller", "Transport<TLS>"),
+			connectionReuse: l.connectionReuse,
 		},
 	}
 	l.tls.init(sipparser, tlsConfig)
@@ -112,7 +121,8 @@ func NewTransportLayer(
 	// TODO. Using default dial tls, but it needs to configurable via client
 	l.wss = &transportWSS{
 		transportWS: &transportWS{
-			log: l.log.With("caller", "Transport<WSS>"),
+			log:             l.log.With("caller", "Transport<WSS>"),
+			connectionReuse: l.connectionReuse,
 		},
 	}
 	l.wss.init(sipparser, tlsConfig)
@@ -389,7 +399,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	// This is probably client forcing host:port
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
-	} else if l.ConnectionReuse {
+	} else if l.connectionReuse {
 		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 		c = transport.GetConnection(addr)

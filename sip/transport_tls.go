@@ -45,43 +45,54 @@ func (t *transportTLS) String() string {
 
 // CreateConnection creates TLS connection for TCP transport
 func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	hostname := raddr.Hostname
-	if hostname == "" {
-		hostname = raddr.IP.String()
-	}
-
-	var tladdr *net.TCPAddr = nil
-	if laddr.IP != nil {
-		tladdr = &net.TCPAddr{
-			IP:   laddr.IP,
-			Port: laddr.Port,
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+		hostname := raddr.Hostname
+		if hostname == "" {
+			hostname = raddr.IP.String()
 		}
-	}
 
-	traddr := &net.TCPAddr{
-		IP:   raddr.IP,
-		Port: raddr.Port,
-	}
+		var tladdr *net.TCPAddr = nil
+		if laddr.IP != nil {
+			tladdr = &net.TCPAddr{
+				IP:   laddr.IP,
+				Port: laddr.Port,
+			}
+		}
 
-	netDialer := &net.Dialer{
-		LocalAddr: tladdr,
-	}
+		traddr := &net.TCPAddr{
+			IP:   raddr.IP,
+			Port: raddr.Port,
+		}
 
-	addr := traddr.String()
-	t.log.Debug("Dialing new connection", "raddr", addr)
-	// No resolving should happen here
-	conn, err := netDialer.DialContext(ctx, "tcp", addr)
+		netDialer := &net.Dialer{
+			LocalAddr: tladdr,
+		}
+
+		addr := traddr.String()
+		t.log.Debug("Dialing new connection", "raddr", addr)
+		// No resolving should happen here
+		conn, err := netDialer.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("dial TCP error: %w", err)
+		}
+
+		tlsConn := t.tlsClient(conn, hostname)
+
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return nil, fmt.Errorf("TLS handshake error: %w", err)
+		}
+
+		t.log.Debug("New connection", "raddr", raddr)
+		c := &TCPConnection{
+			Conn:     tlsConn,
+			refcount: 2 + IdleConnection,
+		}
+		return c, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("dial TCP error: %w", err)
+		return nil, err
 	}
-
-	tlsConn := t.tlsClient(conn, hostname)
-
-	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		return nil, fmt.Errorf("TLS handshake error: %w", err)
-	}
-
-	c := t.initConnection(tlsConn, addr, handler)
-	c.Ref(1)
+	c := conn.(*TCPConnection)
+	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }

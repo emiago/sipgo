@@ -38,8 +38,7 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 	defer func() {
 		require.NoError(t, tp.Close())
 	}()
-
-	require.True(t, tp.ConnectionReuse)
+	require.True(t, tp.connectionReuse)
 
 	t.Run("Default", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
@@ -86,14 +85,13 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 
 func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 	// NOTE it creates real network connection
-	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil, WithTransportLayerConnectionReuse(false))
 	defer func() {
 		require.Empty(t, tp.udp.pool.Size())
 	}()
 	defer func() {
 		require.NoError(t, tp.Close())
 	}()
-	tp.ConnectionReuse = false
 
 	t.Run("Default", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})

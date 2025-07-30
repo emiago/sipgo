@@ -47,6 +47,52 @@ func (p *ConnectionPool) init() {
 	p.m = make(map[string]Connection)
 }
 
+func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do func() (Connection, error)) (Connection, error) {
+	a := raddr.String()
+	// If user wants to create connection per remote addr, allow this always unless reuse is forced
+	if laddr.Port == 0 && !reuse {
+		// There is nothing here to block
+		c, err := do()
+		if err != nil {
+			return nil, err
+		}
+		p.m[a] = c
+		p.m[c.LocalAddr().String()] = c
+		return c, nil
+	}
+
+	p.Lock()
+	defer p.Unlock()
+	// If local port connection is needed check only this connection,
+	// otherwise return existing only if reuse is wanted.
+
+	// TODO: Improve. There is no need to lock if no reuse is needed
+	if laddr.Port > 0 {
+		la := laddr.String()
+		if c, exists := p.m[la]; exists {
+			return c, nil
+		}
+	} else if reuse {
+		//
+		if c, exists := p.m[a]; exists {
+			return c, nil
+		}
+	}
+
+	c, err := do()
+	if err != nil {
+		return nil, err
+	}
+
+	if c.Ref(0) < 1 {
+		c.Ref(1) // Make 1 reference count by default
+	}
+	// Add both references
+	p.m[a] = c
+	p.m[c.LocalAddr().String()] = c
+	return c, err
+}
+
 func (p *ConnectionPool) Add(a string, c Connection) {
 	// TODO how about multi connection support for same remote address
 	// We can then check ref count
