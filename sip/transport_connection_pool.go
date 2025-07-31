@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"sync"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type Connection interface {
@@ -34,7 +36,8 @@ var bufPool = sync.Pool{
 type ConnectionPool struct {
 	// TODO consider sync.Map way with atomic checks to reduce mutex contention
 	sync.RWMutex
-	m map[string]Connection
+	m  map[string]Connection
+	sf singleflight.Group
 }
 
 func NewConnectionPool() *ConnectionPool {
@@ -49,36 +52,30 @@ func (p *ConnectionPool) init() {
 
 func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do func() (Connection, error)) (Connection, error) {
 	a := raddr.String()
-	// If user wants to create connection per remote addr, allow this always unless reuse is forced
-	if laddr.Port == 0 && !reuse {
-		// There is nothing here to block
-		c, err := do()
+
+	if laddr.Port > 0 || reuse {
+		// TODO: remplement this here to avoid type conversion
+		conn, err, shared := p.sf.Do(laddr.String()+raddr.String(), func() (any, error) {
+			return do()
+		})
 		if err != nil {
 			return nil, err
 		}
+		c := conn.(Connection)
+
+		if shared {
+			return c, nil
+		}
+
+		p.Lock()
+		defer p.Unlock()
+
 		p.m[a] = c
 		p.m[c.LocalAddr().String()] = c
 		return c, nil
 	}
 
-	p.Lock()
-	defer p.Unlock()
-	// If local port connection is needed check only this connection,
-	// otherwise return existing only if reuse is wanted.
-
-	// TODO: Improve. There is no need to lock if no reuse is needed
-	if laddr.Port > 0 {
-		la := laddr.String()
-		if c, exists := p.m[la]; exists {
-			return c, nil
-		}
-	} else if reuse {
-		//
-		if c, exists := p.m[a]; exists {
-			return c, nil
-		}
-	}
-
+	// There is nothing here to block
 	c, err := do()
 	if err != nil {
 		return nil, err
@@ -87,10 +84,9 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 	if c.Ref(0) < 1 {
 		c.Ref(1) // Make 1 reference count by default
 	}
-	// Add both references
 	p.m[a] = c
 	p.m[c.LocalAddr().String()] = c
-	return c, err
+	return c, nil
 }
 
 func (p *ConnectionPool) Add(a string, c Connection) {
