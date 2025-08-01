@@ -55,23 +55,34 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 
 	if laddr.Port > 0 || reuse {
 		// TODO: remplement this here to avoid type conversion
-		conn, err, shared := p.sf.Do(laddr.String()+raddr.String(), func() (any, error) {
-			return do()
+		if c := p.Get(a); c != nil {
+			return c, nil
+		}
+
+		laddrStr := laddr.String()
+		if laddr.Port > 0 {
+			if c := p.Get(laddrStr); c != nil {
+				return c, nil
+			}
+		}
+
+		conn, err, _ := p.sf.Do(laddrStr+a, func() (any, error) {
+			c, err := do()
+			if err != nil {
+				return nil, err
+			}
+
+			p.Lock()
+			defer p.Unlock()
+
+			p.m[a] = c
+			p.m[c.LocalAddr().String()] = c
+			return c, nil
 		})
 		if err != nil {
 			return nil, err
 		}
 		c := conn.(Connection)
-
-		if shared {
-			return c, nil
-		}
-
-		p.Lock()
-		defer p.Unlock()
-
-		p.m[a] = c
-		p.m[c.LocalAddr().String()] = c
 		return c, nil
 	}
 

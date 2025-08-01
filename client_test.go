@@ -2,9 +2,13 @@ package sipgo
 
 import (
 	"context"
+	"io"
+	"net"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/emiago/sipgo/sip"
@@ -289,6 +293,40 @@ func TestDigestAuthLowerCase(t *testing.T) {
 		URI:      "sip:+user@example.com",
 	})
 	require.NoError(t, err)
+}
+
+func TestClientParalelDialing(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
+	ua, err := NewUA()
+	require.NoError(t, err)
+
+	l, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 15090})
+	require.NoError(t, err)
+	go func() {
+		io.ReadAll(l)
+	}()
+
+	c, err := NewClient(ua,
+		WithClientHostname("10.0.0.0"),
+		WithClientConnectionAddr("127.0.0.1:15080"),
+	)
+	require.NoError(t, err)
+	wg := sync.WaitGroup{}
+	for i := 0; i < 2*runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := sip.NewRequest(sip.INVITE, sip.Uri{Host: "127.0.0.1", Port: 15090})
+			err := c.WriteRequest(req)
+			require.NoError(t, err)
+		}()
+	}
+
+	wg.Wait()
 }
 
 func BenchmarkClientTransactionRequestBuild(t *testing.B) {

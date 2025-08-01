@@ -193,6 +193,19 @@ func (txl *TransactionLayer) handleResponse(res *Response) error {
 }
 
 func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*ClientTx, error) {
+	tx, err := txl.NewClientTransaction(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Init(); err != nil {
+		tx.Terminate()
+		return nil, err
+	}
+	return tx, nil
+}
+
+func (txl *TransactionLayer) NewClientTransaction(ctx context.Context, req *Request) (*ClientTx, error) {
 	if req.IsAck() {
 		return nil, fmt.Errorf("ACK request must be sent directly through transport")
 	}
@@ -202,7 +215,11 @@ func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*Client
 		return nil, err
 	}
 
-	return txl.clientTxRequest(ctx, req, key)
+	tx, err := txl.clientTxRequest(ctx, req, key)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, key string) (*ClientTx, error) {
@@ -232,11 +249,6 @@ func (txl *TransactionLayer) clientTxCreate(ctx context.Context, req *Request, k
 	}
 
 	tx := NewClientTx(key, req, conn, txl.log)
-	if err := tx.Init(); err != nil {
-		tx.Terminate()
-		return nil, err
-	}
-
 	return tx, nil
 }
 

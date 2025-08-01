@@ -90,6 +90,17 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 // This ensures that you have proper request done within dialog. You should avoid setting any Dialog header (cseq, from, to, callid)
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
 	s.buildReq(req)
+
+	// Overrides contact header with local connection addr
+	if cont := req.Contact(); cont.Address.Host == "" {
+		tx, err := s.UA.Client.newTransaction(ctx, req, func(conn sip.Connection) error {
+			var err error
+			cont.Address.Host, cont.Address.Port, err = sip.ParseAddr(conn.LocalAddr().String())
+			return err
+		})
+		return tx, err
+	}
+
 	// Passing option to avoid CSEQ apply
 	return s.UA.Client.TransactionRequest(ctx, req, s.requestValidate)
 }

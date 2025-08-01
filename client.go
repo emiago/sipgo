@@ -174,6 +174,28 @@ func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.
 	return c.tx.Request(ctx, req)
 }
 
+func (c *Client) newTransaction(ctx context.Context, req *sip.Request, onConnection func(conn sip.Connection) error) (sip.ClientTransaction, error) {
+	if c.TxRequester != nil {
+		return c.TxRequester.Request(ctx, req)
+	}
+
+	tx, err := c.tx.NewClientTransaction(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := onConnection(tx.Connection()); err != nil {
+		tx.Terminate()
+		return nil, err
+	}
+
+	err = tx.Init()
+	if err != nil {
+		tx.Terminate()
+	}
+	return tx, err
+}
+
 // Do request is HTTP client like Do request/response.
 // It returns on final response.
 // NOTE: Canceling ctx WILL not send Cancel Request which is needed for INVITE. Use dialog API for dealing with dialogs
