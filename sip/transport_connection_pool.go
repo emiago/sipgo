@@ -55,13 +55,14 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 
 	if laddr.Port > 0 || reuse {
 		// TODO: remplement this here to avoid type conversion
-		if c := p.Get(a); c != nil {
-			return c, nil
-		}
 
 		laddrStr := laddr.String()
 		if laddr.Port > 0 {
 			if c := p.Get(laddrStr); c != nil {
+				return c, nil
+			}
+		} else {
+			if c := p.Get(a); c != nil {
 				return c, nil
 			}
 		}
