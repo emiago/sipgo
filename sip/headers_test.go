@@ -1,6 +1,8 @@
 package sip
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,4 +106,24 @@ func TestCopyHeaders(t *testing.T) {
 	hdrs := res.GetHeaders("Record-Route")
 	require.Equal(t, "Record-Route: <sip:p1:5060;lr;transport=udp>", hdrs[0].String())
 	require.Equal(t, "Record-Route: <sip:p2:5060;lr>", hdrs[1].String())
+}
+
+func TestHeaderSCompact(t *testing.T) {
+	invite := testCreateMessage(t, []string{
+		"INVITE sip:bob@example.com SIP/2.0",
+		"Via: SIP/2.0/udp test.com;branch=z9hG4bK.3h9TE5VD6tjax5YW",
+		"From: \"Alice\" <sip:alice@test.com>;tag=1754166595691377466",
+		"",
+		"",
+	}).(*Request)
+	invite.CompactHeaders = true
+	buf := bytes.NewBuffer(make([]byte, 0))
+	invite.StringWrite(buf)
+
+	byteBuf := buf.String()
+	rows := strings.Split(byteBuf, "\r\n")
+	t.Log(rows)
+	assert.Equal(t, "INVITE sip:bob@example.com SIP/2.0", rows[0])
+	assert.Equal(t, "v: SIP/2.0/udp test.com;branch=z9hG4bK.3h9TE5VD6tjax5YW", rows[1])
+	assert.Equal(t, "f: \"Alice\" <sip:alice@test.com>;tag=1754166595691377466", rows[2])
 }

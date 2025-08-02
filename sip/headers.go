@@ -21,6 +21,7 @@ type Header interface {
 
 	// Next() Header
 	headerClone() Header
+	valueStringWrite(w io.StringWriter)
 }
 
 // CopyHeader is internal interface for cloning headers.
@@ -50,6 +51,9 @@ type headers struct {
 	route         *RouteHeader
 	recordRoute   *RecordRouteHeader
 	maxForwards   *MaxForwardsHeader
+
+	// CompactHeaders
+	CompactHeaders bool
 }
 
 func (hs *headers) String() string {
@@ -59,11 +63,29 @@ func (hs *headers) String() string {
 }
 
 func (hs *headers) StringWrite(buffer io.StringWriter) {
+	if hs.CompactHeaders {
+		for typeIdx, header := range hs.headerOrder {
+			if typeIdx > 0 {
+				buffer.WriteString("\r\n")
+			}
+
+			// https://www.cs.columbia.edu/sip/compact.html
+			name := header.Name()
+			buffer.WriteString(compactHeaderName(name))
+			buffer.WriteString(": ")
+			header.valueStringWrite(buffer)
+		}
+		buffer.WriteString("\r\n")
+		return
+	}
+
 	for typeIdx, header := range hs.headerOrder {
 		if typeIdx > 0 {
 			buffer.WriteString("\r\n")
 		}
-		header.StringWrite(buffer)
+		buffer.WriteString(header.Name())
+		buffer.WriteString(": ")
+		header.valueStringWrite(buffer)
 	}
 	buffer.WriteString("\r\n")
 }
@@ -454,6 +476,10 @@ func (h *genericHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+func (h *genericHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
 func (h *genericHeader) Name() string {
 	return h.HeaderName
 }
@@ -492,18 +518,18 @@ func (h *ToHeader) String() string {
 func (h *ToHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *ToHeader) Name() string { return "To" }
 
 func (h *ToHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ToHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *ToHeader) valueStringWrite(buffer io.StringWriter) {
 	if h.DisplayName != "" {
 		buffer.WriteString("\"")
 		buffer.WriteString(h.DisplayName)
@@ -570,18 +596,18 @@ func (h *FromHeader) String() string {
 func (h *FromHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *FromHeader) Name() string { return "From" }
 
 func (h *FromHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *FromHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *FromHeader) valueStringWrite(buffer io.StringWriter) {
 	if h.DisplayName != "" {
 		buffer.WriteString("\"")
 		buffer.WriteString(h.DisplayName)
@@ -645,18 +671,18 @@ func (h *ContactHeader) String() string {
 func (h *ContactHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.valueWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *ContactHeader) Name() string { return "Contact" }
 
 func (h *ContactHeader) Value() string {
 	var buffer strings.Builder
-	h.valueWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ContactHeader) valueWrite(buffer io.StringWriter) {
+func (h *ContactHeader) valueStringWrite(buffer io.StringWriter) {
 
 	switch h.Address.Wildcard {
 	case true:
@@ -722,6 +748,10 @@ func (h *CallIDHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+func (h *CallIDHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
 func (h *CallIDHeader) Name() string { return "Call-ID" }
 
 func (h *CallIDHeader) Value() string { return string(*h) }
@@ -745,7 +775,7 @@ func (h *CSeqHeader) String() string {
 func (h *CSeqHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *CSeqHeader) Name() string { return "CSeq" }
@@ -754,7 +784,7 @@ func (h *CSeqHeader) Value() string {
 	return fmt.Sprintf("%d %s", h.SeqNo, h.MethodName)
 }
 
-func (h *CSeqHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *CSeqHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(strconv.Itoa(int(h.SeqNo)))
 	buffer.WriteString(" ")
 	buffer.WriteString(string(h.MethodName))
@@ -787,6 +817,10 @@ func (h *MaxForwardsHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+func (h *MaxForwardsHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
 func (h *MaxForwardsHeader) Name() string { return "Max-Forwards" }
 
 func (h *MaxForwardsHeader) Value() string { return strconv.Itoa(int(*h)) }
@@ -814,6 +848,10 @@ func (h *ExpiresHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+func (h *ExpiresHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
 func (h *ExpiresHeader) Name() string { return "Expires" }
 
 func (h ExpiresHeader) Value() string { return strconv.Itoa(int(h)) }
@@ -832,6 +870,10 @@ func (h ContentLengthHeader) String() string {
 func (h ContentLengthHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
+func (h *ContentLengthHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
@@ -881,11 +923,11 @@ func (h *ViaHeader) Name() string { return "Via" }
 
 func (h *ViaHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ViaHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *ViaHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.ProtocolName)
 	buffer.WriteString("/")
 	buffer.WriteString(h.ProtocolVersion)
@@ -942,6 +984,10 @@ func (h *ContentTypeHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
+func (h *ContentTypeHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
 // func (h **ContentTypeHeader) Name() string { return "Content-Type" }
 func (h *ContentTypeHeader) Name() string { return "Content-Type" }
 
@@ -958,11 +1004,11 @@ func (h *RouteHeader) Name() string { return "Route" }
 
 func (h *RouteHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *RouteHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *RouteHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("<")
 	h.Address.StringWrite(buffer)
 	buffer.WriteString(">")
@@ -977,7 +1023,7 @@ func (h *RouteHeader) String() string {
 func (h *RouteHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *RouteHeader) headerClone() Header {
@@ -1000,11 +1046,11 @@ func (h *RecordRouteHeader) Name() string { return "Record-Route" }
 
 func (h *RecordRouteHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *RecordRouteHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *RecordRouteHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("<")
 	h.Address.StringWrite(buffer)
 	buffer.WriteString(">")
@@ -1019,7 +1065,7 @@ func (h *RecordRouteHeader) String() string {
 func (h *RecordRouteHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *RecordRouteHeader) headerClone() Header {
@@ -1042,11 +1088,11 @@ func (h *ReferToHeader) Name() string { return "Refer-To" }
 
 func (h *ReferToHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ReferToHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *ReferToHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("<")
 	h.Address.StringWrite(buffer)
 	buffer.WriteString(">")
@@ -1061,7 +1107,7 @@ func (h *ReferToHeader) String() string {
 func (h *ReferToHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *ReferToHeader) headerClone() Header {
@@ -1086,11 +1132,11 @@ func (h *ReferredByHeader) Name() string { return "Referred-By" }
 
 func (h *ReferredByHeader) Value() string {
 	var buffer strings.Builder
-	h.ValueStringWrite(&buffer)
+	h.valueStringWrite(&buffer)
 	return buffer.String()
 }
 
-func (h *ReferredByHeader) ValueStringWrite(buffer io.StringWriter) {
+func (h *ReferredByHeader) valueStringWrite(buffer io.StringWriter) {
 	if h.DisplayName != "" {
 		buffer.WriteString("\"")
 		buffer.WriteString(h.DisplayName)
@@ -1116,7 +1162,7 @@ func (h *ReferredByHeader) String() string {
 func (h *ReferredByHeader) StringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Name())
 	buffer.WriteString(": ")
-	h.ValueStringWrite(buffer)
+	h.valueStringWrite(buffer)
 }
 
 func (h *ReferredByHeader) headerClone() Header {
@@ -1161,4 +1207,42 @@ func parseHeaderLazy[T any, HP headerPointerReceiver[T]](hs *headers, f func(hea
 		return true
 	}
 	return false
+}
+
+func compactHeaderName(full string) string {
+	switch full {
+	case "Via":
+		return "v"
+	case "From":
+		return "f"
+	case "To":
+		return "t"
+	case "Call-ID":
+		return "i"
+	case "Content-Type":
+		return "c"
+	case "Content-Length":
+		return "l"
+	case "Contact":
+		return "m"
+	case "Refer-To":
+		return "r"
+	case "Content-Encoding":
+		return "e"
+	case "Accept-Contact":
+		return "a"
+	case "Referred-By":
+		return "b"
+	case "Supported":
+		return "k"
+	case "Event":
+		return "o"
+	case "Subject":
+		return "s"
+	case "Allow-Events":
+		return "u"
+
+	default:
+		return full
+	}
 }
