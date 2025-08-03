@@ -54,7 +54,7 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
 	}
-	txl.log = slog.With("caller", "TransactionLayer")
+	txl.log = DefaultLogger().With("caller", "TransactionLayer")
 
 	for _, o := range options {
 		o(txl)

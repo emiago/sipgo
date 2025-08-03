@@ -108,7 +108,7 @@ func WithClientAddr(addr string) ClientOption {
 func NewClient(ua *UserAgent, options ...ClientOption) (*Client, error) {
 	c := &Client{
 		UserAgent: ua,
-		log:       slog.With("caller", "Client"),
+		log:       sip.DefaultLogger().With("caller", "Client"),
 	}
 
 	for _, o := range options {

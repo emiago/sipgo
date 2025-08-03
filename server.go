@@ -81,7 +81,7 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		responseMiddlewares: make([]func(r *sip.Response), 0),
 		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
 		// log:                 log.Logger.With().Str("caller", "Server").Logger(),
-		log: slog.With("caller", "Server"),
+		log: sip.DefaultLogger().With("caller", "Server"),
 	}
 	for _, o := range options {
 		if err := o(s); err != nil {

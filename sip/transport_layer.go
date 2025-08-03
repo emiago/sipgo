@@ -74,7 +74,7 @@ func NewTransportLayer(
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
 		connectionReuse: true,
-		log:             slog.With("caller", "TransportLayer"),
+		log:             DefaultLogger().With("caller", "TransportLayer"),
 	}
 
 	for _, o := range option {
