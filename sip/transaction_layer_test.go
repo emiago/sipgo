@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,4 +99,6 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	wg.Wait()
 	// Only one transaction will be created and executed
 	require.EqualValues(t, 1, atomic.LoadInt32(&count))
+	require.Equal(t, 2, tp.udp.pool.Size())
+	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
 }

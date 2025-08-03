@@ -223,32 +223,23 @@ func (txl *TransactionLayer) NewClientTransaction(ctx context.Context, req *Requ
 }
 
 func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, key string) (*ClientTx, error) {
+	conn, err := txl.tpl.ClientRequestConnection(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("client transcation failed to request connection: %w", err)
+	}
+
 	txl.clientTransactions.lock()
 	tx, exists := txl.clientTransactions.items[key]
 	if exists {
 		txl.clientTransactions.unlock()
+		conn.TryClose()
 		return nil, fmt.Errorf("client transaction %q already exists", key)
 	}
-
-	tx, err := txl.clientTxCreate(ctx, req, key)
-	if err != nil {
-		txl.clientTransactions.unlock()
-		return nil, fmt.Errorf("failed to create client transaction: %w", err)
-	}
+	tx = NewClientTx(key, req, conn, txl.log)
 
 	txl.clientTransactions.items[key] = tx
 	tx.OnTerminate(txl.clientTxTerminate)
 	txl.clientTransactions.unlock()
-	return tx, nil
-}
-
-func (txl *TransactionLayer) clientTxCreate(ctx context.Context, req *Request, key string) (*ClientTx, error) {
-	conn, err := txl.tpl.ClientRequestConnection(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	tx := NewClientTx(key, req, conn, txl.log)
 	return tx, nil
 }
 
