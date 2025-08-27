@@ -358,6 +358,7 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 	req := s.Dialog.InviteRequest
 	cont := s.Dialog.InviteRequest.Contact()
 	bye := sip.NewRequest(sip.BYE, cont.Address)
+	bye.SetBody(nil) // Add Content-Length header
 	bye.SetTransport(req.Transport())
 
 	return s.WriteBye(ctx, bye)
