@@ -95,6 +95,10 @@ func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.R
 		if req.Via() == nil {
 			ClientRequestAddVia(c, req)
 		}
+		// Makes sure Content-Length is present
+		if req.Body() == nil {
+			req.SetBody(nil)
+		}
 		return nil
 	})
 }
