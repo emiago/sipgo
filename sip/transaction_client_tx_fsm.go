@@ -246,10 +246,6 @@ func (tx *ClientTx) actInviteProceeding() fsmInput {
 		tx.timer_a.Stop()
 		tx.timer_a = nil
 	}
-	if tx.timer_b != nil {
-		tx.timer_b.Stop()
-		tx.timer_b = nil
-	}
 
 	tx.mu.Unlock()
 
