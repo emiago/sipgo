@@ -239,9 +239,10 @@ func NewResponseFromRequest(
 	case 100:
 		CopyHeaders("Timestamp", req, res)
 	default:
-		if _, ok := res.To().Params["tag"]; !ok {
-			uuid, _ := uuid.NewRandom()
-			res.to.Params["tag"] = uuid.String()
+		if h := res.To(); h != nil {
+			if _, ok := h.Params["tag"]; !ok {
+				h.Params["tag"] = uuid.NewString()
+			}
 		}
 	}
 
