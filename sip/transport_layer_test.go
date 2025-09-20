@@ -160,7 +160,7 @@ func TestTransportLayerResolving(t *testing.T) {
 
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 	addr := Addr{}
-	err := tp.resolveAddr(context.TODO(), "udp", "localhost", &addr)
+	err := tp.resolveAddr(context.TODO(), "udp", "localhost", "sip", &addr)
 	require.NoError(t, err)
 
 	assert.True(t, addr.IP.To4() != nil)

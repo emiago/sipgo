@@ -257,7 +257,6 @@ func (tx *ClientTx) actInviteProceeding() fsmInput {
 }
 
 func (tx *ClientTx) actInviteFinal() fsmInput {
-	// tx.Log().Debug("actInviteFinal")
 
 	tx.ack()
 	tx.fsmPassUp()
@@ -272,8 +271,6 @@ func (tx *ClientTx) actInviteFinal() fsmInput {
 		tx.timer_b.Stop()
 		tx.timer_b = nil
 	}
-
-	// tx.Log().Tracef("timer_d set to %v", tx.timer_d_time)
 
 	tx.timer_d = time.AfterFunc(tx.timer_d_time, func() {
 		tx.spinFsm(client_input_timer_d)
