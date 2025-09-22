@@ -115,6 +115,7 @@ func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (err 
 			return err
 		}
 
+		*unparsed = reader.Bytes()
 		p.state = stateHeader
 		p.msg = msg
 		fallthrough
