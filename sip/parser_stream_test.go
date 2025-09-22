@@ -327,6 +327,34 @@ func TestParserStreamMessageSizeLimit(t *testing.T) {
 	require.Equal(t, "Message exceeds ParseMaxMessageLength", err.Error())
 }
 
+func TestParserStreamPartialAfterStartLine(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines1 := []string{
+		"SIP/2.0 481 Call/Transaction Does Not Exist",
+		"Via: SIP/2.0/TCP 10.10.42.37:48476;received=10.10.42.37;bran",
+	}
+	input1 := []byte(strings.Join(lines1, "\r\n"))
+
+	lines2 := []string{
+		"ch=z9hG4bK.9WUsakU92PFG5mIv",
+		"Call-ID: 2227040c-914c-4496-a715-1a93c9501360",
+		"From: \"sipgo\" <sip:sipgo@localhost>;tag=Ffl4DGpHt5yvhgU2",
+		"To: <sip:Port25@10.10.42.64>;tag=z9hG4bK.9WUsakU92PFG5mIv",
+		"CSeq: 1 CANCEL",
+		"Content-Length:  0",
+		"",
+		"",
+	}
+	input2 := []byte(strings.Join(lines2, "\r\n"))
+
+	_, err := parser.ParseSIPStream(input1)
+	require.Error(t, err)
+	_, err = parser.ParseSIPStream(input2)
+	require.NoError(t, err)
+}
+
 func BenchmarkParserStream(b *testing.B) {
 	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
