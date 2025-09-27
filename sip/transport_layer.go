@@ -366,7 +366,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	if raddr.IP == nil {
-		if err := l.resolveAddr(ctx, network, host, &raddr); err != nil {
+		if err := l.resolveAddr(ctx, network, host, req.Recipient.Scheme, &raddr); err != nil {
 			return nil, err
 		}
 
@@ -454,7 +454,7 @@ func (l *TransportLayer) overrideSentBy(c Connection, viaHop *ViaHeader) error {
 	return nil
 }
 
-func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, addr *Addr) error {
+func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host string, sipScheme string, addr *Addr) error {
 	log := l.log
 	defer func(start time.Time) {
 		if dur := time.Since(start); dur > 50*time.Millisecond {
@@ -463,7 +463,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 	}(time.Now())
 
 	if l.DNSPreferSRV {
-		err := l.resolveAddrSRV(ctx, network, host, addr)
+		err := l.resolveAddrSRV(ctx, network, host, sipScheme, addr)
 		if err == nil {
 			return nil
 		}
@@ -477,7 +477,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 	}
 
 	log.Info("IP addr resolving failed, doing via dns SRV resolver...", "error", err)
-	return l.resolveAddrSRV(ctx, network, host, addr)
+	return l.resolveAddrSRV(ctx, network, host, sipScheme, addr)
 }
 
 func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, addr *Addr) error {
@@ -505,7 +505,7 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 	return nil
 }
 
-func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hostname string, addr *Addr) error {
+func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hostname string, sipScheme string, addr *Addr) error {
 	log := l.log
 	var proto string
 	switch network {
@@ -517,11 +517,11 @@ func (l *TransportLayer) resolveAddrSRV(ctx context.Context, network string, hos
 		proto = "tcp"
 	}
 
-	log.Debug("Doing SRV lookup", "proto", proto, "host", hostname)
+	log.Debug("Doing SRV lookup", "scheme", sipScheme, "proto", proto, "host", hostname)
 
 	// The returned records are sorted by priority and randomized
 	// by weight within a priority.
-	_, addrs, err := l.dnsResolver.LookupSRV(ctx, "sip", proto, hostname)
+	_, addrs, err := l.dnsResolver.LookupSRV(ctx, sipScheme, proto, hostname)
 	if err != nil {
 		return fmt.Errorf("fail to lookup SRV for %q: %w", hostname, err)
 	}
