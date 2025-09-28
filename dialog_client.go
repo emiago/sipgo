@@ -229,7 +229,11 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	tx, inviteRequest := s.inviteTx, s.InviteRequest
 	var r *sip.Response
 	var err error
-	for {
+	for i := 0; ; i++ {
+		if i > 10 {
+			// Preventing some long loops
+			return fmt.Errorf("more than 10 responses received")
+		}
 		select {
 		case r = <-tx.Responses():
 			s.InviteResponse = r
@@ -311,7 +315,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		}
 
 		if (r.StatusCode == sip.StatusProxyAuthRequired) && opts.Password != "" {
-			h := r.GetHeader("Proxy-Authorization")
+			h := inviteRequest.GetHeader("Proxy-Authorization")
 			if h == nil {
 				tx.Terminate()
 
