@@ -229,7 +229,11 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	tx, inviteRequest := s.inviteTx, s.InviteRequest
 	var r *sip.Response
 	var err error
-	for {
+	for i := 0; ; i++ {
+		if i > 10 {
+			// Preventing some long loops
+			return fmt.Errorf("more than 10 responses received")
+		}
 		select {
 		case r = <-tx.Responses():
 			s.InviteResponse = r
@@ -311,7 +315,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		}
 
 		if (r.StatusCode == sip.StatusProxyAuthRequired) && opts.Password != "" {
-			h := r.GetHeader("Proxy-Authorization")
+			h := inviteRequest.GetHeader("Proxy-Authorization")
 			if h == nil {
 				tx.Terminate()
 
@@ -430,9 +434,10 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		return nil
 	}
 
-	// In case dialog was not updated
-	if sip.DialogState(state) != sip.DialogStateConfirmed {
-		return fmt.Errorf("Dialog not confirmed. ACK not send?")
+	// 	The caller's UA MAY send a BYE for either
+	//    confirmed or early dialog
+	if sip.DialogState(state) != sip.DialogStateConfirmed && !s.isEarlyDialog() {
+		return fmt.Errorf("Dialog not confirmed or did not receive yet any response")
 	}
 
 	tx, err := s.TransactionRequest(ctx, bye)
@@ -455,6 +460,10 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (s *DialogClientSession) isEarlyDialog() bool {
+	return s.InviteResponse != nil && s.InviteResponse.IsProvisional()
 }
 
 // newAckRequestUAC creates ACK request for 2xx INVITE

@@ -149,6 +149,71 @@ func TestDialogClientMultiRequest(t *testing.T) {
 	assert.Equal(t, d.InviteRequest.CSeq().SeqNo+1, sentReq.CSeq().SeqNo)
 }
 
+func TestDialogClientMultiResponses(t *testing.T) {
+
+	t.Run("ProvisionalLoop", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			return sip.NewResponseFromRequest(req, 100, "Trying", nil)
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+		go func() {
+			// Receive more provisional
+			for i := 0; i < 10; i++ {
+				d.inviteTx.(*sip.ClientTx).Receive(sip.NewResponseFromRequest(d.InviteRequest, 100, "Trying", nil))
+			}
+		}()
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{})
+		require.Error(t, err)
+	})
+	t.Run("ProxyAuthLoop", func(t *testing.T) {
+		var sentReq *sip.Request
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			sentReq = req
+			res := sip.NewResponseFromRequest(req, 407, "Unauthorized", nil)
+			challenge := `Digest username="user", realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", uri="sip:+user@example.com", algorithm=sha-256, response="3681b63e5d9c3bb80e5350e2783d7b88"`
+			res.AppendHeader(sip.NewHeader("Proxy-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Password: "secret"})
+		require.Error(t, err)
+		assert.Equal(t, d.InviteRequest.CSeq().SeqNo, sentReq.CSeq().SeqNo)
+	})
+
+	t.Run("AuthLoop", func(t *testing.T) {
+		var sentReq *sip.Request
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			sentReq = req
+			res := sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
+			challenge := `Digest username="user", realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", uri="sip:+user@example.com", algorithm=sha-256, response="3681b63e5d9c3bb80e5350e2783d7b88"`
+			res.AppendHeader(sip.NewHeader("WWW-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Password: "secret"})
+		require.Error(t, err)
+		assert.Equal(t, d.InviteRequest.CSeq().SeqNo, sentReq.CSeq().SeqNo)
+	})
+
+}
+
 func TestDialogClientACKRetransmission(t *testing.T) {
 	var acks int32
 	client := testClientResponder(t, func(req *sip.Request, w *siptest.ClientTxResponder) {

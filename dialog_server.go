@@ -375,6 +375,10 @@ func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		return nil
 	}
 
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-15
+	// However, the callee's UA MUST NOT send a BYE on a confirmed dialog
+	// until it has received an ACK for its 2xx response or until the server
+	// transaction times out.
 	if sip.DialogState(state) != sip.DialogStateConfirmed {
 		return nil
 	}
@@ -387,11 +391,6 @@ func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) er
 
 	// This is tricky
 	defer s.inviteTx.Terminate() // Terminates INVITE in all cases
-
-	// https://datatracker.ietf.org/doc/html/rfc3261#section-15
-	// However, the callee's UA MUST NOT send a BYE on a confirmed dialog
-	// until it has received an ACK for its 2xx response or until the server
-	// transaction times out.
 	for {
 		state = s.state.Load()
 		if sip.DialogState(state) < sip.DialogStateConfirmed {

@@ -532,6 +532,9 @@ func ClientRequestIncreaseCSEQ(c *Client, req *sip.Request) error {
 
 func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
 	authHeader := res.GetHeader("Proxy-Authenticate")
+	if authHeader == nil {
+		return fmt.Errorf("No Proxy-Authenticate header present")
+	}
 	chal, err := digest.ParseChallenge(authHeader.Value())
 	if err != nil {
 		return fmt.Errorf("fail to parse challenge authHeader=%q: %w", authHeader.Value(), err)
