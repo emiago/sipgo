@@ -315,7 +315,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		}
 
 		if (r.StatusCode == sip.StatusProxyAuthRequired) && opts.Password != "" {
-			h := inviteRequest.GetHeader("Proxy-Authorization")
+			h := r.GetHeader("Proxy-Authorization")
 			if h == nil {
 				tx.Terminate()
 
