@@ -147,13 +147,16 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 
 	if len(options) == 0 {
 		clientRequestBuildReq(c, req)
-		return c.requestTransaction(ctx, req)
+	} else {
+		for _, o := range options {
+			if err := o(c, req); err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	for _, o := range options {
-		if err := o(c, req); err != nil {
-			return nil, err
-		}
+	if c.TxRequester != nil {
+		return c.TxRequester.Request(ctx, req)
 	}
 
 	// Do some request validation, but only place as warning
@@ -164,17 +167,20 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		c.log.Warn("Missing Content-Length for reliable transport")
 	}
 
-	return c.requestTransaction(ctx, req)
-}
-
-func (c *Client) requestTransaction(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
-	if c.TxRequester != nil {
-		return c.TxRequester.Request(ctx, req)
-	}
 	return c.tx.Request(ctx, req)
 }
 
-func (c *Client) newTransaction(ctx context.Context, req *sip.Request, onConnection func(conn sip.Connection) error) (sip.ClientTransaction, error) {
+func (c *Client) newTransaction(ctx context.Context, req *sip.Request, onConnection func(conn sip.Connection) error, options ...ClientRequestOption) (sip.ClientTransaction, error) {
+	if len(options) == 0 {
+		clientRequestBuildReq(c, req)
+	} else {
+		for _, o := range options {
+			if err := o(c, req); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if c.TxRequester != nil {
 		return c.TxRequester.Request(ctx, req)
 	}

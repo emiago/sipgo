@@ -123,7 +123,30 @@ func (d *DialogClientSession) Invite(ctx context.Context, options ...ClientReque
 	inviteReq := d.InviteRequest
 
 	var err error
-	d.inviteTx, err = cli.TransactionRequest(ctx, inviteReq, options...)
+	d.inviteTx, err = func() (sip.ClientTransaction, error) {
+		// Try overriding contact header with via or local connection host port
+		if cont := inviteReq.Contact(); cont.Address.Port == 0 {
+			return cli.newTransaction(ctx, inviteReq, func(conn sip.Connection) error {
+				// Using via instead connection to avoid double parsing
+				// host, port, err = sip.ParseAddr(conn.LocalAddr().String())
+				via := inviteReq.Via()
+				if cont.Address.Host == "" {
+					cont.Address.Host = via.Host
+					cont.Address.Port = via.Port
+					return nil
+				}
+
+				// In case host is FQDN we will not override
+				if via.Host == cont.Address.Host {
+					cont.Address.Port = via.Port
+				}
+				return nil
+			}, options...)
+		}
+
+		return cli.TransactionRequest(ctx, inviteReq, options...)
+	}()
+
 	if err == nil {
 		d.lastCSeqNo.Store(inviteReq.CSeq().SeqNo)
 	}

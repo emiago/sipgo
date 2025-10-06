@@ -125,11 +125,10 @@ func TestIntegrationDialog(t *testing.T) {
 		defer ua.Close()
 
 		srv, _ := NewServer(ua)
-		cli, _ := NewClient(ua)
+		cli, _ := NewClient(ua, WithClientConnectionAddr("127.0.0.200:0"))
 
-		contactHDR := sip.ContactHeader{
-			Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5088},
-		}
+		// Use for now empheral contact based on client connection
+		contactHDR := sip.ContactHeader{}
 		dialogCli := NewDialogClientCache(cli, contactHDR)
 
 		// Setup server side
@@ -141,8 +140,7 @@ func TestIntegrationDialog(t *testing.T) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
-		startTestServer(ctx, srv, contactHDR.Address.HostPort())
-		t.Run("UAS hangup", func(t *testing.T) {
+		t.Run("UAShangup", func(t *testing.T) {
 			// INVITE
 			t.Log("UAC: INVITE")
 			sess, err := dialogCli.Invite(context.TODO(), uasContact.Address, nil)
