@@ -13,11 +13,9 @@ import (
 
 // TCP transport implementation
 type transportTCP struct {
-	addr            string
 	transport       string
 	parser          *Parser
 	log             *slog.Logger
-	createMu        sync.Mutex
 	connectionReuse bool
 
 	pool *ConnectionPool

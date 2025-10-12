@@ -552,7 +552,7 @@ func (l *TransportLayer) GetConnection(network, addr string) (Connection, error)
 }
 
 func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
-	transport, ok := l.transports[network]
+	transport, ok := l.getTransport(network)
 	if !ok {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -578,6 +578,24 @@ func (l *TransportLayer) Close() error {
 		l.log.Debug("Layer closed with error", "error", werr)
 	}
 	return werr
+}
+
+func (l *TransportLayer) getTransport(network string) (Transport, bool) {
+	switch network {
+	case "udp":
+		return l.udp, true
+	case "tcp":
+		return l.tcp, true
+	case "tls":
+		return l.tls, true
+	case "ws":
+		return l.ws, true
+	case "wss":
+		return l.wss, true
+	}
+
+	t, ok := l.transports[network]
+	return t, ok
 }
 
 func IsReliable(network string) bool {
