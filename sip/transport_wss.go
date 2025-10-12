@@ -12,15 +12,15 @@ import (
 )
 
 // TLS transport implementation
-type transportWSS struct {
-	*transportWS
+type TransportWSS struct {
+	*TransportWS
 
 	// rootPool *x509.CertPool
 }
 
-func (t *transportWSS) init(par *Parser, dialTLSConf *tls.Config) {
-	t.transportWS.init(par)
-	t.transportWS.transport = TransportWSS
+func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {
+	t.TransportWS.init(par)
+	t.TransportWS.transport = "WSS"
 	t.dialer.TLSConfig = dialTLSConf
 
 	t.dialer.TLSClient = func(conn net.Conn, hostname string) net.Conn {
@@ -39,13 +39,13 @@ func (t *transportWSS) init(par *Parser, dialTLSConf *tls.Config) {
 	}
 }
 
-func (t *transportWSS) String() string {
+func (t *TransportWSS) String() string {
 	return "transport<WSS>"
 }
 
 // CreateConnection creates WSS connection for TCP transport
 // TODO Make this consisten with TCP
-func (t *transportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	log := t.log
 
 	// Must have IP resolved

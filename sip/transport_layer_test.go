@@ -13,7 +13,7 @@ func TestTransportLayerClosing(t *testing.T) {
 	// NOTE it creates real network connection
 
 	// TODO add other transports
-	for _, tran := range []string{TransportUDP} {
+	for _, tran := range []string{"UDP"} {
 		t.Run(tran, func(t *testing.T) {
 			tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 			req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
@@ -140,7 +140,7 @@ func TestTransportLayerDefaultPort(t *testing.T) {
 	// NOTE it creates real network connection
 
 	// TODO add other transports
-	for _, tran := range []string{TransportUDP} {
+	for _, tran := range []string{"UDP"} {
 		t.Run(tran, func(t *testing.T) {
 			tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 			req := NewRequest(OPTIONS, Uri{Host: "127.0.0.99"})

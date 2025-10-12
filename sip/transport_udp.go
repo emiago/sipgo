@@ -20,7 +20,7 @@ var (
 )
 
 // UDP transport implementation
-type transportUDP struct {
+type TransportUDP struct {
 	// listener *net.UDPConn
 	parser          *Parser
 	pool            *ConnectionPool
@@ -28,33 +28,29 @@ type transportUDP struct {
 	connectionReuse bool
 }
 
-func (t *transportUDP) init(par *Parser) {
+func (t *TransportUDP) init(par *Parser) {
 	t.parser = par
 	t.pool = NewConnectionPool()
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
 	}
 }
 
-func (t *transportUDP) setLogger(log *slog.Logger) {
-	t.log = log
-}
-
-func (t *transportUDP) String() string {
+func (t *TransportUDP) String() string {
 	return "transport<UDP>"
 }
 
-func (t *transportUDP) Network() string {
-	return TransportUDP
+func (t *TransportUDP) Network() string {
+	return "UDP"
 }
 
-func (t *transportUDP) Close() error {
+func (t *TransportUDP) Close() error {
 	return t.pool.Clear()
 	// Closing listeners is caller thing.
 }
 
 // ServeConn is direct way to provide conn on which this worker will listen
-func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error {
+func (t *TransportUDP) Serve(conn net.PacketConn, handler MessageHandler) error {
 	t.log.Debug("begin listening", "network", t.Network(), "addr", conn.LocalAddr().String())
 	/*
 		Multiple readers makes problem, which can delay writing response
@@ -70,12 +66,12 @@ func (t *transportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 	return nil
 }
 
-func (t *transportUDP) ResolveAddr(addr string) (net.Addr, error) {
+func (t *TransportUDP) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveUDPAddr("udp", addr)
 }
 
 // GetConnection will return same listener connection
-func (t *transportUDP) GetConnection(addr string) Connection {
+func (t *TransportUDP) GetConnection(addr string) Connection {
 	// Single udp connection as listener can only be used as long IP of a packet in same network
 	// In case this is not the case we should return error?
 	// https://dadrian.io/blog/posts/udp-in-go/
@@ -84,7 +80,7 @@ func (t *transportUDP) GetConnection(addr string) Connection {
 }
 
 // CreateConnection will create new connection
-func (t *transportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// if UDPUseConnectedConnection {
 	// 	return t.createConnectedConnection(ctx, laddr, raddr, handler)
 	// }
@@ -92,7 +88,7 @@ func (t *transportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return t.createConnection(ctx, laddr, raddr, handler)
 }
 
-func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	laddrStr := laddr.String()
 	lc := &net.ListenConfig{}
 
@@ -136,7 +132,7 @@ func (t *transportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	return c, err
 }
 
-func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, laddr string, handler MessageHandler) {
+func (t *TransportUDP) readUDPConnection(conn *UDPConnection, raddr string, laddr string, handler MessageHandler) {
 	defer t.pool.Delete(raddr) // should be closed in previous defer
 	t.readListenerConnection(conn, laddr, handler)
 }
@@ -182,7 +178,7 @@ func (t *transportUDP) readUDPConnection(conn *UDPConnection, raddr string, ladd
 	return c, err
 } */
 
-func (t *transportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
+func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, laddr); err != nil {
@@ -281,7 +277,7 @@ func (t *transportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 	}
 } */
 
-func (t *transportUDP) parseAndHandle(data []byte, src string, handler MessageHandler) {
+func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -297,7 +293,7 @@ func (t *transportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 		return
 	}
 
-	msg.SetTransport(TransportUDP)
+	msg.SetTransport(t.Network())
 	// TODO should we avoid this and let source be inspected.
 	// Current transaction are taking connection but for UDP they can forward on different src address
 	msg.SetSource(src) // By default we expect our source is behind NAT. https://datatracker.ietf.org/doc/html/rfc3581#section-6

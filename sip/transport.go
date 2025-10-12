@@ -29,13 +29,6 @@ const (
 	DefaultTlsPort int = 5061
 	DefaultWsPort  int = 80
 	DefaultWssPort int = 443
-	// Transport for different sip messages. GO uses lowercase, but for message parsing, we should
-	// use this constants for setting message Transport
-	TransportUDP = "UDP"
-	TransportTCP = "TCP"
-	TransportTLS = "TLS"
-	TransportWS  = "WS"
-	TransportWSS = "WSS"
 
 	// TransportFixedLengthMessage sets message size limit for parsing and avoids stream parsing
 	TransportFixedLengthMessage uint16 = 0
