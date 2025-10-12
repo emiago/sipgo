@@ -453,7 +453,7 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 }
 
 func (s *DialogClientSession) isEarlyDialog() bool {
-	return s.InviteResponse != nil && s.InviteResponse.IsProvisional()
+	return s.InviteResponse != nil && s.InviteResponse.IsProvisional() && s.InviteResponse.StatusCode != 100
 }
 
 // newAckRequestUAC creates ACK request for 2xx INVITE
