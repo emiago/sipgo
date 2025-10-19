@@ -2,6 +2,8 @@ package sipgo
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"net"
@@ -389,8 +391,15 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	}
 
 	if v := req.CSeq(); v == nil {
+		var b [4]byte
+		_, err := rand.Read(b[:])
+		if err != nil {
+			return err
+		}
+		n := binary.BigEndian.Uint32(b[:]) & 0x7FFFFFFF // ensure < 2^31
+		n = max(1<<31-100, n)
 		cseq := sip.CSeqHeader{
-			SeqNo:      1,
+			SeqNo:      n,
 			MethodName: req.Method,
 		}
 		mustHeader = append(mustHeader, &cseq)
