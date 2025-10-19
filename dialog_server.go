@@ -51,16 +51,6 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	return nil
 }
 
-// ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
-func (s *DialogServerSession) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
-	if err := s.validateRequest(req); err != nil {
-		return err
-	}
-
-	s.lastCSeqNo.Store(req.CSeq().SeqNo)
-	return nil
-}
-
 // Do does request response pattern. For more control over transaction use TransactionRequest
 func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
 	tx, err := s.TransactionRequest(ctx, req)
@@ -431,11 +421,7 @@ func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) er
 func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 	// Make sure this is bye for this dialog
 
-	// UAS SHOULD be
-	// prepared to receive and process requests with CSeq values more than
-	// one higher than the previous received request.
-
-	if req.CSeq().SeqNo < dt.lastCSeqNo.Load() {
+	if req.CSeq().SeqNo < dt.InviteRequest.CSeq().SeqNo {
 		return ErrDialogInvalidCseq
 	}
 	return nil

@@ -21,14 +21,6 @@ type DialogClientSession struct {
 	onClose func()
 }
 
-func (dt *DialogClientSession) validateRequest(req *sip.Request) (err error) {
-	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo < dt.lastCSeqNo.Load() {
-		return ErrDialogInvalidCseq
-	}
-	return nil
-}
-
 func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
 	s.setState(sip.DialogStateEnded)
 
@@ -43,16 +35,6 @@ func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 	// case <-tx.Done():
 	// 	return tx.Err()
 	// }
-	return nil
-}
-
-// ReadRequest is generic func to validate new request in dialog and update seq. Use it if there are no predefined
-func (s *DialogClientSession) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
-	if err := s.validateRequest(req); err != nil {
-		return err
-	}
-
-	s.lastCSeqNo.Store(req.CSeq().SeqNo)
 	return nil
 }
 

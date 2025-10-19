@@ -112,6 +112,75 @@ func TestDialogServerTransactionCanceled(t *testing.T) {
 
 }
 
+func TestDialogServerRequestsWithinDialog(t *testing.T) {
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.2.2
+
+	ua, _ := NewUA()
+	defer ua.Close()
+	cli, _ := NewClient(ua)
+
+	uasContact := sip.ContactHeader{
+		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+	}
+	dialogSrv := NewDialogServerCache(cli, uasContact)
+
+	invite, _, _ := createTestInvite(t, "sip:uas@127.0.0.1", "udp", "127.0.0.1:5090")
+	invite.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uas", Port: 1234}})
+
+	t.Run("InvalidCseq", func(t *testing.T) {
+		// This covers issue explained as
+		// https://github.com/emiago/sipgo/issues/187
+		conn := &sip.UDPConnection{
+			PacketConn: &fakes.UDPConn{
+				Writers: map[string]io.Writer{
+					"127.0.0.1:5090": bytes.NewBuffer(make([]byte, 0)),
+				},
+			},
+		}
+		tx := sip.NewServerTx("test", invite, conn, slog.Default())
+		tx.Init()
+
+		dialog, err := dialogSrv.ReadInvite(invite, tx)
+		require.NoError(t, err)
+		defer dialog.Close()
+
+		byeWrongCseq := newByeRequestUAC(invite, sip.NewResponseFromRequest(invite, 200, "OK", nil), nil)
+		byeWrongCseq.CSeq().SeqNo--
+		tx = sip.NewServerTx("test", byeWrongCseq, conn, slog.Default())
+		tx.Init()
+		err = dialog.ReadBye(byeWrongCseq, tx)
+		require.ErrorIs(t, err, ErrDialogInvalidCseq)
+	})
+
+	t.Run("TerminateAfterSentRequest", func(t *testing.T) {
+		// This covers issue explained as
+		// https://github.com/emiago/sipgo/issues/187
+		conn := &sip.UDPConnection{
+			PacketConn: &fakes.UDPConn{
+				Writers: map[string]io.Writer{
+					"127.0.0.1:5090": bytes.NewBuffer(make([]byte, 0)),
+				},
+			},
+		}
+		tx := sip.NewServerTx("test", invite, conn, slog.Default())
+		tx.Init()
+
+		dialog, err := dialogSrv.ReadInvite(invite, tx)
+		require.NoError(t, err)
+		defer dialog.Close()
+
+		reinvite := sip.NewRequest(sip.INVITE, invite.From().Address)
+		_, err = dialog.TransactionRequest(context.TODO(), reinvite)
+		require.NoError(t, err)
+
+		bye := newByeRequestUAC(invite, sip.NewResponseFromRequest(invite, 200, "OK", nil), nil)
+		tx = sip.NewServerTx("test-bye", bye, conn, slog.Default())
+		tx.Init()
+		err = dialog.ReadBye(bye, tx)
+		require.NoError(t, err)
+	})
+}
+
 func TestDialogServer2xxRetransmission(t *testing.T) {
 	// sip.T1 = 1
 	ua, _ := NewUA()
