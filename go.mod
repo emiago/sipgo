@@ -1,4 +1,4 @@
-module github.com/disacod/sipgo
+module github.com/emiago/sipgo
 
 go 1.23.0
 
