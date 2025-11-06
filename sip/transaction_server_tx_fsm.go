@@ -16,7 +16,8 @@ func (tx *ServerTx) inviteStateProcceeding(s fsmInput) fsmInput {
 	case server_input_request:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actRespond
 	case server_input_cancel:
-		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancel
+//		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actCancel
+		tx.fsmState, spinfn = tx.stateProceeding, tx.actCancel
 	case server_input_user_1xx:
 		tx.fsmState, spinfn = tx.inviteStateProcceeding, tx.actRespond
 	case server_input_user_2xx:
