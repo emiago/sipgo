@@ -220,7 +220,7 @@ func getContentLength(b []byte) int {
 	pos := bytes.Index(b, []byte("\r\nContent-Length:"))
 	if pos == -1 {
 		// Fallback to compact form "l:" if not found.
-		pos = bytes.Index(b, []byte("\r\n"))
+		pos = bytes.Index(b, []byte("\r\nl:"))
 		if pos == -1 {
 			return -1
 		}
