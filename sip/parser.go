@@ -29,6 +29,10 @@ var (
 	ParseMaxMessageLength = 65535
 )
 
+var (
+	crlf = []byte("\r\n")
+)
+
 func ParseMessage(msgData []byte) (Message, error) {
 	parser := NewParser()
 	return parser.ParseSIP(msgData)
@@ -104,8 +108,7 @@ func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
 		}
 	}
 
-	// TODO Use Content Length header
-	contentLength := getBodyLength(data)
+	contentLength := getContentLength(data)
 	if contentLength <= 0 {
 		return msg, nil
 	}
@@ -205,17 +208,41 @@ func nextLine(reader *bytes.Buffer) (line string, err error) {
 	return line, nil
 }
 
-// Calculate the size of a SIP message's body, given the entire contents of the message as a byte array.
-func getBodyLength(data []byte) int {
-	// Body starts with first character following a double-CRLF.
-	idx := bytes.Index(data, []byte("\r\n\r\n"))
-	if idx == -1 {
+// getContentLength extracts the numeric value of the "Content-Length" header
+// from a SIP message buffer.
+//
+// It returns the body length in bytes, or -1 if the header is missing
+// or cannot be parsed.
+//
+// https://datatracker.ietf.org/doc/html/rfc3261#section-20.14
+func getContentLength(b []byte) int {
+	// Find "Content-Length" header line.
+	pos := bytes.Index(b, []byte("\r\nContent-Length:"))
+	if pos == -1 {
+		// Fallback to compact form "l:" if not found.
+		pos = bytes.Index(b, []byte("\r\n"))
+		if pos == -1 {
+			return -1
+		}
+	}
+
+	// Skip over CRLF and the ':' character.
+	pos += len(crlf)
+	pos += bytes.IndexRune(b[pos:], ':') + 1
+
+	// Find end of header line (next CRLF).
+	eol := bytes.Index(b[pos:], crlf)
+	if eol == -1 {
 		return -1
 	}
 
-	bodyStart := idx + 4
-
-	return len(data) - bodyStart
+	// Trim spaces and parse numeric value.
+	clen := string(bytes.Trim(b[pos:pos+eol], " \t"))
+	l, err := strconv.Atoi(clen)
+	if err != nil {
+		return -1
+	}
+	return l
 }
 
 // detet is request by spaces
