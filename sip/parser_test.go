@@ -488,6 +488,106 @@ a=rtpmap:31 LPC`,
 	t.Log(msg.String())
 }
 
+func TestGetContentLength(t *testing.T) {
+	t.Run("ValidContentLength", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: 150\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 150, length)
+	})
+
+	t.Run("ValidContentLengthWithSpaces", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length:   200   \r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 200, length)
+	})
+
+	t.Run("ValidContentLengthWithTabs", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length:\t\t100\t\t\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 100, length)
+	})
+
+	t.Run("ContentLengthZero", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: 0\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 0, length)
+	})
+
+	t.Run("CompactFormL", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nl: 250\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 250, length)
+	})
+
+	t.Run("CompactFormLWithSpaces", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nl:  300  \r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 300, length)
+	})
+
+	t.Run("MissingContentLength", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nVia: SIP/2.0/UDP example.com\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, -1, length)
+	})
+
+	t.Run("InvalidContentLengthNonNumeric", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: abc\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, -1, length)
+	})
+
+	t.Run("ContentLengthMissingCRLF", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: 100")
+		length := getContentLength(msg)
+		assert.Equal(t, -1, length)
+	})
+
+	t.Run("MultipleHeaders", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nVia: SIP/2.0/UDP example.com\r\nContent-Length: 500\r\nCSeq: 1 INVITE\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 500, length)
+	})
+
+	t.Run("ContentLengthAfterOtherHeaders", func(t *testing.T) {
+		rawMsg := []string{
+			"INVITE sip:bob@example.com SIP/2.0",
+			"Via: SIP/2.0/UDP 127.0.0.1:5060;branch=z9hG4bK776asdhds",
+			"From: Alice <sip:alice@example.com>;tag=1928301774",
+			"To: Bob <sip:bob@example.com>",
+			"Content-Length: 350",
+			"",
+		}
+		msg := []byte(strings.Join(rawMsg, "\r\n"))
+		length := getContentLength(msg)
+		assert.Equal(t, 350, length)
+	})
+
+	t.Run("LargeContentLength", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: 999999\r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 999999, length)
+	})
+
+	t.Run("EmptyBuffer", func(t *testing.T) {
+		msg := []byte("")
+		length := getContentLength(msg)
+		assert.Equal(t, -1, length)
+	})
+
+	t.Run("OnlyHeaderName", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length:")
+		length := getContentLength(msg)
+		assert.Equal(t, -1, length)
+	})
+
+	t.Run("ContentLengthWithExtraWhitespace", func(t *testing.T) {
+		msg := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: \t  \t 123 \t  \r\n\r\n")
+		length := getContentLength(msg)
+		assert.Equal(t, 123, length)
+	})
+}
+
 func BenchmarkParser(b *testing.B) {
 	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
