@@ -137,47 +137,6 @@ func (t *TransportUDP) readUDPConnection(conn *UDPConnection, raddr string, ladd
 	t.readListenerConnection(conn, laddr, handler)
 }
 
-// The major problem here is in case you are creating connected connection on non unicast (0.0.0.0)
-// via unicast 127.0.0.1
-// This GO will fail to read as it is getting responses from 0.0.0.0
-// More bigger problem are responses that are ariving from different IP ranges
-// ex
-// 192.168.... -> 127.0.0.1
-// 192.168..... <- 192.168..  This will not work as connected connection can not handle this
-/* func (t *transportUDP) createConnectedConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	var uladdr *net.UDPAddr = nil
-	if laddr.IP != nil {
-		uladdr = &net.UDPAddr{
-			IP:   laddr.IP,
-			Port: laddr.Port,
-		}
-	}
-
-	d := net.Dialer{
-		LocalAddr: uladdr,
-	}
-
-	addr := raddr.String()
-	udpconn, err := d.DialContext(ctx, "udp", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	c := &UDPConnection{
-		Conn: udpconn,
-		// 1 ref for current return , 2 ref for reader
-		refcount: 2 + IdleConnection,
-	}
-
-	t.log.Debug().Str("raddr", addr).Msg("New connected connection")
-
-	// Wrap it in reference
-	t.pool.Add(addr, c)
-	go t.readConnectedConnection(c, handler)
-
-	return c, err
-} */
-
 func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
 	defer func() {
@@ -222,32 +181,6 @@ func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 		lastRaddr = rastr
 	}
 }
-
-/* func (t *transportUDP) readConnectedConnection(conn *UDPConnection, handler MessageHandler) {
-	buf := make([]byte, transportBufferSize)
-	raddr := conn.Conn.RemoteAddr().String()
-	defer t.pool.CloseAndDelete(conn, raddr)
-	defer t.log.Debug().Str("raddr", raddr).Msg("Read connected connection stopped")
-
-	for {
-		num, err := conn.Read(buf)
-		if err != nil {
-			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
-				t.log.Debug().Err(err).Msg("Read connection closed")
-				return
-			}
-			t.log.Error().Err(err).Msg("Read connection error")
-			return
-		}
-
-		data := buf[:num]
-		if len(bytes.Trim(data, "\x00")) == 0 {
-			continue
-		}
-
-		t.parseAndHandle(data, raddr, handler)
-	}
-} */
 
 // This should performe better to avoid any interface allocation
 // For now no usage, but leaving here
@@ -301,13 +234,9 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 }
 
 type UDPConnection struct {
-	// mutual exclusive for now to avoid interface for Read
-	// TODO Refactor
 	PacketConn net.PacketConn
 	PacketAddr string // For faster matching
 	Listener   bool
-
-	Conn net.Conn
 
 	mu       sync.RWMutex
 	refcount int
@@ -317,11 +246,6 @@ func (c *UDPConnection) close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-
-	if c.Conn != nil {
-		slog.Debug("UDP doing hard close", "ip", c.LocalAddr().String(), "dst", c.Conn.RemoteAddr().String(), "ref", 0)
-		return c.Conn.Close()
-	}
 
 	if c.Listener {
 		// In case this UDP created as listener from Serve. Avoid double closing.
@@ -333,16 +257,10 @@ func (c *UDPConnection) close() error {
 }
 
 func (c *UDPConnection) LocalAddr() net.Addr {
-	if c.Conn != nil {
-		return c.Conn.LocalAddr()
-	}
 	return c.PacketConn.LocalAddr()
 }
 
 func (c *UDPConnection) RemoteAddr() net.Addr {
-	if c.Conn != nil {
-		return c.Conn.RemoteAddr()
-	}
 	return c.PacketConn.LocalAddr()
 }
 
@@ -382,22 +300,6 @@ func (c *UDPConnection) TryClose() (int, error) {
 	return ref, c.close()
 }
 
-func (c *UDPConnection) Read(b []byte) (n int, err error) {
-	n, err = c.Conn.Read(b)
-	if SIPDebug {
-		logSIPRead("UDP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
-	}
-	return n, err
-}
-
-func (c *UDPConnection) Write(b []byte) (n int, err error) {
-	n, err = c.Conn.Write(b)
-	if SIPDebug {
-		logSIPWrite("UDP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
-	}
-	return n, err
-}
-
 func (c *UDPConnection) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	// Some debug hook. TODO move to proper way
 	n, addr, err = c.PacketConn.ReadFrom(b)
@@ -428,35 +330,26 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	}
 
 	var n int
-	// TODO doing without if
-	if c.Conn != nil {
-		var err error
-		n, err = c.Write(data)
-		if err != nil {
-			return fmt.Errorf("conn %s write err=%w", c.Conn.LocalAddr().String(), err)
-		}
-	} else {
-		var err error
+	var err error
 
-		// TODO lets return this better
-		dst := msg.Destination() // Destination should be already resolved by transport layer
-		host, port, err := ParseAddr(dst)
-		if err != nil {
-			return err
-		}
-		raddr := net.UDPAddr{
-			IP:   net.ParseIP(host),
-			Port: port,
-		}
+	// TODO lets return this better
+	dst := msg.Destination() // Destination should be already resolved by transport layer
+	host, port, err := ParseAddr(dst)
+	if err != nil {
+		return err
+	}
+	raddr := net.UDPAddr{
+		IP:   net.ParseIP(host),
+		Port: port,
+	}
 
-		if raddr.Port == 0 {
-			raddr.Port = DefaultUdpPort
-		}
+	if raddr.Port == 0 {
+		raddr.Port = DefaultUdpPort
+	}
 
-		n, err = c.WriteTo(data, &raddr)
-		if err != nil {
-			return fmt.Errorf("udp conn %s err. %w", c.PacketConn.LocalAddr().String(), err)
-		}
+	n, err = c.WriteTo(data, &raddr)
+	if err != nil {
+		return fmt.Errorf("udp conn %s err. %w", c.PacketConn.LocalAddr().String(), err)
 	}
 
 	if n == 0 {
