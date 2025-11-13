@@ -113,7 +113,7 @@ func TestIntegrationDialog(t *testing.T) {
 		}
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
+	srv.serveRequest(func(r *sip.Request) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
@@ -136,7 +136,7 @@ func TestIntegrationDialog(t *testing.T) {
 			err := dialogCli.ReadBye(req, tx)
 			require.NoError(t, err)
 		})
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
@@ -240,7 +240,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		dialogSrv.ReadAck(req, tx)
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
+	srv.serveRequest(func(r *sip.Request) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
@@ -264,7 +264,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			err := dialogCli.ReadBye(req, tx)
 			require.NoError(t, err)
 		})
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
@@ -361,7 +361,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 		t.Log("Cancel received")
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
+	srv.serveRequest(func(r *sip.Request) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
@@ -380,7 +380,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 		}
 		dialogCli := NewDialogClientCache(cli, contactHDR)
 
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
