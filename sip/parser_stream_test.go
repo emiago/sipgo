@@ -217,8 +217,6 @@ func TestParserStreamChunky(t *testing.T) {
 	_, err = parser.ParseSIPStream(data)
 	require.ErrorIs(t, err, ErrParseSipPartial)
 
-	// TODO add more here chunks
-
 	// rest of sip
 	lines = []string{
 		"/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",

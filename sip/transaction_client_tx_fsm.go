@@ -462,11 +462,4 @@ func (tx *ClientTx) passUpRetransmission() {
 
 	// Client probably left or not interested, so therefore we must not block here
 	// For proxies they should handle this retransmission
-	// select {
-	// case <-tx.done:
-	// case tx.responses <- lastResp:
-	// 	// TODO is T1 best here option? This can take Timer_M as 64*T1
-	// case <-time.After(T1):
-	// 	tx.log.Debug("skipped response. Retransimission", "tx", tx.Key())
-	// }
 }

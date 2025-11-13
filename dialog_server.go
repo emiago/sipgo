@@ -430,7 +430,7 @@ func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 // DialogServerCache serves as quick way to start building dialog server
 // It is not optimized version and it is recomended that you build own dialog caching
 type DialogServerCache struct {
-	dialogs sync.Map // TODO replace with typed version
+	dialogs sync.Map
 	ua      DialogUA
 }
 

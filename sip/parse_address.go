@@ -36,7 +36,6 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 // parseNameAddress
 // name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
 // addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
-// TODO Consider exporting this
 func parseNameAddress(addressText string, a *nameAddress) (err error) {
 	state := addressStateDisplayName
 	str := addressText

@@ -14,8 +14,6 @@ import (
 // TLS transport implementation
 type TransportWSS struct {
 	*TransportWS
-
-	// rootPool *x509.CertPool
 }
 
 func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {

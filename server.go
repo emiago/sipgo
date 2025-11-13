@@ -87,7 +87,6 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		}
 	}
 
-	// TODO have this exported as option
 	s.noRouteHandler = s.defaultUnhandledHandler
 
 	return s, nil

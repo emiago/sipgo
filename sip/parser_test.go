@@ -46,7 +46,7 @@ func TestParseHeaders(t *testing.T) {
 		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
-		// TODO find better way to compare
+		// Not best way to compare, just lazy
 		unordered := header[:strings.Index(header, ";")] + ";branch=" + branch + ";rport"
 		assert.True(t, hstr == header || hstr == unordered, hstr)
 
@@ -484,7 +484,6 @@ a=rtpmap:31 LPC`,
 	msg, err := parser.ParseSIP(data)
 	require.Nil(t, err, err)
 
-	// TODO check each header
 	t.Log(msg.String())
 }
 

@@ -92,7 +92,6 @@ func uriStateHost(uri *Uri, s string) (uriFSM, string, error) {
 			return uriStateHostIPV6, s[i:], nil
 		}
 
-		// TODO this part gets repeated on IPV6
 		if c == ':' {
 			uri.Host = s[:i]
 			return uriStatePort, s[i+1:], nil

@@ -112,14 +112,6 @@ func TestParseAddressBad(t *testing.T) {
 	})
 }
 
-// TODO
-// func TestParseAddressMultiline(t *testing.T) {
-// contact:
-// 	+`Contact: "Mr. Watson" <sip:watson@worcester.bell-telephone.com>
-// 	;q=0.7; expires=3600,
-// 	"Mr. Watson" <mailto:watson@bell-telephone.com> ;q=0.1`
-// }
-
 func BenchmarkParseAddress(b *testing.B) {
 	address := "\"Bob\" <sips:bob:password@127.0.0.1:5060;user=phone>;tag=1234"
 	uri := Uri{}
