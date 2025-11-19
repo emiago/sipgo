@@ -94,6 +94,12 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 		req.SetBody(body)
 	}
 
+	if recipient.UriParams != nil {
+		if tran, _ := recipient.UriParams.Get("transport"); tran != "" {
+			req.SetTransport(tran)
+		}
+	}
+
 	for _, h := range headers {
 		req.AppendHeader(h)
 	}

@@ -23,23 +23,24 @@ var (
 )
 
 // WS transport implementation
-type transportWS struct {
+type TransportWS struct {
 	parser    *Parser
 	log       *slog.Logger
 	transport string
 
-	createMu        sync.Mutex
 	connectionReuse bool
 
 	pool   *ConnectionPool
 	dialer ws.Dialer
+
+	DialerCreate func(laddr net.Addr) ws.Dialer
 }
 
-func newWSTransport(par *Parser) *transportWS {
-	p := &transportWS{
+func newWSTransport(par *Parser) *TransportWS {
+	p := &TransportWS{
 		parser:    par,
 		pool:      NewConnectionPool(),
-		transport: TransportWS,
+		transport: "WS",
 		dialer:    ws.DefaultDialer,
 	}
 	p.dialer.Protocols = WebSocketProtocols
@@ -47,19 +48,23 @@ func newWSTransport(par *Parser) *transportWS {
 	return p
 }
 
-func (t *transportWS) init(par *Parser) {
+func (t *TransportWS) init(par *Parser) {
 	t.parser = par
 	t.pool = NewConnectionPool()
-	t.transport = TransportWS
+	t.transport = "WS"
 	t.dialer = ws.DefaultDialer
 	t.dialer.Protocols = WebSocketProtocols
 
 	if t.log == nil {
 		t.log = slog.Default()
 	}
+
+	if t.DialerCreate == nil {
+		t.DialerCreate = t.dialerCreate
+	}
 }
 
-func (t *transportWS) getDialer(laddr net.Addr) ws.Dialer {
+func (t *TransportWS) dialerCreate(laddr net.Addr) ws.Dialer {
 	if laddr == nil {
 		return t.dialer
 	}
@@ -75,20 +80,20 @@ func (t *transportWS) getDialer(laddr net.Addr) ws.Dialer {
 	return dialer
 }
 
-func (t *transportWS) String() string {
+func (t *TransportWS) String() string {
 	return "transport<WS>"
 }
 
-func (t *transportWS) Network() string {
+func (t *TransportWS) Network() string {
 	return t.transport
 }
 
-func (t *transportWS) Close() error {
+func (t *TransportWS) Close() error {
 	return t.pool.Clear()
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
+func (t *TransportWS) Serve(l net.Listener, handler MessageHandler) error {
 	log := t.log
 	log.Debug("begin listening on", "network", t.Network(), "laddr", l.Addr().String())
 
@@ -138,7 +143,7 @@ func (t *transportWS) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide bool, handler MessageHandler) Connection {
+func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide bool, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	laddr := conn.LocalAddr().String()
@@ -155,7 +160,7 @@ func (t *transportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 }
 
 // This should performe better to avoid any interface allocation
-func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr string, handler MessageHandler) {
+func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr string, handler MessageHandler) {
 	log := t.log
 	buf := make([]byte, TransportBufferReadSize)
 	// defer conn.Close()
@@ -211,7 +216,7 @@ func (t *transportWS) readConnection(conn *WSConnection, laddr string, raddr str
 }
 
 // TODO: Try to reuse this from TCP transport as func are same
-func (t *transportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
@@ -223,15 +228,15 @@ func (t *transportWS) parseStream(par *ParserStream, data []byte, src string, ha
 	handler(msg)
 }
 
-func (t *transportWS) ResolveAddr(addr string) (net.Addr, error) {
+func (t *TransportWS) ResolveAddr(addr string) (net.Addr, error) {
 	return net.ResolveTCPAddr("tcp", addr)
 }
 
-func (t *transportWS) GetConnection(addr string) Connection {
+func (t *TransportWS) GetConnection(addr string) Connection {
 	return t.pool.Get(addr)
 }
 
-func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
 		var tladdr *net.TCPAddr = nil
 		if laddr.IP != nil {
@@ -250,7 +255,7 @@ func (t *transportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 		addr := traddr.String()
 		log.Debug("Dialing new connection", "raddr", addr)
 
-		dialer := t.getDialer(tladdr)
+		dialer := t.dialerCreate(tladdr)
 		// How to define local interface
 		if tladdr != nil {
 			log.Debug("Dialing with local IP is not supported on ws", "laddr", tladdr.String())
@@ -290,7 +295,7 @@ func (c *WSConnection) Ref(i int) int {
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
-	slog.Debug("WS reference increment", "ip", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("WS reference increment", "ip", c.RemoteAddr().String(), "ref", ref)
 	return ref
 
 }
@@ -299,7 +304,7 @@ func (c *WSConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	slog.Debug("WS doing hard close", "ip", c.RemoteAddr().String())
+	DefaultLogger().Debug("WS doing hard close", "ip", c.RemoteAddr().String())
 	return c.Conn.Close()
 }
 
@@ -308,16 +313,16 @@ func (c *WSConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	slog.Debug("WS reference decrement", "ip", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("WS reference decrement", "ip", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		slog.Warn("WS ref went negative", "ip", c.RemoteAddr().String(), "ref", ref)
+		DefaultLogger().Warn("WS ref went negative", "ip", c.RemoteAddr().String(), "ref", ref)
 		return 0, nil
 	}
-	slog.Debug("WS closing", "ip", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("WS closing", "ip", c.RemoteAddr().String(), "ref", ref)
 	return ref, c.Conn.Close()
 }
 

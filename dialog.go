@@ -35,7 +35,8 @@ type Dialog struct {
 	InviteRequest *sip.Request
 
 	// lastCSeqNo is set for every request within dialog except ACK CANCEL
-	lastCSeqNo atomic.Uint32
+	lastCSeqNo   atomic.Uint32
+	remoteCSeqNo atomic.Uint32
 
 	// InviteResponse is last response received or sent. It is not thread safe!
 	// Use it only as read only and do not change values
@@ -58,6 +59,7 @@ func (d *Dialog) Init() {
 	// We may have sequence number initialized
 	if cseq := d.InviteRequest.CSeq(); cseq != nil {
 		d.lastCSeqNo.Store(cseq.SeqNo)
+		d.remoteCSeqNo.Store(cseq.SeqNo)
 	}
 	d.onStatePointer = atomic.Pointer[DialogStateFn]{}
 }
@@ -143,4 +145,24 @@ func (d *Dialog) CSEQ() uint32 {
 
 func (d *Dialog) Context() context.Context {
 	return d.ctx
+}
+
+func (d *Dialog) validateRemoteRequest(req *sip.Request) (err error) {
+	// Make sure this is bye for this dialog
+	if req.CSeq().SeqNo < d.remoteCSeqNo.Load() {
+		return ErrDialogInvalidCseq
+	}
+	return nil
+}
+
+func (d *Dialog) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
+	// UAS role of dialog SHOULD be
+	// prepared to receive and process requests with CSeq values more than
+	// one higher than the previous received request.
+	if err := d.validateRemoteRequest(req); err != nil {
+		return err
+	}
+
+	d.remoteCSeqNo.Store(req.CSeq().SeqNo)
+	return nil
 }

@@ -4,25 +4,22 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"net"
 )
 
 var ()
 
 // TLS transport implementation
-type transportTLS struct {
-	*transportTCP
+type TransportTLS struct {
+	*TransportTCP
 
 	// rootPool *x509.CertPool
-	tlsConf   *tls.Config
 	tlsClient func(conn net.Conn, hostname string) *tls.Conn
 }
 
-func (t *transportTLS) init(par *Parser, dialTLSConf *tls.Config) {
-	t.transportTCP.init(par)
-	t.transport = TransportTLS
-	t.tlsConf = dialTLSConf
+func (t *TransportTLS) init(par *Parser, dialTLSConf *tls.Config) {
+	t.TransportTCP.init(par)
+	t.transport = "TLS"
 	// p.rootPool = roots
 	t.tlsClient = func(conn net.Conn, hostname string) *tls.Conn {
 		config := dialTLSConf
@@ -33,18 +30,14 @@ func (t *transportTLS) init(par *Parser, dialTLSConf *tls.Config) {
 		}
 		return tls.Client(conn, config)
 	}
-
-	if t.log == nil {
-		t.log = slog.Default()
-	}
 }
 
-func (t *transportTLS) String() string {
+func (t *TransportTLS) String() string {
 	return "Transport<TLS>"
 }
 
 // CreateConnection creates TLS connection for TCP transport
-func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
 		hostname := raddr.Hostname
 		if hostname == "" {
@@ -64,9 +57,7 @@ func (t *transportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 			Port: raddr.Port,
 		}
 
-		netDialer := &net.Dialer{
-			LocalAddr: tladdr,
-		}
+		netDialer := t.DialerCreate(tladdr)
 
 		addr := traddr.String()
 		t.log.Debug("Dialing new connection", "raddr", addr)

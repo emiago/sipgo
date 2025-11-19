@@ -9,45 +9,54 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 )
 
 // TCP transport implementation
-type transportTCP struct {
-	addr            string
+type TransportTCP struct {
 	transport       string
 	parser          *Parser
 	log             *slog.Logger
-	createMu        sync.Mutex
 	connectionReuse bool
 
 	pool *ConnectionPool
+
+	DialerCreate func(laddr net.Addr) net.Dialer
 }
 
-func (t *transportTCP) init(par *Parser) {
+func (t *TransportTCP) init(par *Parser) {
 	t.parser = par
 	t.pool = NewConnectionPool()
-	t.transport = TransportTCP
+	t.transport = "TCP"
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
+	}
+	if t.DialerCreate == nil {
+		t.DialerCreate = func(laddr net.Addr) net.Dialer {
+			return net.Dialer{
+				Timeout:   1 * time.Minute,
+				LocalAddr: laddr,
+			}
+		}
 	}
 }
 
-func (t *transportTCP) String() string {
+func (t *TransportTCP) String() string {
 	return "Transport<TCP>"
 }
 
-func (t *transportTCP) Network() string {
+func (t *TransportTCP) Network() string {
 	// return "tcp"
 	return t.transport
 }
 
-func (t *transportTCP) Close() error {
+func (t *TransportTCP) Close() error {
 	// return t.connections.Done()
 	return t.pool.Clear()
 }
 
 // Serve is direct way to provide conn on which this worker will listen
-func (t *transportTCP) Serve(l net.Listener, handler MessageHandler) error {
+func (t *TransportTCP) Serve(l net.Listener, handler MessageHandler) error {
 	t.log.Debug("begin listening on", "network", t.Network(), "laddr", l.Addr().String())
 	for {
 		conn, err := l.Accept()
@@ -59,12 +68,12 @@ func (t *transportTCP) Serve(l net.Listener, handler MessageHandler) error {
 	}
 }
 
-func (t *transportTCP) GetConnection(addr string) Connection {
+func (t *TransportTCP) GetConnection(addr string) Connection {
 	c := t.pool.Get(addr)
 	return c
 }
 
-func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
+func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	// We are letting transport layer to resolve our address
 	// raddr, err := net.ResolveTCPAddr("tcp", addr)
 	// if err != nil {
@@ -88,9 +97,8 @@ func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		addr := traddr.String()
 		t.log.Debug("Dialing new connection", "raddr", addr)
 
-		d := net.Dialer{
-			LocalAddr: tladdr,
-		}
+		d := t.DialerCreate(tladdr)
+
 		conn, err := d.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return nil, fmt.Errorf("%s dial err=%w", t, err)
@@ -122,7 +130,7 @@ func (t *transportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	return c, nil
 }
 
-func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler MessageHandler) Connection {
+func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	laddr := conn.LocalAddr().String()
@@ -138,7 +146,7 @@ func (t *transportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 }
 
 // This should performe better to avoid any interface allocation
-func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
+func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
 	defer t.pool.Delete(laddr)
 	defer func() {
@@ -192,7 +200,7 @@ func (t *transportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 	}
 }
 
-func (t *transportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	err := par.ParseSIPStreamEach(data, func(msg Message) {
 		msg.SetTransport(t.Network())
 		msg.SetSource(src)
@@ -220,7 +228,7 @@ func (c *TCPConnection) Ref(i int) int {
 	c.refcount += i
 	ref := c.refcount
 	c.mu.Unlock()
-	slog.Debug("TCP reference increment", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("TCP reference increment", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 	return ref
 }
 
@@ -228,7 +236,7 @@ func (c *TCPConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
 	c.mu.Unlock()
-	slog.Debug("TCP doing hard close", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", 0)
+	DefaultLogger().Debug("TCP doing hard close", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", 0)
 	return c.Conn.Close()
 }
 
@@ -237,17 +245,17 @@ func (c *TCPConnection) TryClose() (int, error) {
 	c.refcount--
 	ref := c.refcount
 	c.mu.Unlock()
-	slog.Debug("TCP reference decrement", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("TCP reference decrement", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		slog.Warn("TCP ref went negative", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+		DefaultLogger().Warn("TCP ref went negative", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 		return 0, nil
 	}
 
-	slog.Debug("TCP closing", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+	DefaultLogger().Debug("TCP closing", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 	return ref, c.Conn.Close()
 }
 

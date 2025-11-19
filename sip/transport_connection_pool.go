@@ -123,11 +123,6 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 		return nil
 	}
 	c.Ref(1)
-	// TODO handling more references
-	// if c.Ref(1) <= 1 {
-	// 	return nil
-	// }
-
 	return c
 }
 

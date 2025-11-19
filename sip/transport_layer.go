@@ -20,13 +20,11 @@ var (
 
 // TransportLayer implementation.
 type TransportLayer struct {
-	udp *transportUDP
-	tcp *transportTCP
-	tls *transportTLS
-	ws  *transportWS
-	wss *transportWSS
-
-	transports map[string]Transport
+	udp *TransportUDP
+	tcp *TransportTCP
+	tls *TransportTLS
+	ws  *TransportWS
+	wss *TransportWSS
 
 	listenPorts   map[string][]int
 	listenPortsMu sync.Mutex
@@ -59,6 +57,20 @@ func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 	}
 }
 
+type TransportsConfig struct {
+	UDP *TransportUDP
+	TCP *TransportTCP
+	TLS *TransportTLS
+	WS  *TransportWS
+	WSS *TransportWSS
+}
+
+func WithTransportLayerTransports(conf TransportsConfig) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.withTransports(conf)
+	}
+}
+
 // NewLayer creates transport layer.
 // dns Resolver
 // sip parser
@@ -70,7 +82,6 @@ func NewTransportLayer(
 	option ...TransportLayerOption,
 ) *TransportLayer {
 	l := &TransportLayer{
-		transports:      make(map[string]Transport),
 		listenPorts:     make(map[string][]int),
 		dnsResolver:     dnsResolver,
 		connectionReuse: true,
@@ -86,55 +97,61 @@ func NewTransportLayer(
 		tlsConfig = &tlsEmptyConf
 	}
 
-	// Exporting transport configuration
-	// UDP
-	l.udp = &transportUDP{
-		log:             l.log.With("caller", "Transport<UDP>"),
-		connectionReuse: l.connectionReuse,
+	// Create our default transports settings
+	transports := TransportsConfig{
+		UDP: &TransportUDP{
+			log:             l.log.With("caller", "Transport<UDP>"),
+			connectionReuse: l.connectionReuse,
+		},
+		TCP: &TransportTCP{
+			log:             l.log.With("caller", "Transport<TCP>"),
+			connectionReuse: l.connectionReuse,
+		},
+		TLS: &TransportTLS{
+			TransportTCP: &TransportTCP{
+				log:             l.log.With("caller", "Transport<TLS>"),
+				connectionReuse: l.connectionReuse,
+			},
+		},
+		WS: &TransportWS{
+			log: l.log.With("caller", "Transport<WS>"),
+		},
+		// TODO. Using default dial tls, but it needs to configurable via client
+		WSS: &TransportWSS{
+			TransportWS: &TransportWS{
+				log:             l.log.With("caller", "Transport<WSS>"),
+				connectionReuse: l.connectionReuse,
+			},
+		},
 	}
+
+	l.withTransports(transports)
+
 	l.udp.init(sipparser)
-
-	// TCP
-	l.tcp = &transportTCP{
-		log:             l.log.With("caller", "Transport<TCP>"),
-		connectionReuse: l.connectionReuse,
-	}
 	l.tcp.init(sipparser)
-
-	// TLS
-	// TODO. Using default dial tls, but it needs to configurable via client
-	l.tls = &transportTLS{
-		transportTCP: &transportTCP{
-			log:             l.log.With("caller", "Transport<TLS>"),
-			connectionReuse: l.connectionReuse,
-		},
-	}
 	l.tls.init(sipparser, tlsConfig)
-
-	// WS
-	l.ws = &transportWS{
-		log: l.log.With("caller", "Transport<WS>"),
-	}
 	l.ws.init(sipparser)
-
-	// WSS
-	// TODO. Using default dial tls, but it needs to configurable via client
-	l.wss = &transportWSS{
-		transportWS: &transportWS{
-			log:             l.log.With("caller", "Transport<WSS>"),
-			connectionReuse: l.connectionReuse,
-		},
-	}
 	l.wss.init(sipparser, tlsConfig)
 
-	// Fill map for fast access
-	l.transports["udp"] = l.udp
-	l.transports["tcp"] = l.tcp
-	l.transports["tls"] = l.tls
-	l.transports["ws"] = l.ws
-	l.transports["wss"] = l.wss
-
 	return l
+}
+
+func (l *TransportLayer) withTransports(conf TransportsConfig) {
+	if conf.UDP != nil && l.udp == nil {
+		l.udp = conf.UDP
+	}
+	if conf.TCP != nil && l.tcp == nil {
+		l.tcp = conf.TCP
+	}
+	if conf.TLS != nil && l.tls == nil {
+		l.tls = conf.TLS
+	}
+	if conf.WS != nil && l.ws == nil {
+		l.ws = conf.WS
+	}
+	if conf.WSS != nil && l.wss == nil {
+		l.wss = conf.WSS
+	}
 }
 
 // OnMessage is main function which will be called on any new message by transport layer
@@ -340,8 +357,8 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 // other words SetDestination will be called
 func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
-	transport, ok := l.transports[network]
-	if !ok {
+	transport := l.GetTransport(network)
+	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
@@ -552,8 +569,8 @@ func (l *TransportLayer) GetConnection(network, addr string) (Connection, error)
 }
 
 func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
-	transport, ok := l.transports[network]
-	if !ok {
+	transport := l.GetTransport(network)
+	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
@@ -569,7 +586,10 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 func (l *TransportLayer) Close() error {
 	l.log.Debug("Layer is closing")
 	var werr error
-	for _, t := range l.transports {
+	for _, t := range l.allTransports() {
+		if t == nil {
+			continue
+		}
 		if err := t.Close(); err != nil {
 			werr = errors.Join(werr, err)
 		}
@@ -578,6 +598,26 @@ func (l *TransportLayer) Close() error {
 		l.log.Debug("Layer closed with error", "error", werr)
 	}
 	return werr
+}
+
+func (l *TransportLayer) GetTransport(network string) Transport {
+	switch network {
+	case "udp":
+		return l.udp
+	case "tcp":
+		return l.tcp
+	case "tls":
+		return l.tls
+	case "ws":
+		return l.ws
+	case "wss":
+		return l.wss
+	}
+	return nil
+}
+
+func (l *TransportLayer) allTransports() []Transport {
+	return []Transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
 }
 
 func IsReliable(network string) bool {

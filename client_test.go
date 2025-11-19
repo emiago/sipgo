@@ -2,6 +2,7 @@ package sipgo
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -56,7 +57,8 @@ func TestClientRequestBuild(t *testing.T) {
 	assert.NotEmpty(t, callid.Value())
 
 	cseq := req.CSeq()
-	assert.Equal(t, "1 OPTIONS", cseq.Value())
+	assert.True(t, cseq.SeqNo > 1)
+	assert.Equal(t, fmt.Sprintf("%d %s", cseq.SeqNo, "OPTIONS"), cseq.Value())
 
 	maxfwd := req.MaxForwards()
 	assert.Equal(t, "70", maxfwd.Value())
