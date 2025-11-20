@@ -51,6 +51,7 @@ func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
 	})
 }
 
+// ParseSIPStreamEach parses SIP stream and calls callback as soon first SIP message is parsed
 func (p *ParserStream) ParseSIPStreamEach(data []byte, cb func(msg Message)) (err error) {
 	if p.reader == nil {
 		p.reader = streamBufReader.Get().(*bytes.Buffer)

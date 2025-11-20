@@ -76,7 +76,7 @@ func (t *TransportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
 			Conn:     tlsConn,
-			refcount: 2 + IdleConnection,
+			refcount: 2 + TransportIdleConnection,
 		}
 		return c, nil
 	})

@@ -545,16 +545,6 @@ func BenchmarkParser(b *testing.B) {
 			}
 		})
 	})
-
-	// b.Run("Paralel", func(b *testing.B) {
-	// 	b.RunParallel(func(p *testing.PB) {
-	// 		b.ResetTimer()
-	// 		for p.Next() {
-	// 			testcase(b)
-	// 		}
-	// 	})
-	// })
-
 }
 
 func BenchmarkParseStartLine(b *testing.B) {

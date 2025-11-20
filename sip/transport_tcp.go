@@ -115,7 +115,7 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
 			Conn:     conn,
-			refcount: 2 + IdleConnection,
+			refcount: 2 + TransportIdleConnection,
 		}
 
 		// Increase ref by 1 before returnin
@@ -137,7 +137,7 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	t.log.Debug("New connection", "raddr", raddr)
 	c := &TCPConnection{
 		Conn:     conn,
-		refcount: 1 + IdleConnection,
+		refcount: 1 + TransportIdleConnection,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)

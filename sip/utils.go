@@ -19,30 +19,6 @@ const (
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
-// https://github.com/kpbird/golang_random_string
-func RandString(n int) string {
-	output := make([]byte, n)
-	// We will take n bytes, one byte for each character of output.
-	randomness := make([]byte, n)
-	// read all random
-	_, err := rand.Read(randomness)
-	if err != nil {
-		panic(err)
-	}
-	l := len(letterBytes)
-	// fill output
-	for pos := range output {
-		// get random item
-		random := randomness[pos]
-		// random % 64
-		randomPos := random % uint8(l)
-		// put into output
-		output[pos] = letterBytes[randomPos]
-	}
-
-	return string(output)
-}
-
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
 func RandStringBytesMask(sb *strings.Builder, n int) string {
 	sb.Grow(n)
@@ -209,50 +185,6 @@ func SplitByWhitespace(text string) []string {
 	return result
 }
 
-// A delimiter is any pair of characters used for quoting text (i.e. bulk escaping literals).
-type delimiter struct {
-	start uint8
-	end   uint8
-}
-
-// Define common quote characters needed in parsing.
-var quotesDelim = delimiter{'"', '"'}
-
-var anglesDelim = delimiter{'<', '>'}
-
-// Find the first instance of the target in the given text which is not enclosed in any delimiters
-// from the list provided.
-func findUnescaped(text string, target uint8, delims ...delimiter) int {
-	return findAnyUnescaped(text, string(target), delims...)
-}
-
-// Find the first instance of any of the targets in the given text that are not enclosed in any delimiters
-// from the list provided.
-func findAnyUnescaped(text string, targets string, delims ...delimiter) int {
-	escaped := false
-	var endEscape uint8 = 0
-
-	endChars := make(map[uint8]uint8)
-	for _, delim := range delims {
-		endChars[delim.start] = delim.end
-	}
-
-	for idx := 0; idx < len(text); idx++ {
-		if !escaped && strings.Contains(targets, string(text[idx])) {
-			return idx
-		}
-
-		if escaped {
-			escaped = text[idx] != endEscape
-			continue
-		} else {
-			endEscape, escaped = endChars[text[idx]]
-		}
-	}
-
-	return -1
-}
-
 // ResolveInterfaceIP will check current interfaces and resolve to IP
 // Using targetIP it will try to match interface with same subnet
 // network can be "ip" "ip4" "ip6"
@@ -338,8 +270,8 @@ func NonceWrite(buf []byte) {
 	}
 }
 
-// MessageShortString dumps short version of msg. Used only for logging
-func MessageShortString(msg Message) string {
+// messageShortString dumps short version of msg. Used only for logging
+func messageShortString(msg Message) string {
 	switch m := msg.(type) {
 	case *Request:
 		return m.Short()

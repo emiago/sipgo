@@ -305,12 +305,12 @@ func MakeServerTxKey(msg Message) (string, error) {
 func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
-		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", messageShortString(msg))
 	}
 
 	cseq := msg.CSeq()
 	if cseq == nil {
-		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'CSeq' header not found in message '%s'", messageShortString(msg))
 	}
 	method := cseq.MethodName
 	if method == ACK {
@@ -357,15 +357,15 @@ func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	// RFC 2543 compliant
 	from := msg.From()
 	if from == nil {
-		return "", fmt.Errorf("'From' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'From' header not found in message '%s'", messageShortString(msg))
 	}
 	fromTag, ok := from.Params.Get("tag")
 	if !ok {
-		return "", fmt.Errorf("'tag' param not found in 'From' header of message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'tag' param not found in 'From' header of message '%s'", messageShortString(msg))
 	}
 	callId := msg.CallID()
 	if callId == nil {
-		return "", fmt.Errorf("'Call-ID' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Call-ID' header not found in message '%s'", messageShortString(msg))
 	}
 
 	builder.WriteString(fromTag)
@@ -390,7 +390,7 @@ func MakeClientTxKey(msg Message) (string, error) {
 func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	cseq := msg.CSeq()
 	if cseq == nil {
-		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'CSeq' header not found in message '%s'", messageShortString(msg))
 	}
 	method := cseq.MethodName
 	if method == ACK {
@@ -403,14 +403,14 @@ func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
-		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", messageShortString(msg))
 	}
 
 	branch, ok := firstViaHop.Params.Get("branch")
 	if !ok || len(branch) == 0 ||
 		!strings.HasPrefix(branch, RFC3261BranchMagicCookie) ||
 		len(strings.TrimPrefix(branch, RFC3261BranchMagicCookie)) == 0 {
-		return "", fmt.Errorf("'branch' not found or empty in 'Via' header of message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'branch' not found or empty in 'Via' header of message '%s'", messageShortString(msg))
 	}
 
 	var builder strings.Builder

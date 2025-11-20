@@ -12,10 +12,8 @@ import (
 var (
 	ErrDialogOutsideDialog   = errors.New("Call/Transaction Outside Dialog")
 	ErrDialogDoesNotExists   = errors.New("Call/Transaction Does Not Exist")
-	ErrDialogInviteNoContact = errors.New("No Contact header")
-	ErrDialogInvalidCseq     = errors.New("Invalid CSEQ number")
-	// ErrDialogCanceled matches invite transaction canceled
-	ErrDialogCanceled = sip.ErrTransactionCanceled
+	ErrDialogInviteNoContact = errors.New("no Contact header")
+	ErrDialogInvalidCseq     = errors.New("invalid CSEQ number")
 )
 
 type ErrDialogResponse struct {

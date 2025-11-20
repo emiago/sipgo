@@ -13,9 +13,6 @@ import (
 var (
 	UDPMTUSize = 1500
 
-	// UDPUseConnectedConnection will force creating UDP connected connection
-	// UDPUseConnectedConnection = false
-
 	ErrUDPMTUCongestion = errors.New("size of packet larger than MTU")
 )
 
@@ -109,7 +106,7 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 			PacketConn: udpconn,
 			PacketAddr: udpconn.LocalAddr().String(),
 			// 1 ref for current return , 2 ref for reader
-			refcount: 2 + IdleConnection,
+			refcount: 2 + TransportIdleConnection,
 		}
 		return c, nil
 	})

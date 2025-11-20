@@ -61,15 +61,13 @@ var headersParsers = mapHeadersParser{
 }
 
 // DefaultHeadersParser returns minimal version header parser.
-// It can be extended or overwritten. Removing some defaults can break SIP functionality
-//
-// NOTE this API call may change
+// It can be extended or overwritten.
 func DefaultHeadersParser() map[string]HeaderParser {
 	return headersParsers
 }
 
 // parseMsgHeader will append any parsed header
-// in case comma seperated values it will add them as new in case comma is detected
+// In case comma seperated values it will add them as new in case comma is detected
 func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText string) (err error) {
 	// p.log.Tracef("parsing header \"%s\"", headerText)
 
@@ -114,21 +112,6 @@ func (headersParser mapHeadersParser) parseMsgHeader(msg Message, headerText str
 		// Ok we detected we have comma in header value
 		msg.AppendHeader(header)
 		fieldText = fieldText[commaErr+1:]
-	}
-}
-
-func parseHeaderErrorNoComma(err error) bool {
-	if err == nil {
-		return false
-	}
-	_, ok := err.(errComaDetected)
-	return ok
-}
-
-func headerParserGeneric(lowHeaderName string) HeaderParser {
-	return func(headerName, headerData string) (Header, error) {
-		header := NewHeader(lowHeaderName, headerData)
-		return header, nil
 	}
 }
 

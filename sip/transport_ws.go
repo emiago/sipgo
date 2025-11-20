@@ -150,7 +150,7 @@ func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	t.log.Debug("New WS connection", "raddr", raddr)
 	c := &WSConnection{
 		Conn:       conn,
-		refcount:   1 + IdleConnection,
+		refcount:   1 + TransportIdleConnection,
 		clientSide: clientSide,
 	}
 	t.pool.Add(laddr, c)
@@ -269,7 +269,7 @@ func (t *TransportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 		t.log.Debug("New WS connection", "raddr", raddr)
 		c := &WSConnection{
 			Conn:       conn,
-			refcount:   2 + IdleConnection,
+			refcount:   2 + TransportIdleConnection,
 			clientSide: true,
 		}
 		return c, nil

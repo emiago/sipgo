@@ -884,7 +884,6 @@ func (h ContentLengthHeader) Value() string { return strconv.Itoa(int(h)) }
 func (h *ContentLengthHeader) headerClone() Header { return h }
 
 // ViaHeader is Via header representation.
-// It can be linked list of multiple via if they are part of one header
 type ViaHeader struct {
 	// E.g. 'SIP'.
 	ProtocolName string
@@ -987,7 +986,6 @@ func (h *ContentTypeHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
-// func (h **ContentTypeHeader) Name() string { return "Content-Type" }
 func (h *ContentTypeHeader) Name() string { return "Content-Type" }
 
 func (h *ContentTypeHeader) Value() string { return string(*h) }

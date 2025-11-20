@@ -1,4 +1,3 @@
-// Originally forked from https://github.com/ghettovoice/gosip by @ghetovoice
 package sip
 
 import (
@@ -6,6 +5,7 @@ import (
 )
 
 // TODO v2
+// Originally forked from https://github.com/ghettovoice/gosip by @ghetovoice
 // Better design could by passing some context through fsm state
 // Context could carry either response or error
 
@@ -294,7 +294,6 @@ func (tx *ServerTx) actConfirm() fsmInput {
 }
 
 func (tx *ServerTx) actCancel() fsmInput {
-	// tx.passCancel()
 	r := tx.fsmCancel
 
 	if r == nil {
@@ -325,19 +324,6 @@ func (tx *ServerTx) passAck() {
 	tx.ackSendAsync(r)
 }
 
-// func (tx *ServerTx) passCancel() {
-// 	r := tx.fsmCancel
-
-// 	if r == nil {
-// 		return
-// 	}
-// 	res := tx.onCancel(r)
-// 	if res != nil {
-
-// 	}
-// 	// tx.cancelSendAsync(r)
-// }
-
 func (tx *ServerTx) passResp() error {
 	lastResp := tx.fsmResp
 
@@ -347,7 +333,6 @@ func (tx *ServerTx) passResp() error {
 		return nil
 	}
 
-	// tx.Log().Debug("actFinal")
 	err := tx.conn.WriteMsg(lastResp)
 	if err != nil {
 		tx.log.Debug("fail to pass response", "error", err, "res", lastResp.StartLine(), "tx", tx.Key())

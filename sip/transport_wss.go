@@ -111,7 +111,7 @@ func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 
 		c := &WSConnection{
 			Conn:       tlsConn,
-			refcount:   2 + IdleConnection,
+			refcount:   2 + TransportIdleConnection,
 			clientSide: true,
 		}
 		return c, nil
