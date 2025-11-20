@@ -20,14 +20,14 @@ var (
 type TransportUDP struct {
 	// listener *net.UDPConn
 	parser          *Parser
-	pool            *ConnectionPool
+	pool            *connectionPool
 	log             *slog.Logger
 	connectionReuse bool
 }
 
 func (t *TransportUDP) init(par *Parser) {
 	t.parser = par
-	t.pool = NewConnectionPool()
+	t.pool = newConnectionPool()
 	if t.log == nil {
 		t.log = DefaultLogger()
 	}

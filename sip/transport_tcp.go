@@ -19,14 +19,14 @@ type TransportTCP struct {
 	log             *slog.Logger
 	connectionReuse bool
 
-	pool *ConnectionPool
+	pool *connectionPool
 
 	DialerCreate func(laddr net.Addr) net.Dialer
 }
 
 func (t *TransportTCP) init(par *Parser) {
 	t.parser = par
-	t.pool = NewConnectionPool()
+	t.pool = newConnectionPool()
 	t.transport = "TCP"
 	if t.log == nil {
 		t.log = DefaultLogger()

@@ -30,7 +30,7 @@ type TransportWS struct {
 
 	connectionReuse bool
 
-	pool   *ConnectionPool
+	pool   *connectionPool
 	dialer ws.Dialer
 
 	DialerCreate func(laddr net.Addr) ws.Dialer
@@ -39,7 +39,7 @@ type TransportWS struct {
 func newWSTransport(par *Parser) *TransportWS {
 	p := &TransportWS{
 		parser:    par,
-		pool:      NewConnectionPool(),
+		pool:      newConnectionPool(),
 		transport: "WS",
 		dialer:    ws.DefaultDialer,
 	}
@@ -50,7 +50,7 @@ func newWSTransport(par *Parser) *TransportWS {
 
 func (t *TransportWS) init(par *Parser) {
 	t.parser = par
-	t.pool = NewConnectionPool()
+	t.pool = newConnectionPool()
 	t.transport = "WS"
 	t.dialer = ws.DefaultDialer
 	t.dialer.Protocols = WebSocketProtocols
