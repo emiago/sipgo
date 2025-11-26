@@ -391,15 +391,8 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	}
 
 	if v := req.CSeq(); v == nil {
-		var b [4]byte
-		_, err := rand.Read(b[:])
-		if err != nil {
-			return err
-		}
-		n := binary.BigEndian.Uint32(b[:]) & 0x7FFFFFFF // ensure < 2^31
-		n = max(1<<31-100, n)
 		cseq := sip.CSeqHeader{
-			SeqNo:      n,
+			SeqNo:      randUniform32() & 0x7FFF, // 0 - 32767
 			MethodName: req.Method,
 		}
 		mustHeader = append(mustHeader, &cseq)
@@ -606,4 +599,21 @@ func digestProxyAuthRequest(ctx context.Context, client *Client, req *sip.Reques
 	req.RemoveHeader("Via")
 	tx, err := client.TransactionRequest(ctx, req, ClientRequestAddVia)
 	return tx, err
+}
+
+func randUniform32() uint32 {
+	var b [4]byte
+	rand.Read(b[:]) // NOTE: This has panic which should never be called
+
+	x := binary.BigEndian.Uint32(b[:])
+	return max(1, x)
+}
+
+func randUniformRange32(minimum uint32, maximum uint32) uint32 {
+	var b [4]byte
+	rand.Read(b[:])
+
+	x := binary.BigEndian.Uint32(b[:])
+	n := uint32(uint64(x) * uint64(maximum) >> 32)
+	return max(minimum, n)
 }
