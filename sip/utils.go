@@ -244,15 +244,16 @@ func ResolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet
 			continue
 		}
 
+		// IP is v6 only if this returns nil
+		isIP4 := ip.To4() == nil
 		switch network {
 		case "ip4":
-			if ip.To4() == nil {
+			if !isIP4 {
 				continue
 			}
 
 		case "ip6":
-			// IP is v6 only if this returns nil
-			if ip.To4() != nil {
+			if !isIP4 {
 				continue
 			}
 		}
@@ -288,4 +289,26 @@ func compareFunctions(fsm1 any, fsm2 any) error {
 		return fmt.Errorf("Functions are not equal f1=%q, f2=%q", funcName1, funcName2)
 	}
 	return nil
+}
+
+func isIPV6(host string) bool {
+	// Quick reject (no colon)
+	for c := range host {
+		if c == ':' {
+			return true
+		}
+		if c == '.' {
+			return false
+		}
+	}
+
+	ip := net.ParseIP(host)
+	return ip != nil && ip.To4() == nil
+}
+
+func uriIP(ip string) string {
+	if isIPV6(ip) {
+		return "[" + ip + "]"
+	}
+	return ip
 }

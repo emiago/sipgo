@@ -932,7 +932,7 @@ func (h *ViaHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("/")
 	buffer.WriteString(h.Transport)
 	buffer.WriteString(" ")
-	buffer.WriteString(h.Host)
+	buffer.WriteString(uriIP(h.Host))
 
 	if h.Port > 0 {
 		buffer.WriteString(":")
