@@ -245,20 +245,18 @@ func ResolveInterfaceIp(iface net.Interface, network string, targetIP *net.IPNet
 		}
 
 		// IP is v6 only if this returns nil
-		isIP4 := ip.To4() == nil
+		isIP4 := ip.To4() != nil
 		switch network {
 		case "ip4":
-			if !isIP4 {
-				continue
+			if isIP4 {
+				return ip, nil
 			}
 
 		case "ip6":
 			if !isIP4 {
-				continue
+				return ip, nil
 			}
 		}
-
-		return ip, nil
 	}
 	return nil, io.EOF
 }
