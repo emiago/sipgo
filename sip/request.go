@@ -150,16 +150,25 @@ func (req *Request) Transport() string {
 	return tp
 }
 
-// Source will return host:port address
+// Source will return host:port address using what is set by SetSource or based on Via header value
 // In case of network parsed request source will be connection remote address
 func (req *Request) Source() string {
 	if src := req.MessageData.Source(); src != "" {
 		return src
 	}
+	return req.sourceVia()
+}
 
+// sourceVia returns addr based on Via Header.
+func (req *Request) sourceVia() string {
+	host, port := req.sourceViaHostPort()
+	return fmt.Sprintf("%s:%d", host, port)
+}
+
+func (req *Request) sourceViaHostPort() (string, int) {
 	viaHop := req.Via()
 	if viaHop == nil {
-		return ""
+		return "", 0
 	}
 
 	var (
@@ -186,7 +195,7 @@ func (req *Request) Source() string {
 		}
 	}
 
-	return fmt.Sprintf("%v:%v", host, port)
+	return host, port
 }
 
 // TODO: return Addr instead string, to remove double string parsing

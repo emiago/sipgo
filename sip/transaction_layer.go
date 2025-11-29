@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 type TransactionRequestHandler func(req *Request, tx *ServerTx)
@@ -157,9 +158,11 @@ func (txl *TransactionLayer) serverTxRequest(req *Request, key string) error {
 }
 
 func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx, error) {
-	// Connection must exist by transport layer.
-	// TODO: What if we are getting BYE and client closed connection
-	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
+	// Connection must exist by transport layer or it will be created
+	// What if connection setup can not be made fast enough?
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := txl.tpl.serverRequestConnection(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("server tx get connection failed: %w", err)
 	}

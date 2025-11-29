@@ -16,6 +16,9 @@ var (
 
 	// Errors
 	ErrTransportNotSuported = errors.New("protocol not supported")
+
+	// No need yet to expose
+	errTransportConnectionDoesNotExists = errors.New("connection does not exists")
 )
 
 // TransportLayer implementation.
@@ -440,6 +443,60 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	return c, nil
 }
 
+// serverRequestConnection implements serving connection when response needs to be returned
+// Based on: https://datatracker.ietf.org/doc/html/rfc3261#section-18.2.2
+//
+// NOTE: this normally should be called one time for request transaction
+func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
+	network := NetworkToLower(req.Transport())
+	transport := l.GetTransport(network)
+	if transport == nil {
+		return nil, fmt.Errorf("transport %s is not supported", network)
+	}
+
+	if IsReliable(network) && req.MessageData.Source() != "" {
+		// If the "sent-protocol" is a reliable transport protocol such as
+		//  TCP or SCTP, or TLS over those, the response MUST be sent using
+		//  the existing connection to the source of the original request
+
+		// by default source is set to incoming connection addr
+		conn := transport.GetConnection(req.MessageData.Source())
+		if conn != nil {
+			return conn, nil
+		}
+	}
+
+	host, port := req.sourceViaHostPort()
+	raddr := Addr{
+		IP:       net.ParseIP(host),
+		Port:     port,
+		Hostname: host,
+	}
+
+	if raddr.Port == 0 {
+		// Use default port for transport
+		raddr.Port = DefaultPort(network)
+	}
+
+	if raddr.IP == nil {
+		if err := l.resolveAddr(ctx, network, host, req.Recipient.Scheme, &raddr); err != nil {
+			return nil, err
+		}
+	}
+
+	// What about local Addr? It has usage for client
+	// laddr := req.Laddr
+	laddr := Addr{}
+
+	// Check is there some connection to be reused
+	addr := raddr.String()
+	if c := transport.GetConnection(addr); c != nil {
+		return c, nil
+	}
+	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
+	return c, err
+}
+
 func (l *TransportLayer) overrideSentBy(c Connection, viaHop *ViaHeader) error {
 	if viaHop.Host != "" && viaHop.Port > 0 {
 		// avoids underhood parsing
@@ -577,7 +634,7 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 	l.log.Debug("getting connection", "network", network, "addr", addr)
 	c := transport.GetConnection(addr)
 	if c == nil {
-		return nil, fmt.Errorf("connection %q does not exist", addr)
+		return nil, errTransportConnectionDoesNotExists
 	}
 
 	return c, nil

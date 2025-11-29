@@ -306,15 +306,17 @@ func TestClientParalelDialing(t *testing.T) {
 	ua, err := NewUA()
 	require.NoError(t, err)
 
-	l, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 15090})
+	l, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	require.NoError(t, err)
 	go func() {
 		io.ReadAll(l)
 	}()
+	_, dstPort, err := sip.ParseAddr(l.LocalAddr().String())
+	require.NoError(t, err)
 
 	c, err := NewClient(ua,
 		WithClientHostname("10.0.0.0"),
-		WithClientConnectionAddr("127.0.0.1:15080"),
+		WithClientConnectionAddr("127.0.0.1:15066"),
 	)
 	require.NoError(t, err)
 	wg := sync.WaitGroup{}
@@ -322,7 +324,7 @@ func TestClientParalelDialing(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req := sip.NewRequest(sip.INVITE, sip.Uri{Host: "127.0.0.1", Port: 15090})
+			req := sip.NewRequest(sip.INVITE, sip.Uri{Host: "127.0.0.1", Port: dstPort})
 			err := c.WriteRequest(req)
 			require.NoError(t, err)
 		}()
