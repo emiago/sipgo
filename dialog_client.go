@@ -375,13 +375,14 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	// request is passed to the transport layer directly for transmission,
 	// rather than a client transaction.  This is because the UAC core
 	// handles retransmissions of the ACK, not the transaction layer.
+	retransmissionAck := ack.Clone() // We need to clone for RACE safety
 	s.inviteTx.OnRetransmission(func(r *sip.Response) {
 		// Detect retransmission
 		if r.StatusCode != 200 {
 			return
 		}
 
-		if err := s.WriteRequest(ack); err != nil {
+		if err := s.WriteRequest(retransmissionAck); err != nil {
 			s.endWithCause(fmt.Errorf("ACK retransmission failed: %w", err))
 		}
 	})

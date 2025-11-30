@@ -220,17 +220,17 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		<-dlg.Context().Done()
@@ -331,7 +331,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 	defer ua.Close()
 	srv, _ := NewServer(ua)
 	cli, _ := NewClient(ua)
-	sip.SetTimers(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	// sip.SetTimers(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -358,11 +358,11 @@ func TestIntegrationDialogCancel(t *testing.T) {
 	})
 
 	srv.OnCancel(func(req *sip.Request, tx sip.ServerTransaction) {
-		t.Log("Cancel received")
+		fmt.Println("Cancel received")
 	})
 
 	srv.serveRequest(func(r *sip.Request) {
-		t.Log("UAS server: ", r.StartLine())
+		fmt.Println("UAS server: ", r.StartLine())
 	})
 
 	startTestServer(ctx, srv, uasContact.Address.HostPort())

@@ -33,7 +33,7 @@ func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	// tx.cancels = make(chan *Request)
 	tx.done = make(chan struct{})
 	tx.log = logger
-	tx.origin = origin
+	tx.origin = origin.Clone() // Due to transaction responses we need to work with clone to avoid races
 	tx.reliable = IsReliable(origin.Transport())
 	return tx
 }

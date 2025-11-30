@@ -3,7 +3,6 @@ package sip
 import (
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 )
 
@@ -18,7 +17,6 @@ type ClientTx struct {
 	timer_m      *time.Timer
 
 	onRetransmission FnTxResponse
-	closeOnce        sync.Once
 }
 
 func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logger) *ClientTx {
@@ -31,7 +29,7 @@ func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	tx.done = make(chan struct{})
 	tx.log = logger
 
-	tx.origin = origin
+	tx.origin = origin.Clone() // TODO:Due to subsequent request like ack we need to use clone to avoid races
 	return tx
 }
 

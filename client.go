@@ -135,8 +135,9 @@ func (c *Client) Hostname() string {
 // TransactionRequest uses transaction layer to send request and returns transaction
 // For more correct behavior use client.Do instead which acts same like HTTP req/response
 //
-// By default request will not be cloned and it will populate request with missing headers unless options are used
+// NOTE RACE: By default request will not be cloned and it will populate request with missing headers and data unless options are used
 // In most cases you want this as you will retry with additional headers
+// For other cases call Request.Clone() before doing transaction request
 //
 // Following header fields will be added if not exist to have correct SIP request:
 // To, From, CSeq, Call-ID, Max-Forwards, Via

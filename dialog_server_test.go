@@ -203,10 +203,11 @@ func TestDialogServer2xxRetransmission(t *testing.T) {
 	require.NoError(t, err)
 
 	res200 := sip.NewResponseFromRequest(invite, 200, "OK", nil)
+	ackReceive := newAckRequestUAC(invite, res200, nil)
 	go func() {
 		// Delay ACK receiving
 		time.Sleep(2 * sip.T1)
-		d.ReadAck(newAckRequestUAC(invite, res200, nil), tx)
+		d.ReadAck(ackReceive, tx)
 	}()
 	// Respond 200
 	// This will block until ACK
