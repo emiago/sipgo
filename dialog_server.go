@@ -259,6 +259,8 @@ func (s *DialogServerSession) authDigest(chal *digest.Challenge, opts digest.Opt
 }
 
 // WriteResponse allows passing you custom response
+// NOTE: Make sure you have built response based on dialog.InviteRequest which makes sure
+// that dialog ID do match
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
 

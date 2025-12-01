@@ -202,8 +202,8 @@ func TestDialogServer2xxRetransmission(t *testing.T) {
 	d, err := dialogSrv.ReadInvite(invite, tx)
 	require.NoError(t, err)
 
-	res200 := sip.NewResponseFromRequest(invite, 200, "OK", nil)
-	ackReceive := newAckRequestUAC(invite, res200, nil)
+	res200 := sip.NewResponseFromRequest(d.InviteRequest, 200, "OK", nil)
+	ackReceive := newAckRequestUAC(d.InviteRequest, res200, nil)
 	go func() {
 		// Delay ACK receiving
 		time.Sleep(2 * sip.T1)
@@ -212,6 +212,7 @@ func TestDialogServer2xxRetransmission(t *testing.T) {
 	// Respond 200
 	// This will block until ACK
 	err = d.WriteResponse(res200)
+	require.NoError(t, err)
 
 	// We must have at least 2 responses
 	resps := tx.Result()

@@ -97,6 +97,8 @@ func (req *Request) StringWrite(buffer io.StringWriter) {
 	// buffer.WriteString("\r\n")
 }
 
+// Clone performs shallow clone, that is clones everything except Body
+// If full clone is needed make sure body is also cloned
 func (req *Request) Clone() *Request {
 	return cloneRequest(req)
 }
@@ -339,7 +341,7 @@ func cloneRequest(req *Request) *Request {
 	for _, h := range req.CloneHeaders() {
 		newReq.AppendHeader(h)
 	}
-	// newReq.SetBody(req.Body())
+	newReq.SetBody(req.Body())
 	newReq.SetTransport(req.Transport())
 	newReq.SetSource(req.Source())
 	newReq.SetDestination(req.Destination())

@@ -21,12 +21,12 @@ type DialogUA struct {
 	RewriteContact bool
 }
 
-func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
+func (c *DialogUA) ReadInvite(inviteRequest *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
 	// do some minimal validation
-	if inviteReq.Contact() == nil {
+	if inviteRequest.Contact() == nil {
 		return nil, ErrDialogInviteNoContact
 	}
-	if inviteReq.CSeq() == nil {
+	if inviteRequest.CSeq() == nil {
 		return nil, fmt.Errorf("no CSEQ header present")
 	}
 
@@ -36,6 +36,8 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	if err != nil {
 		return nil, fmt.Errorf("generating dialog to tag failed: %w", err)
 	}
+	// As we are modifying request we need to perform shallow clone to avoid transaction races
+	inviteReq := inviteRequest.Clone()
 	inviteReq.To().Params["tag"] = uuid.String()
 	id, err := sip.UASReadRequestDialogID(inviteReq)
 	if err != nil {
