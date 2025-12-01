@@ -393,7 +393,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		// Save destination in request to avoid repeated resolving
 		// This also solves problem where subsequent request like NON 2xx ACK can
 		// send on same destination without resolving again.
-		req.SetDestination(raddr.String())
+		// req.SetDestination(raddr.String())
 	}
 
 	// Now use Via header to determine our local address
@@ -415,6 +415,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 
 	// Should we use default transport ports here?
 	laddr := req.Laddr
+	req.raddr = raddr
 
 	// This is probably client forcing host:port
 	if laddr.IP != nil && laddr.Port > 0 {
@@ -485,8 +486,10 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	// What about local Addr? It has usage for client
-	// laddr := req.Laddr
 	laddr := Addr{}
+	// Set request remote address to be used for further responses
+	// NOTE: for race reasons this should not be exposed
+	req.raddr = raddr
 
 	// Check is there some connection to be reused
 	addr := raddr.String()

@@ -15,6 +15,8 @@ type Request struct {
 
 	// Laddr is Connection local Addr used to sent request
 	Laddr Addr
+	// raddr is address set after resolving Via
+	raddr Addr
 }
 
 // NewRequest creates base for building sip Request

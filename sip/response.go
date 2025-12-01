@@ -248,8 +248,13 @@ func NewResponseFromRequest(
 
 	res.SetBody(body)
 	res.SetTransport(req.Transport())
-	res.SetSource(req.Destination())
-	res.SetDestination(req.Source())
+
+	// If raddr is present this is resolved remote addr based on via header, otherwise use connection based source addr
+	if req.raddr.IP != nil {
+		res.SetDestination(req.raddr.String())
+	} else {
+		res.SetDestination(req.Source())
+	}
 
 	return res
 }
