@@ -17,6 +17,7 @@ type TransportTCP struct {
 	transport       string
 	parser          *Parser
 	log             *slog.Logger
+	createMu        sync.Mutex
 	connectionReuse bool
 
 	pool *connectionPool
@@ -79,6 +80,17 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// if err != nil {
 	// 	return nil, err
 	// }
+
+	// ensure connection wasn't created in the meantime
+	t.createMu.Lock()
+	defer t.createMu.Unlock()
+
+	existing := t.pool.Get(raddr.String())
+	if existing != nil {
+		t.log.Debug("Reusing existing connection", "raddr", raddr.String())
+		return existing, nil
+	}
+
 	// We do singleflight if laddr is required or connection reuse
 	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
 		var tladdr *net.TCPAddr = nil
@@ -131,6 +143,8 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 }
 
 func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler MessageHandler) Connection {
+	t.createMu.Lock()
+	defer t.createMu.Unlock()
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	laddr := conn.LocalAddr().String()
