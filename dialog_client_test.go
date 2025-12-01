@@ -239,7 +239,6 @@ func TestDialogClientACKRetransmission(t *testing.T) {
 	require.NoError(t, err)
 
 	// We will keep receiving retransmission
-
 	if err := d.Ack(context.TODO()); err != nil {
 		t.Error(err)
 	}

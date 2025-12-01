@@ -335,20 +335,6 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 		return err
 	}
 
-	// transport, ok := l.transports[network]
-	// if !ok {
-	// 	return fmt.Errorf("transport %s is not supported", network)
-	// }
-
-	// raddr, err := transport.ResolveAddr(addr)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = transport.WriteMsg(msg, raddr)
-	// if err != nil {
-	// 	err = fmt.Errorf("send SIP message through %s protocol to %s: %w", network, addr, err)
-	// }
 	return err
 }
 

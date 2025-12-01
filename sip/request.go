@@ -339,14 +339,12 @@ func cloneRequest(req *Request) *Request {
 	for _, h := range req.CloneHeaders() {
 		newReq.AppendHeader(h)
 	}
-	// for _, h := range cloneHeaders(req) {
-	// 	newReq.AppendHeader(h)
-	// }
-
 	// newReq.SetBody(req.Body())
 	newReq.SetTransport(req.Transport())
 	newReq.SetSource(req.Source())
 	newReq.SetDestination(req.Destination())
+	newReq.raddr = req.raddr
+	newReq.Laddr = req.Laddr
 
 	return newReq
 }
