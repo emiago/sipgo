@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -185,10 +186,11 @@ func TestIntegrationServerResponse(t *testing.T) {
 	defer ua.Close()
 	srv, _ := NewServer(ua)
 
-	serverResDestination := ""
+	serverResDestination := atomic.Pointer[string]{}
 	srv.OnOptions(func(req *sip.Request, tx sip.ServerTransaction) {
 		res := sip.NewResponseFromRequest(req, 200, "", nil)
-		serverResDestination = res.Destination()
+		dst := res.Destination()
+		serverResDestination.Store(&dst)
 		tx.Respond(res)
 	})
 
@@ -218,7 +220,7 @@ func TestIntegrationServerResponse(t *testing.T) {
 		assert.Equal(t, 200, res.StatusCode)
 		// Now this is important that server choosed this addr instead client default
 		// This confirms server is actually sending request over VIA
-		assert.Equal(t, "127.0.0.1:15152", serverResDestination)
+		assert.Equal(t, "127.0.0.1:15152", *serverResDestination.Load())
 	})
 
 	t.Run("TCP", func(t *testing.T) {
@@ -232,7 +234,7 @@ func TestIntegrationServerResponse(t *testing.T) {
 		res, err := cli.Do(context.TODO(), req)
 		require.NoError(t, err)
 		assert.Equal(t, 200, res.StatusCode)
-		assert.Equal(t, "127.0.0.1:15000", serverResDestination)
+		assert.Equal(t, "127.0.0.1:15000", *serverResDestination.Load())
 	})
 }
 

@@ -29,7 +29,7 @@ func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	tx.done = make(chan struct{})
 	tx.log = logger
 
-	tx.origin = origin.Clone() // TODO:Due to subsequent request like ack we need to use clone to avoid races
+	tx.origin = origin // TODO:Due to subsequent request like ack we need to use clone to avoid races
 	return tx
 }
 
