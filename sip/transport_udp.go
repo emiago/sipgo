@@ -78,10 +78,6 @@ func (t *TransportUDP) GetConnection(addr string) Connection {
 
 // CreateConnection will create new connection
 func (t *TransportUDP) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	// if UDPUseConnectedConnection {
-	// 	return t.createConnectedConnection(ctx, laddr, raddr, handler)
-	// }
-
 	return t.createConnection(ctx, laddr, raddr, handler)
 }
 
@@ -116,15 +112,6 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	c := conn.(*UDPConnection)
 
 	t.log.Debug("New connection", "raddr", addr)
-	// We need to also have mapping remote add to this connection
-	// t.pool.Add(addr, c)
-
-	// Add in pool but as listen connection
-	// Reason is that UDP connection can be reused.
-	// Notice this can only be reused if VIA header is set explicitly like WithClientAddr()
-	// t.pool.Add(c.PacketAddr, c)
-
-	// t.listeners = append(t.listeners, c)
 	go t.readUDPConnection(c, addr, c.PacketAddr, handler)
 	return c, err
 }
@@ -257,10 +244,6 @@ func (c *UDPConnection) LocalAddr() net.Addr {
 	return c.PacketConn.LocalAddr()
 }
 
-func (c *UDPConnection) RemoteAddr() net.Addr {
-	return c.PacketConn.LocalAddr()
-}
-
 func (c *UDPConnection) Ref(i int) int {
 	c.mu.Lock()
 	c.refcount += i
@@ -284,13 +267,13 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return ref, nil
 	}
 
-	slog.Debug("UDP reference decrement", "src", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+	slog.Debug("UDP reference decrement", "src", c.LocalAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		slog.Warn("UDP ref went negative", "src", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+		slog.Warn("UDP ref went negative", "src", c.LocalAddr().String(), "ref", ref)
 		return 0, nil
 	}
 

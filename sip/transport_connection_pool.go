@@ -54,20 +54,20 @@ func (p *connectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 	a := raddr.String()
 
 	if laddr.Port > 0 || reuse {
-		// TODO: remplement this here to avoid type conversion
-
+		// TODO: implement singleflight without  type conversion
 		laddrStr := laddr.String()
-		if laddr.Port > 0 {
-			if c := p.Get(laddrStr); c != nil {
-				return c, nil
-			}
-		} else {
-			if c := p.Get(a); c != nil {
-				return c, nil
-			}
-		}
-
+		// We create or return existing
 		conn, err, _ := p.sf.Do(laddrStr+a, func() (any, error) {
+			if laddr.Port > 0 {
+				if c := p.Get(laddrStr); c != nil {
+					return c, nil
+				}
+			} else {
+				if c := p.Get(a); c != nil {
+					return c, nil
+				}
+			}
+
 			c, err := do()
 			if err != nil {
 				return nil, err
