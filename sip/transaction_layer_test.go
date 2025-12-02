@@ -36,9 +36,9 @@ func TestIntegrationTransactionLayerServerTx(t *testing.T) {
 		t.Log("Request")
 	})
 
-	// It will fail as it does not have connection
+	// Connection will be created
 	err := txl.handleRequest(req)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	// Now create connection and test multiple concurent received request
 	tp.udp.CreateConnection(context.TODO(),
