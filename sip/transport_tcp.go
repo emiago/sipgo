@@ -201,7 +201,7 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 }
 
 func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
-	err := par.ParseSIPStreamEach(data, func(msg Message) {
+	err := par.ParseSIPStream(data, func(msg Message) {
 		msg.SetTransport(t.Network())
 		msg.SetSource(src)
 		handler(msg)
