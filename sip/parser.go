@@ -24,14 +24,15 @@ var (
 	// Stream parse errors
 	ErrParseSipPartial         = errors.New("SIP partial data")
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
-	ErrParseMoreMessages       = errors.New("Stream has more message")
+	ErrParseMoreMessages       = errors.New("stream has more message")
 
 	ParseMaxMessageLength = 65535
+
+	defaultParser = NewParser()
 )
 
 func ParseMessage(msgData []byte) (Message, error) {
-	parser := NewParser()
-	return parser.ParseSIP(msgData)
+	return defaultParser.ParseSIP(msgData)
 }
 
 // Parser is implementation of SIPParser
