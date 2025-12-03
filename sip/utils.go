@@ -290,13 +290,13 @@ func compareFunctions(fsm1 any, fsm2 any) error {
 }
 
 func isIPV6(host string) bool {
-	// Quick reject (no colon)
+	// Quick reject (has dot)
 	for c := range host {
-		if c == ':' {
-			return true
-		}
 		if c == '.' {
 			return false
+		}
+		if c == ':' {
+			break
 		}
 	}
 
@@ -309,4 +309,9 @@ func uriIP(ip string) string {
 		return "[" + ip + "]"
 	}
 	return ip
+}
+
+// uriNetIP returns parsable IP by net
+func uriNetIP(ip string) string {
+	return strings.Trim(ip, "[]")
 }

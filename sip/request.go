@@ -166,7 +166,7 @@ func (req *Request) Source() string {
 // sourceVia returns addr based on Via Header.
 func (req *Request) sourceVia() string {
 	host, port := req.sourceViaHostPort()
-	return fmt.Sprintf("%s:%d", host, port)
+	return fmt.Sprintf("%s:%d", uriNetIP(host), port)
 }
 
 func (req *Request) sourceViaHostPort() (string, int) {

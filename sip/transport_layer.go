@@ -407,7 +407,6 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
 	} else if l.connectionReuse {
-		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 		c = transport.GetConnection(addr)
 	}
@@ -454,8 +453,9 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	host, port := req.sourceViaHostPort()
+
 	raddr := Addr{
-		IP:       net.ParseIP(host),
+		IP:       net.ParseIP(uriNetIP(host)),
 		Port:     port,
 		Hostname: host,
 	}

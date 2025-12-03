@@ -217,7 +217,7 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 
 // TODO: Try to reuse this from TCP transport as func are same
 func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
-	msg, err := t.parser.ParseSIP(data) //Very expensive operation
+	msg, err := t.parser.ParseSIP(data) //Very expensive operationParseSIP
 	if err != nil {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
 		return
