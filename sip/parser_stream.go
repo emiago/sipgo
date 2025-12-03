@@ -14,7 +14,9 @@ const (
 	// stateParsed = 1
 )
 
-var ()
+var (
+	ParseMaxMessageLength = 65535
+)
 
 var streamBufReader = sync.Pool{
 	New: func() interface{} {

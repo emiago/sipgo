@@ -26,8 +26,6 @@ var (
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 	ErrParseMoreMessages       = errors.New("stream has more message")
 
-	ParseMaxMessageLength = 65535
-
 	defaultParser = NewParser()
 )
 

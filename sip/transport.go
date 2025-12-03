@@ -15,7 +15,7 @@ var (
 	TransportIdleConnection int = 1
 
 	// TransportBufferReadSize sets this buffer size to use on reading SIP messages.
-	TransportBufferReadSize uint16 = 65535
+	TransportBufferReadSize uint16 = 32768
 )
 
 const (
