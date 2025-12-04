@@ -177,7 +177,7 @@ func uriStateUriParams(uri *Uri, s string) (uriFSM, string, error) {
 	}
 	uri.UriParams = NewParams()
 	// uri.UriParams, n, err = ParseParams(s, 0, ';', '?', true, true)
-	n, err = UnmarshalParams(s, ';', '?', uri.UriParams)
+	n, err = UnmarshalHeaderParams(s, ';', '?', uri.UriParams)
 	if err != nil {
 		return nil, s, err
 	}
@@ -197,6 +197,6 @@ func uriStateHeaders(uri *Uri, s string) (uriFSM, string, error) {
 	var err error
 	// uri.Headers, _, err = ParseParams(s, 0, '&', 0, true, false)
 	uri.Headers = NewParams()
-	_, err = UnmarshalParams(s, '&', 0, uri.Headers)
+	_, err = UnmarshalHeaderParams(s, '&', 0, uri.Headers)
 	return nil, s, err
 }

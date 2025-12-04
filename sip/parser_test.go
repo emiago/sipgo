@@ -17,7 +17,7 @@ import (
 func TestUnmarshalParams(t *testing.T) {
 	s := "transport=tls;lr"
 	params := HeaderParams{}
-	UnmarshalParams(s, ';', '?', params)
+	UnmarshalHeaderParams(s, ';', '?', params)
 	assert.Equal(t, 2, len(params))
 	assert.Equal(t, "tls", params["transport"])
 	assert.Equal(t, "", params["lr"])

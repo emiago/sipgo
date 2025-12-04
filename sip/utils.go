@@ -158,7 +158,7 @@ func UriIsSIPS(s string) bool {
 
 // Splits the given string into sections, separated by one or more characters
 // from c_ABNF_WS.
-func SplitByWhitespace(text string) []string {
+func splitByWhitespace(text string) []string {
 	var buffer bytes.Buffer
 	var inString = true
 	result := make([]string, 0)

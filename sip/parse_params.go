@@ -13,7 +13,7 @@ const (
 	paramsStateQuote
 )
 
-func UnmarshalParams(s string, seperator rune, ending rune, p HeaderParams) (n int, err error) {
+func UnmarshalHeaderParams(s string, seperator rune, ending rune, p HeaderParams) (n int, err error) {
 	var start, sep, quote int = 0, 0, -1
 	state := paramsStateKey
 

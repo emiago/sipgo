@@ -108,13 +108,13 @@ func viaStateParams(h *ViaHeader, s string) (viaFSM, int, error) {
 	var err error
 	coma := strings.IndexRune(s, ',')
 	if coma > 0 {
-		_, err = UnmarshalParams(s[:coma], ';', ',', h.Params)
+		_, err = UnmarshalHeaderParams(s[:coma], ';', ',', h.Params)
 		if err != nil {
 			return nil, 0, err
 		}
 		return viaStateProtocol, coma, errComaDetected(coma)
 	}
 
-	_, err = UnmarshalParams(s, ';', '\r', h.Params)
+	_, err = UnmarshalHeaderParams(s, ';', '\r', h.Params)
 	return nil, 0, err
 }

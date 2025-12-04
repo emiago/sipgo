@@ -223,13 +223,9 @@ func (hs *headers) ReplaceHeader(header Header) {
 	}
 }
 
-// Headers gets some headers.
+// Headers  returns list of headers.
+// NOT THREAD SAFE for updating. Clone them
 func (hs *headers) Headers() []Header {
-	// hdrs := make([]Header, 0)
-	// for _, key := range hs.headerOrder {
-	// 	hdrs = append(hdrs, hs.headers[key])
-	// }
-
 	return hs.headerOrder
 }
 
