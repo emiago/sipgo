@@ -101,7 +101,8 @@ type Transaction interface {
 
 	// Done when transaction fsm terminates. Can be called multiple times
 	Done() <-chan struct{}
-	// Last error. Useful to check when transaction terminates
+
+	// Err that stopped transaction. Useful to check when transaction terminates
 	Err() error
 }
 

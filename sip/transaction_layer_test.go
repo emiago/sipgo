@@ -99,6 +99,6 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	wg.Wait()
 	// Only one transaction will be created and executed
 	require.EqualValues(t, 1, atomic.LoadInt32(&count))
-	require.Equal(t, 2, tp.udp.pool.size())
-	assert.True(t, tp.udp.pool.get("127.0.0.1:9876") != nil)
+	require.Equal(t, 2, tp.udp.pool.Size())
+	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
 }
