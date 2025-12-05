@@ -26,7 +26,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	slogzerolog "github.com/samber/slog-zerolog/v2"
 	// _ "go.uber.org/automaxprocs"
 )
@@ -92,7 +91,7 @@ func httpServer(address string) {
 	})
 	statsviz.Register(http.DefaultServeMux)
 
-	log.Info().Msgf("Http server started address=%s", address)
+	slog.Info("Http server started", "address", address)
 	http.ListenAndServe(address, nil)
 }
 
@@ -190,7 +189,10 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 			// }
 			case <-clTx.Done():
 				if err := tx.Err(); err != nil {
-					log.Error("Client Transaction done with error", "error", err, "req", req.Method.String())
+					if errors.Is(err, sip.ErrTransactionTerminated) {
+						return
+					}
+					log.Error("Client Transaction done with error", "error", err, "req", req.Method.String(), "callid", req.CallID().Value())
 				}
 				return
 
@@ -220,7 +222,11 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 						}
 					}
 
-					log.Error("Transaction done with error", "error", err, "req", req.Method.String())
+					if errors.Is(err, sip.ErrTransactionTerminated) {
+						return
+					}
+
+					log.Error("Transaction done with error", "error", err, "req", req.Method.String(), "callid", req.CallID().Value())
 					return
 				}
 				log.Debug("Transaction done", "req", req.Method.String())

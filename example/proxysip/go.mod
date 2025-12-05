@@ -1,6 +1,6 @@
 module github.com/emiago/sipgo/example/proxysip
 
-go 1.22
+go 1.23.0
 
 toolchain go1.23.1
 
@@ -37,6 +37,7 @@ require (
 	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/samber/lo v1.47.0 // indirect
 	github.com/samber/slog-common v0.18.1 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
