@@ -104,16 +104,15 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 			// 1 ref for current return , 2 ref for reader
 			refcount: 2 + TransportIdleConnection,
 		}
+		t.log.Debug("New connection", "raddr", addr)
+		go t.readUDPConnection(c, addr, c.PacketAddr, handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	c := conn.(*UDPConnection)
-
-	t.log.Debug("New connection", "raddr", addr)
-	go t.readUDPConnection(c, addr, c.PacketAddr, handler)
-	return c, err
+	return c, nil
 }
 
 func (t *TransportUDP) readUDPConnection(conn *UDPConnection, raddr string, laddr string, handler MessageHandler) {

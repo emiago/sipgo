@@ -114,12 +114,12 @@ func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 			refcount:   2 + TransportIdleConnection,
 			clientSide: true,
 		}
+		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	c := conn.(*WSConnection)
-	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }

@@ -115,18 +115,17 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
 			Conn:     conn,
-			refcount: 2 + TransportIdleConnection,
+			refcount: 2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
 		}
 
-		// Increase ref by 1 before returnin
-		// c.Ref(1)
+		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	c := conn.(*TCPConnection)
-	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }
 

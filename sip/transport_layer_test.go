@@ -89,12 +89,13 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 		req.SetTransport(transport)
 		connections := sync.Map{}
 		wg := sync.WaitGroup{}
+
 		for i := range 10 {
 			wg.Add(1)
 			go func(req *Request) {
 				defer wg.Done()
 				conn, err := tp.ClientRequestConnection(context.TODO(), req)
-				t.Log("Created connect", conn)
+				t.Log("Created connect", conn.LocalAddr().String())
 				require.NoError(t, err)
 				connections.Store(i, conn)
 			}(req.Clone())
@@ -118,10 +119,11 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 		defer l.Close()
 		go func() {
 			for {
-				_, err := l.Accept()
+				conn, err := l.Accept()
 				if err != nil {
 					break
 				}
+				go func() { conn.Read([]byte{}) }()
 			}
 		}()
 		testParallel(t, "TCP")
