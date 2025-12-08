@@ -477,6 +477,27 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	host, port := req.sourceViaHostPort()
+	// Use always source addr and via port
+	if sourceAddr := req.MessageData.Source(); sourceAddr != "" {
+		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
+		// 		for unreliable transport protocols, to the source
+		//    address of the request, and the port in the Via header field
+		sourceHost, _, err := ParseAddr(sourceAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		raddr := Addr{
+			IP:   net.ParseIP(sourceHost),
+			Port: port,
+		}
+		if c := transport.GetConnection(raddr.String()); c != nil {
+			/// Set request addr here
+			req.raddr = raddr
+			return c, nil
+		}
+		// Fallback then to Via full host port
+	}
 
 	raddr := Addr{
 		IP:       net.ParseIP(uriNetIP(host)),
@@ -505,6 +526,11 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	addr := raddr.String()
 	if c := transport.GetConnection(addr); c != nil {
 		return c, nil
+	}
+
+	if l.log.Enabled(ctx, slog.LevelDebug) {
+		// printing laddr adds some execution
+		l.log.Debug("Creating server connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
 	}
 	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 	return c, err
