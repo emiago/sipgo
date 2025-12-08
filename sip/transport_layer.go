@@ -67,9 +67,10 @@ func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
 	}
 }
 
-// WithTransportLayerDNSLookupIP allows to set which ip4 or ip6 to prefer on resolve
+// TODO will be exposed
+// withTransportLayerDNSLookupIP allows to set which ip4 or ip6 to prefer on resolve
 // default is ip4
-func WithTransportLayerDNSLookupIP(preferIP string) TransportLayerOption {
+func withTransportLayerDNSLookupIP(preferIP string) TransportLayerOption {
 	return func(l *TransportLayer) {
 		switch preferIP {
 		case "ip4":
@@ -111,6 +112,7 @@ func NewTransportLayer(
 		dnsResolver:     dnsResolver,
 		connectionReuse: true,
 		log:             DefaultLogger().With("caller", "TransportLayer"),
+		dnsPreferIP:     1, // IPV4
 	}
 
 	for _, o := range option {
@@ -579,13 +581,23 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 	}
 
 	// Prefer IPV4
-	for _, ip := range ips {
-		// This is only correct way to check is ipv4.
-		if ip.IP.To4() != nil {
-			addr.IP = ip.IP
-			return nil
+	if l.dnsPreferIP > 0 {
+		checkIp := func(ip net.IP) bool {
+			// This is only correct way to check is ipv4.
+			if l.dnsPreferIP == 1 {
+				return ip.To4() != nil
+			}
+			return ip.To4() == nil
+		}
+
+		for _, ip := range ips {
+			if checkIp(ip.IP) {
+				addr.IP = ip.IP
+				return nil
+			}
 		}
 	}
+
 	addr.IP = ips[0].IP
 	return nil
 }
