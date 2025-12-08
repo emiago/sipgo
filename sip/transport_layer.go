@@ -40,8 +40,9 @@ type TransportLayer struct {
 	// connectionReuse will force connection reuse when passing request
 	connectionReuse bool
 
-	// PreferSRV does always SRV lookup first
-	DNSPreferSRV bool
+	// dnsPreferSRV does always SRV lookup first
+	dnsPreferSRV bool
+	dnsPreferIP  int // 0 - no preference , 1 -ip4, 2 - ip6
 }
 
 type TransportLayerOption func(l *TransportLayer)
@@ -57,6 +58,27 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.connectionReuse = f
+	}
+}
+
+func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.dnsPreferSRV = preferSRV
+	}
+}
+
+// WithTransportLayerDNSLookupIP allows to set which ip4 or ip6 to prefer on resolve
+// default is ip4
+func WithTransportLayerDNSLookupIP(preferIP string) TransportLayerOption {
+	return func(l *TransportLayer) {
+		switch preferIP {
+		case "ip4":
+			l.dnsPreferIP = 1
+		case "ip6":
+			l.dnsPreferIP = 2
+		default:
+			l.dnsPreferIP = 0
+		}
 	}
 }
 
@@ -346,7 +368,7 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 // other words SetDestination will be called
 func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
-	transport := l.GetTransport(network)
+	transport := l.getTransport(network)
 	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -435,7 +457,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 // NOTE: this normally should be called one time for request transaction
 func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
-	transport := l.GetTransport(network)
+	transport := l.getTransport(network)
 	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -525,7 +547,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		}
 	}(time.Now())
 
-	if l.DNSPreferSRV {
+	if l.dnsPreferSRV {
 		err := l.resolveAddrSRV(ctx, network, host, sipScheme, addr)
 		if err == nil {
 			return nil
@@ -556,9 +578,9 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 		return fmt.Errorf("lookup ip addr did not return any ip addr")
 	}
 
+	// Prefer IPV4
 	for _, ip := range ips {
 		// This is only correct way to check is ipv4.
-		//  len(ip.IP) == net.IPv4len IS NOT working in all cases
 		if ip.IP.To4() != nil {
 			addr.IP = ip.IP
 			return nil
@@ -615,7 +637,7 @@ func (l *TransportLayer) GetConnection(network, addr string) (Connection, error)
 }
 
 func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
-	transport := l.GetTransport(network)
+	transport := l.getTransport(network)
 	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -646,7 +668,7 @@ func (l *TransportLayer) Close() error {
 	return werr
 }
 
-func (l *TransportLayer) GetTransport(network string) Transport {
+func (l *TransportLayer) getTransport(network string) transport {
 	switch network {
 	case "udp":
 		return l.udp
@@ -662,8 +684,8 @@ func (l *TransportLayer) GetTransport(network string) Transport {
 	return nil
 }
 
-func (l *TransportLayer) allTransports() []Transport {
-	return []Transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
+func (l *TransportLayer) allTransports() []transport {
+	return []transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
 }
 
 func IsReliable(network string) bool {

@@ -29,7 +29,7 @@ const (
 )
 
 // Protocol implements network specific features.
-type Transport interface {
+type transport interface {
 	// GetConnection returns connection from transport
 	// addr must be resolved to IP:port
 	GetConnection(addr string) Connection
