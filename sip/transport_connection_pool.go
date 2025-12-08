@@ -59,11 +59,11 @@ func (p *connectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 		// We create or return existing
 		conn, err, _ := p.sf.Do(laddrStr+a, func() (any, error) {
 			if laddr.Port > 0 {
-				if c := p.Get(laddrStr); c != nil {
+				if c := p.getUnref(laddrStr); c != nil {
 					return c, nil
 				}
 			} else {
-				if c := p.Get(a); c != nil {
+				if c := p.getUnref(a); c != nil {
 					return c, nil
 				}
 			}
@@ -72,6 +72,9 @@ func (p *connectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 			if err != nil {
 				return nil, err
 			}
+			// Decrease reference as it will be increased after
+			// Singleflight will return cached so we need todo this
+			c.Ref(-1)
 
 			p.Lock()
 			defer p.Unlock()
@@ -84,6 +87,7 @@ func (p *connectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 			return nil, err
 		}
 		c := conn.(Connection)
+		c.Ref(1)
 		return c, nil
 	}
 
@@ -116,13 +120,27 @@ func (p *connectionPool) Add(a string, c Connection) {
 // Getting connection pool increases reference
 // Make sure you TryClose after finish
 func (p *connectionPool) Get(a string) (c Connection) {
+	// p.RLock()
+	// c, exists := p.m[a]
+	// p.RUnlock()
+	// if !exists {
+	// 	return nil
+	// }
+	c = p.getUnref(a)
+	if c == nil {
+		return nil
+	}
+	c.Ref(1)
+	return c
+}
+
+func (p *connectionPool) getUnref(a string) (c Connection) {
 	p.RLock()
 	c, exists := p.m[a]
 	p.RUnlock()
 	if !exists {
 		return nil
 	}
-	c.Ref(1)
 	return c
 }
 
