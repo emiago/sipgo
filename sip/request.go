@@ -3,6 +3,7 @@ package sip
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -341,7 +342,7 @@ func cloneRequest(req *Request) *Request {
 	for _, h := range req.CloneHeaders() {
 		newReq.AppendHeader(h)
 	}
-	newReq.SetBody(req.Body())
+	newReq.SetBody(slices.Clone(req.Body()))
 	newReq.SetTransport(req.Transport())
 	newReq.SetSource(req.Source())
 	newReq.SetDestination(req.Destination())
