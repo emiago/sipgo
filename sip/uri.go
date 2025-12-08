@@ -75,11 +75,17 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 			buffer.WriteString(":")
 			buffer.WriteString(uri.Password)
 		}
-		buffer.WriteString("@")
+
+		if uri.Scheme != "tel" {
+			buffer.WriteString("@")
+		}
+
 	}
 
 	// Compulsory hostname.
-	buffer.WriteString(uriIP(uri.Host))
+	if uri.Host != "" {
+		buffer.WriteString(uriIP(uri.Host))
+	}
 
 	// Optional port number.
 	if uri.Port > 0 {
@@ -133,8 +139,10 @@ func (uri *Uri) Addr() string {
 	}
 
 	addr := uri.Host
-	if uri.User != "" {
+	if uri.User != "" && uri.Scheme != "tel" {
 		addr = uri.User + "@" + addr
+	} else if uri.Scheme == "tel" {
+		addr = uri.User
 	}
 	if uri.Port > 0 {
 		addr += ":" + strconv.Itoa(uri.Port)

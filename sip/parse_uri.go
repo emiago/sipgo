@@ -62,6 +62,18 @@ func uriStateSlashes(uri *Uri, s string) (uriFSM, string, error) {
 
 func uriStateUser(uri *Uri, s string) (uriFSM, string, error) {
 	var userend int = 0
+	// For scheme tel RFC3966 use other flow for parsing
+	// https://datatracker.ietf.org/doc/html/rfc3966#section-3
+	if uri.Scheme == "tel" {
+		for i, c := range s {
+			if c == ';' {
+				uri.User = s[:i]
+				return uriStateUriParams, s[i+1:], nil
+			}
+		}
+		uri.User = s
+		return uriStateUriParams, "", nil
+	}
 	for i, c := range s {
 		if c == '[' {
 			// IPV6
