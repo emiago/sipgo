@@ -43,8 +43,6 @@ func newWSTransport(par *Parser) *TransportWS {
 		transport: "WS",
 		dialer:    ws.DefaultDialer,
 	}
-	p.dialer.Protocols = WebSocketProtocols
-	// p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
 }
 
