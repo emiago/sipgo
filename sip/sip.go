@@ -78,7 +78,7 @@ func DialogIDFromResponse(msg *Response) (string, error) {
 	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
 		return "", err
 	}
-	return MakeDialogID(callID, toTag, fromTag), nil
+	return DialogIDMake(callID, toTag, fromTag), nil
 }
 
 // DialogIDFromRequestUAS creates dialog ID of message if receiver has UAS role.
@@ -88,7 +88,7 @@ func DialogIDFromRequestUAS(msg *Request) (string, error) {
 	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
 		return "", err
 	}
-	return MakeDialogID(callID, toTag, fromTag), nil
+	return DialogIDMake(callID, toTag, fromTag), nil
 }
 
 // DialogIDFromRequestUAC creates dialog ID of message if receiver has UAC role.
@@ -98,7 +98,7 @@ func DialogIDFromRequestUAC(msg *Request) (string, error) {
 	if err := getDialogIDFromMessage(msg, &callID, &toTag, &fromTag); err != nil {
 		return "", err
 	}
-	return MakeDialogID(callID, fromTag, toTag), nil
+	return DialogIDMake(callID, fromTag, toTag), nil
 }
 
 func getDialogIDFromMessage(msg Message, callId, toHeaderTag, fromHeaderTag *string) error {
@@ -132,6 +132,6 @@ func getDialogIDFromMessage(msg Message, callId, toHeaderTag, fromHeaderTag *str
 	return nil
 }
 
-func MakeDialogID(callID, innerID, externalID string) string {
+func DialogIDMake(callID, innerID, externalID string) string {
 	return strings.Join([]string{callID, innerID, externalID}, TxSeperator)
 }

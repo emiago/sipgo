@@ -296,8 +296,8 @@ func isRFC3261(branch string) bool {
 		strings.TrimPrefix(branch, RFC3261BranchMagicCookie) != ""
 }
 
-// MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
-func MakeServerTxKey(msg Message) (string, error) {
+// ServerTxKeyMake creates server key for matching retransmitting requests - RFC 3261 17.2.3.
+func ServerTxKeyMake(msg Message) (string, error) {
 	return makeServerTxKey(msg, "")
 }
 
@@ -383,8 +383,8 @@ func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	return builder.String(), nil
 }
 
-// MakeClientTxKey creates client key for matching responses - RFC 3261 17.1.3.
-func MakeClientTxKey(msg Message) (string, error) {
+// ClientTxKeyMake creates client key for matching responses - RFC 3261 17.1.3.
+func ClientTxKeyMake(msg Message) (string, error) {
 	return makeClientTxKey(msg, "")
 }
 

@@ -178,7 +178,7 @@ func (txl *TransactionLayer) handleResponseBackground(res *Response) {
 }
 
 func (txl *TransactionLayer) handleResponse(res *Response) error {
-	key, err := MakeClientTxKey(res)
+	key, err := ClientTxKeyMake(res)
 	if err != nil {
 		return fmt.Errorf("make key failed: %w", err)
 	}
@@ -213,7 +213,7 @@ func (txl *TransactionLayer) NewClientTransaction(ctx context.Context, req *Requ
 		return nil, fmt.Errorf("ACK request must be sent directly through transport")
 	}
 
-	key, err := MakeClientTxKey(req)
+	key, err := ClientTxKeyMake(req)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, 
 }
 
 func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
-	key, err := MakeServerTxKey(res)
+	key, err := ServerTxKeyMake(res)
 	if err != nil {
 		return nil, err
 	}
