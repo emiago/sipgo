@@ -296,7 +296,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		return &ErrDialogResponse{Res: r}
 	}
 
-	id, err := sip.MakeDialogIDFromResponse(r)
+	id, err := sip.DialogIDFromResponse(r)
 	if err != nil {
 		return err
 	}
@@ -606,7 +606,7 @@ func (s *DialogClientCache) loadDialog(id string) *DialogClientSession {
 }
 
 func (s *DialogClientCache) MatchRequestDialog(req *sip.Request) (*DialogClientSession, error) {
-	id, err := sip.UACReadRequestDialogID(req)
+	id, err := sip.DialogIDFromRequestUAC(req)
 	if err != nil {
 		return nil, errors.Join(err, ErrDialogOutsideDialog)
 	}
