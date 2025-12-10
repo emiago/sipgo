@@ -351,7 +351,3 @@ func cloneRequest(req *Request) *Request {
 
 	return newReq
 }
-
-func CopyRequest(req *Request) *Request {
-	return cloneRequest(req)
-}
