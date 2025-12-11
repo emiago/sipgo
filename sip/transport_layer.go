@@ -464,45 +464,82 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
-	if IsReliable(network) && req.MessageData.Source() != "" {
+	sourceAddr := req.MessageData.Source()
+	if IsReliable(network) && sourceAddr != "" {
 		// If the "sent-protocol" is a reliable transport protocol such as
 		//  TCP or SCTP, or TLS over those, the response MUST be sent using
 		//  the existing connection to the source of the original request
 
-		// by default source is set to incoming connection addr
+		// connection can be matched by source(remote) addr
 		conn := transport.GetConnection(req.MessageData.Source())
 		if conn != nil {
 			return conn, nil
 		}
 	}
 
-	host, port := req.sourceViaHostPort()
-	// Use always source addr and via port
-	if sourceAddr := req.MessageData.Source(); sourceAddr != "" {
+	viaHop := req.Via()
+	if viaHop == nil {
+		return nil, fmt.Errorf("no Via Header present")
+	}
+
+	// TODO: refactor bellow to remove duplicate code
+
+	viaHost, viaPort := req.sourceViaHostPort()
+	if sourceAddr != "" {
 		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
 		// 		for unreliable transport protocols, to the source
 		//    address of the request, and the port in the Via header field
-		sourceHost, _, err := ParseAddr(sourceAddr)
+
+		// Use source host and port
+		sourceHost, sourcePort, err := ParseAddr(sourceAddr)
 		if err != nil {
 			return nil, err
 		}
-
+		// Use source address and via port
 		raddr := Addr{
-			IP:   net.ParseIP(sourceHost),
-			Port: port,
+			IP:       net.ParseIP(sourceHost),
+			Port:     viaPort,
+			Hostname: sourceHost,
 		}
-		if c := transport.GetConnection(raddr.String()); c != nil {
-			/// Set request addr here
-			req.raddr = raddr
+
+		// https://datatracker.ietf.org/doc/html/rfc3581#section-4
+		// If rport is set then we must use sourcePort instead
+		if viaHop != nil && viaHop.Params != nil {
+			if rport, ok := viaHop.Params.Get("rport"); ok && rport == "" {
+				raddr.Port = sourcePort
+			}
+		}
+
+		// Should never be case but for safety
+		if raddr.Port == 0 {
+			// Use default port for transport
+			raddr.Port = DefaultPort(network)
+		}
+
+		/// Set request addr here which is used for response build and setting received and rport if needed
+		req.raddr = raddr
+
+		// Check by source
+		if c := transport.GetConnection(sourceAddr); c != nil {
 			return c, nil
 		}
-		// Fallback then to Via full host port
+		if c := transport.GetConnection(raddr.String()); c != nil {
+			return c, nil
+		}
+
+		laddr := Addr{}
+		if l.log.Enabled(ctx, slog.LevelDebug) {
+			// printing laddr adds some execution
+			l.log.Debug("Creating server connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
+		}
+		c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
+		return c, err
 	}
 
 	raddr := Addr{
-		IP:       net.ParseIP(uriNetIP(host)),
-		Port:     port,
-		Hostname: host,
+		IP:       net.ParseIP(uriNetIP(viaHost)),
+		Port:     viaPort,
+		Hostname: viaHost,
 	}
 
 	if raddr.Port == 0 {
@@ -511,16 +548,25 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	if raddr.IP == nil {
-		if err := l.resolveAddr(ctx, network, host, req.Recipient.Scheme, &raddr); err != nil {
+		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
+		// NOTE: Full RFC may require we do this differentely
+		// Whe port exists AAAA is used otherwise it should go immediately by SRV
+		// In our case we do both by default
+		if err := l.resolveAddr(ctx, network, viaHost, req.Recipient.Scheme, &raddr); err != nil {
 			return nil, err
 		}
 	}
 
-	// What about local Addr? It has usage for client
-	laddr := Addr{}
 	// Set request remote address to be used for further responses
 	// NOTE: for race reasons this should not be exposed
 	req.raddr = raddr
+
+	// Check by source
+	if sourceAddr != "" {
+		if c := transport.GetConnection(sourceAddr); c != nil {
+			return c, nil
+		}
+	}
 
 	// Check is there some connection to be reused
 	addr := raddr.String()
@@ -528,6 +574,9 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 		return c, nil
 	}
 
+	// Fail with new connection :(
+	// What about local Addr? It has usage for client
+	laddr := Addr{}
 	if l.log.Enabled(ctx, slog.LevelDebug) {
 		// printing laddr adds some execution
 		l.log.Debug("Creating server connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
