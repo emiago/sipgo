@@ -12,7 +12,6 @@ It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.o
 
 **Libs on top of sipgo:**
 - ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack 
-- ***sipgox*** [github.com/emiago/sipgox](https://github.com/emiago/sipgox): Fast building SIP phone or SIP helpers (It is recomended to switch to **Diago**)
 
 **Tools/Service:**
 - <img width="20" src="https://github.com/emiago/diagox/raw/main/images/diagox-icon-blue.png"> [github.com/emiago/diagox](https://github.com/emiago/diagox) simple Ingress/Egress and Registrar for SIP/RTP scaling
