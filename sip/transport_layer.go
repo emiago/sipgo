@@ -527,13 +527,9 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 			return c, nil
 		}
 
-		laddr := Addr{}
-		if l.log.Enabled(ctx, slog.LevelDebug) {
-			// printing laddr adds some execution
-			l.log.Debug("Creating server connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
-		}
-		c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
-		return c, err
+		// Fail with via host
+		// NOTE: This can happen at any point when server sending response and we are not handling those cases.
+		// Generally this may have issue with setups where connections are closed after each response
 	}
 
 	raddr := Addr{
