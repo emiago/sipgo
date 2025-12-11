@@ -61,7 +61,7 @@ Also thanks to [pion](https://github.com/pion/webrtc) project sharing this examp
 
 
 
-## Performance :rocket
+## Performance :rocket:
 
 SIPgo was proven that can excel in performance compared to some other configured base proxy solutions. 
 
