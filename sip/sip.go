@@ -32,7 +32,7 @@ func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
 	}
 
 	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
-		slog.Debug(fmt.Sprintf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg))
+		DefaultLogger().Debug(fmt.Sprintf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg))
 	}
 }
 
@@ -42,7 +42,7 @@ func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
 		return
 	}
 	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
-		slog.Debug(fmt.Sprintf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg))
+		DefaultLogger().Debug(fmt.Sprintf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg))
 	}
 }
 

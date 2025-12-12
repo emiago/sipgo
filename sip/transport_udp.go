@@ -234,7 +234,7 @@ func (c *UDPConnection) close() error {
 		// Closing is done by read connection and it will return already error
 		return nil
 	}
-	slog.Debug("UDP reference doing hard close", "ip", c.LocalAddr().String(), "ref", 0)
+	DefaultLogger().Debug("UDP reference doing hard close", "ip", c.LocalAddr().String(), "ref", 0)
 	return c.PacketConn.Close()
 }
 
@@ -265,13 +265,13 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return ref, nil
 	}
 
-	slog.Debug("UDP reference decrement", "src", c.LocalAddr().String(), "ref", ref)
+	DefaultLogger().Debug("UDP reference decrement", "src", c.LocalAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		slog.Warn("UDP ref went negative on try close", "src", c.LocalAddr().String(), "ref", ref)
+		DefaultLogger().Warn("UDP ref went negative on try close", "src", c.LocalAddr().String(), "ref", ref)
 		return 0, nil
 	}
 
