@@ -214,3 +214,37 @@ func TestParseUriIPV6(t *testing.T) {
 		assert.Equal(t, "user", uri.User)
 	})
 }
+
+// Examples from https://datatracker.ietf.org/doc/html/rfc3966#section-6
+// and https://datatracker.ietf.org/doc/html/rfc4694#section-6
+func TestParseTelUri(t *testing.T) {
+	t.Run("schema tel global", func(t *testing.T) {
+		uri := Uri{}
+		str := "tel:+1-201-555-0123"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+		assert.Equal(t, "", uri.Host)
+		assert.Equal(t, "+1-201-555-0123", uri.User)
+	})
+
+	t.Run("schema tel local", func(t *testing.T) {
+		uri := Uri{}
+		str := "tel:7042;phone-context=example.com"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+		assert.Equal(t, "", uri.Host)
+		assert.Equal(t, "7042", uri.User)
+		assert.Equal(t, "example.com", uri.UriParams["phone-context"])
+	})
+
+	t.Run("schema tel local with context", func(t *testing.T) {
+		uri := Uri{}
+		str := "tel:+1-202-533-6789;npdi"
+		err := ParseUri(str, &uri)
+		require.NoError(t, err)
+		assert.Equal(t, "", uri.Host)
+		assert.Equal(t, "+1-202-533-6789", uri.User)
+		assert.NotEmpty(t, "example.com", uri.UriParams["npdi"])
+	})
+
+}
