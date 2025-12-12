@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
@@ -33,7 +32,7 @@ func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {
 	}
 
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
 	}
 }
 
