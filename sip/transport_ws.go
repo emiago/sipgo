@@ -341,7 +341,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 
 		if SIPDebug {
 			str := fmt.Sprintf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
-			slog.Debug(str, "caller", c.RemoteAddr().String())
+			DefaultLogger().Debug(str, "caller", c.RemoteAddr().String())
 		}
 
 		if header.OpCode.IsControl() {

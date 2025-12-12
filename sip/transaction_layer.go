@@ -12,11 +12,11 @@ type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
 func defaultRequestHandler(r *Request, tx *ServerTx) {
-	slog.Info("Unhandled sip request. OnRequest handler not added", "caller", "transactionLayer", "msg", r.Short())
+	DefaultLogger().Info("Unhandled sip request. OnRequest handler not added", "caller", "transactionLayer", "msg", r.Short())
 }
 
 func defaultUnhandledRespHandler(r *Response) {
-	slog.Info("TransactionLayer: Unhandled sip response. Possible retransmissions. Set UnhandledResponseHandler", "caller", "transactionLayer", "msg", r.Short())
+	DefaultLogger().Info("TransactionLayer: Unhandled sip response. Possible retransmissions. Set UnhandledResponseHandler", "caller", "transactionLayer", "msg", r.Short())
 }
 
 type TransactionLayer struct {
