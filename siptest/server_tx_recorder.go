@@ -13,7 +13,7 @@ type ServerTxRecorder struct {
 }
 
 func NewServerTxRecorder(req *sip.Request) *ServerTxRecorder {
-	key, err := sip.MakeServerTxKey(req)
+	key, err := sip.ServerTxKeyMake(req)
 	if err != nil {
 		panic(err)
 	}

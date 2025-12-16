@@ -43,8 +43,6 @@ func newWSTransport(par *Parser) *TransportWS {
 		transport: "WS",
 		dialer:    ws.DefaultDialer,
 	}
-	p.dialer.Protocols = WebSocketProtocols
-	// p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
 }
 
@@ -56,7 +54,7 @@ func (t *TransportWS) init(par *Parser) {
 	t.dialer.Protocols = WebSocketProtocols
 
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
 	}
 
 	if t.DialerCreate == nil {
@@ -343,7 +341,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 
 		if SIPDebug {
 			str := fmt.Sprintf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
-			slog.Debug(str, "caller", c.RemoteAddr().String())
+			DefaultLogger().Debug(str, "caller", c.RemoteAddr().String())
 		}
 
 		if header.OpCode.IsControl() {

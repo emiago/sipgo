@@ -300,7 +300,7 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return nil
 	}
 
-	id, err := sip.MakeDialogIDFromResponse(res)
+	id, err := sip.DialogIDFromResponse(res)
 	if err != nil {
 		return err
 	}
@@ -447,7 +447,7 @@ func (s *DialogServerCache) loadDialog(id string) *DialogServerSession {
 }
 
 func (s *DialogServerCache) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
-	id, err := sip.UASReadRequestDialogID(req)
+	id, err := sip.DialogIDFromRequestUAS(req)
 	if err != nil {
 		return nil, errors.Join(ErrDialogOutsideDialog, err)
 	}

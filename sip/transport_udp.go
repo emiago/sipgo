@@ -210,7 +210,6 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 	}
 
 	msg.SetTransport(t.Network())
-	// TODO should we avoid this and let source be inspected.
 	// Current transaction are taking connection but for UDP they can forward on different src address
 	msg.SetSource(src) // By default we expect our source is behind NAT. https://datatracker.ietf.org/doc/html/rfc3581#section-6
 	handler(msg)
@@ -235,7 +234,7 @@ func (c *UDPConnection) close() error {
 		// Closing is done by read connection and it will return already error
 		return nil
 	}
-	slog.Debug("UDP listener doing hard close", "ip", c.LocalAddr().String(), "ref", 0)
+	DefaultLogger().Debug("UDP reference doing hard close", "ip", c.LocalAddr().String(), "ref", 0)
 	return c.PacketConn.Close()
 }
 
@@ -266,13 +265,13 @@ func (c *UDPConnection) TryClose() (int, error) {
 		return ref, nil
 	}
 
-	slog.Debug("UDP reference decrement", "src", c.LocalAddr().String(), "ref", ref)
+	DefaultLogger().Debug("UDP reference decrement", "src", c.LocalAddr().String(), "ref", ref)
 	if ref > 0 {
 		return ref, nil
 	}
 
 	if ref < 0 {
-		slog.Warn("UDP ref went negative", "src", c.LocalAddr().String(), "ref", ref)
+		DefaultLogger().Warn("UDP ref went negative on try close", "src", c.LocalAddr().String(), "ref", ref)
 		return 0, nil
 	}
 

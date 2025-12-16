@@ -10,11 +10,8 @@
 It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)|[RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)|[RFC6026](https://datatracker.ietf.org/doc/html/rfc6026)) optimized for fast parsing.
 
 
-> **NOTE**: LIBRARY IS IN PROCESS GETTING TO 1.0. THIS MAY TAKE TIME UNTIL WE CLOSE ALL ISSUES. PLEASE OPEN ISSUES FOR DISCUSSION FIRST INSTEAD PULL REQUESTS.
-
 **Libs on top of sipgo:**
 - ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack 
-- ***sipgox*** [github.com/emiago/sipgox](https://github.com/emiago/sipgox): Fast building SIP phone or SIP helpers (It is recomended to switch to **Diago**)
 
 **Tools/Service:**
 - <img width="20" src="https://github.com/emiago/diagox/raw/main/images/diagox-icon-blue.png"> [github.com/emiago/diagox](https://github.com/emiago/diagox) simple Ingress/Egress and Registrar for SIP/RTP scaling
@@ -42,7 +39,8 @@ More on documentation you can find on [Go doc](https://pkg.go.dev/github.com/emi
 
 
 ### RFC:
-- [RFC 3261](https://datatracker.ietf.org/doc/html/rfc3261)
+- [RFC3261](https://datatracker.ietf.org/doc/html/rfc3261)
+- [RFC3263](https://datatracker.ietf.org/doc/html/rfc3263)
 - [RFC3581](https://datatracker.ietf.org/doc/html/rfc3581)
 - [RFC6026](https://datatracker.ietf.org/doc/html/rfc6026)
 
@@ -63,9 +61,11 @@ Also thanks to [pion](https://github.com/pion/webrtc) project sharing this examp
 
 
 
-## Performance
+## Performance :rocket
 
-As example you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
+SIPgo was proven that can excel in performance compared to some other configured base proxy solutions. 
+
+As an example, you can find `example/proxysip` as simple version of statefull proxy. It is used for stress testing with `sipp`. 
 To find out more about performance check the latest results:  
 [example/proxysip](example/proxysip) 
 
@@ -381,20 +381,6 @@ If you find this project interesting for bigger support or consulting, you can c
 [mail](mailto:emirfreelance91@gmail.com)
 
 For bugs features pls create [issue](https://github.com/emiago/sipgo/issues).
-
-## Trusted By
-
-<a href="https://www.babelforce.com">
-<img src="icons/babelforce-logo.png" width="200" alt="babelforce">
-</a>&nbsp;&nbsp;&nbsp;&nbsp;
-<a href="https://avero.it">
-<img src="icons/avero.png" width="100" alt="avero">
-</a>
-
----
-*If you are using in company, your logo can be here.*
-
-
 
 ## Extra
 

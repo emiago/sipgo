@@ -297,7 +297,7 @@ func TestDigestAuthLowerCase(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestClientParalelDialing(t *testing.T) {
+func TestIntegrationClientParalelDialing(t *testing.T) {
 	if os.Getenv("TEST_INTEGRATION") == "" {
 		t.Skip("Use TEST_INTEGRATION env value to run this test")
 		return
@@ -305,9 +305,11 @@ func TestClientParalelDialing(t *testing.T) {
 
 	ua, err := NewUA()
 	require.NoError(t, err)
+	defer ua.Close()
 
 	l, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	require.NoError(t, err)
+	defer l.Close()
 	go func() {
 		io.ReadAll(l)
 	}()
@@ -320,8 +322,10 @@ func TestClientParalelDialing(t *testing.T) {
 	)
 	require.NoError(t, err)
 	wg := sync.WaitGroup{}
+	defer t.Log("Exiting")
 	for i := 0; i < 2*runtime.NumCPU(); i++ {
 		wg.Add(1)
+		t.Log("Running", i)
 		go func() {
 			defer wg.Done()
 			req := sip.NewRequest(sip.INVITE, sip.Uri{Host: "127.0.0.1", Port: dstPort})
@@ -331,6 +335,11 @@ func TestClientParalelDialing(t *testing.T) {
 	}
 
 	wg.Wait()
+
+	// Check that connection reference count
+	conn, err := ua.TransportLayer().GetConnection("udp", "127.0.0.1:15066")
+	require.NoError(t, err)
+	assert.Equal(t, 3, conn.Ref(0))
 }
 
 func BenchmarkClientTransactionRequestBuild(t *testing.B) {

@@ -315,3 +315,10 @@ func uriIP(ip string) string {
 func uriNetIP(ip string) string {
 	return strings.Trim(ip, "[]")
 }
+
+func printStack(args ...any) {
+	buf := make([]byte, 8192)
+	n := runtime.Stack(buf, false)
+	fmt.Println(args...)
+	fmt.Println(string(buf[:n]))
+}
