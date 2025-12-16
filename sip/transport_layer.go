@@ -43,6 +43,10 @@ type TransportLayer struct {
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
 	dnsPreferIP  int // 0 - no preference , 1 -ip4, 2 - ip6
+
+	// forceLocalReplySocket forces using the connection that received the request
+	// for UDP responses, instead of trying to match by Via header
+	forceLocalReplySocket bool
 }
 
 type TransportLayerOption func(l *TransportLayer)
@@ -64,6 +68,12 @@ func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.dnsPreferSRV = preferSRV
+	}
+}
+
+func WithTransportLayerForceLocalReplySocket(force bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.forceLocalReplySocket = force
 	}
 }
 
@@ -465,6 +475,8 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	sourceAddr := req.MessageData.Source()
+
+	// For reliable transports, always use the connection that received the request
 	if IsReliable(network) && sourceAddr != "" {
 		// If the "sent-protocol" is a reliable transport protocol such as
 		//  TCP or SCTP, or TLS over those, the response MUST be sent using
@@ -472,6 +484,16 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 
 		// connection can be matched by source(remote) addr
 		conn := transport.GetConnection(req.MessageData.Source())
+		if conn != nil {
+			return conn, nil
+		}
+	}
+
+	// For unreliable transports (UDP), if forceLocalReplySocket is enabled,
+	// always try to use the connection that received the request first
+	// The connection pool stores connections by remote address (source address)
+	if !IsReliable(network) && l.forceLocalReplySocket && sourceAddr != "" {
+		conn := transport.GetConnection(sourceAddr)
 		if conn != nil {
 			return conn, nil
 		}
@@ -769,6 +791,12 @@ func (l *TransportLayer) getTransport(network string) transport {
 
 func (l *TransportLayer) allTransports() []transport {
 	return []transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
+}
+
+// SetForceLocalReplySocket sets the forceLocalReplySocket flag on the transport layer.
+// This allows setting the flag after the transport layer is created.
+func (l *TransportLayer) SetForceLocalReplySocket(force bool) {
+	l.forceLocalReplySocket = force
 }
 
 func IsReliable(network string) bool {

@@ -80,6 +80,18 @@ func WithUserAgentTransportLayerOptions(o ...sip.TransportLayerOption) UserAgent
 	}
 }
 
+// WithForceLocalReplySocket forces the transport layer to use the connection
+// that received the request for UDP responses, instead of trying to match by Via header.
+// This ensures responses are sent from the same socket that received the request.
+// This applies to both server and client transactions.
+func WithForceLocalReplySocket() UserAgentOption {
+	return func(ua *UserAgent) error {
+		// Add the transport layer option
+		ua.tpOptions = append(ua.tpOptions, sip.WithTransportLayerForceLocalReplySocket(true))
+		return nil
+	}
+}
+
 // NewUA creates User Agent
 // User Agent will create transport and transaction layer
 // Check options for customizing user agent
