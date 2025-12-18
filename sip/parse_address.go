@@ -172,7 +172,7 @@ func addressStateHeaderParams(a *nameAddress, s string) (addressFSM, string, err
 
 	equal := -1
 	for i, c := range s {
-		if c == '=' {
+		if c == '=' && equal < 0 {
 			equal = i
 			continue
 		}
