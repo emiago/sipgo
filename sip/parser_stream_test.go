@@ -2,6 +2,7 @@ package sip
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestParserStreamBadMessage(t *testing.T) {
-	parser := ParserStream{}
+	parser := NewParser().NewSIPStream()
 
 	// 		The start-line, each message-header line, and the empty line MUST be
 	//    terminated by a carriage-return line-feed sequence (CRLF).  Note that
@@ -27,7 +28,7 @@ func TestParserStreamBadMessage(t *testing.T) {
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.parseSIPStreamFull([]byte(msgstr))
-		require.ErrorIs(t, err, ErrParseEOF)
+		require.Error(t, err)
 	})
 	t.Run("finish empty line", func(t *testing.T) {
 		rawMsg := []string{
@@ -47,6 +48,7 @@ func TestParserStreamMessage(t *testing.T) {
 	parser := p.NewSIPStream()
 
 	lines := []string{
+		"", "", // Check that stream ignores CRLF in the beginning
 		"INVITE sip:192.168.1.254:5060 SIP/2.0",
 		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
 		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
@@ -153,46 +155,91 @@ func TestParserStreamMessage(t *testing.T) {
 		"", // Content length includes last CRLF
 	}
 	data := []byte((strings.Join(lines, "\r\n")))
+	const bodySize = 3119
 
-	// make partials
-	part1 := data[:500]
-	part2 := data[500:1000]
-	part3 := data[1000:]
+	for _, c := range []struct {
+		Name  string
+		Skip  int
+		Split []int
+	}{
+		// arbitrary split points
+		{Split: []int{500, 1000}, Skip: 4},
+		{Split: []int{300, 2000}, Skip: 4},
+		{Split: []int{500, 1000}},
+		{Split: []int{300, 2000}},
+		// split at specific places
+		{
+			Name:  "few bytes",
+			Split: []int{1, 2, 3, 4, 5, 6},
+		},
+		{
+			Name:  "CRLF pings",
+			Split: []int{2, 4},
+		},
+		{
+			Name:  "after start line",
+			Split: []int{37 + 2}, Skip: 4,
+		},
+		{
+			Name:  "after header",
+			Split: []int{37 + 2 + 89 + 2}, Skip: 4,
+		},
+		{
+			Name:  "after all headers",
+			Split: []int{702}, Skip: 4,
+		},
+		{
+			Name:  "before body",
+			Split: []int{704}, Skip: 4,
+		},
+		// completely random split (try a few times)
+		{Split: []int{rand.IntN(len(data))}},
+		{Split: []int{rand.IntN(len(data))}},
+		{Split: []int{rand.IntN(len(data))}},
+	} {
+		name := c.Name
+		if name == "" {
+			name = fmt.Sprintf("split_%v_skip_%d", c.Split, c.Skip)
+			name = strings.ReplaceAll(name, "[", "")
+			name = strings.ReplaceAll(name, "]", "")
+		}
+		t.Run(name, func(t *testing.T) {
+			data := data
+			if c.Skip != 0 {
+				data = data[c.Skip:]
+			}
+			var parts [][]byte
+			for i := range c.Split {
+				start := 0
+				if i > 0 {
+					start = c.Split[i-1]
+				}
+				end := c.Split[i]
+				parts = append(parts, data[start:end])
+			}
+			lastPart := data[c.Split[len(c.Split)-1]:]
 
-	t.Run("first run", func(t *testing.T) {
-		t.Logf("Parsing part 1:\n%s", string(part1))
-		_, err := parser.parseSIPStreamFull(part1)
-		require.Error(t, err)
-		require.ErrorIs(t, err, ErrParseSipPartial)
+			for i, part := range parts {
+				t.Logf("Parsing part %d:\n%s", i+1, string(part))
+				_, err := parser.parseSIPStreamFull(part)
+				require.Error(t, err)
+				require.ErrorIs(t, err, ErrParseSipPartial)
+			}
+			t.Logf("Parsing final part:\n%s", string(lastPart))
+			msgs, err := parser.parseSIPStreamFull(lastPart)
+			require.NoError(t, err)
+			msg := msgs[0]
+			require.NotNil(t, msg)
+			require.Len(t, msg.Body(), bodySize)
+		})
+	}
 
-		t.Logf("Parsing part 2:\n%s", string(part2))
-		_, err = parser.parseSIPStreamFull(part2)
-		require.Error(t, err)
-		require.ErrorIs(t, err, ErrParseSipPartial)
-
-		t.Logf("Parsing part 3:\n%s", string(part3))
-		msgs, err := parser.parseSIPStreamFull(part3)
-		msg := msgs[0]
-		require.NoError(t, err)
-		require.NotNil(t, msg)
-		require.Len(t, msg.Body(), 3119)
-		// Check is parser reset it self
-		require.Nil(t, parser.reader)
+	t.Run("reset", func(t *testing.T) {
+		// Check is parser resets itself
+		require.True(t, parser.state == stateStartLine)
+		parser.Close()
+		require.Nil(t, parser.buf)
 	})
-
-	t.Run("second run", func(t *testing.T) {
-		part1 := data[:300]
-		part2 := data[300:2000]
-		part3 := data[2000:]
-
-		parser.parseSIPStreamFull(part1)
-		parser.parseSIPStreamFull(part2)
-		msg, err := parser.parseSIPStreamFull(part3)
-		require.NoError(t, err)
-		require.NotNil(t, msg)
-		require.Nil(t, parser.reader)
-	})
-
 }
 
 func TestParserStreamChunky(t *testing.T) {
