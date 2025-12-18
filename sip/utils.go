@@ -42,6 +42,32 @@ func isASCII(c rune) bool {
 	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }
 
+func asciiToLower(s []byte) []byte {
+	// first check is ascii already low to avoid alloc
+	nonLowInd := -1
+	for i, c := range s {
+		if 'a' <= c && c <= 'z' {
+			continue
+		}
+		nonLowInd = i
+		break
+	}
+	if nonLowInd < 0 {
+		return s
+	}
+
+	b := make([]byte, len(s))
+	copy(b, s[:nonLowInd])
+	for i := nonLowInd; i < len(s); i++ {
+		c := s[i]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return b
+}
+
 // ASCIIToLower is faster than go version. It avoids one more loop
 func ASCIIToLower(s string) string {
 	// first check is ascii already low to avoid alloc
@@ -107,6 +133,76 @@ func ASCIIToUpper(s string) string {
 	return b.String()
 }
 
+var (
+	hdrVia           = []byte("via")
+	hdrFrom          = []byte("from")
+	hdrTo            = []byte("to")
+	hdrCallID        = []byte("call-id")
+	hdrContact       = []byte("contact")
+	hdrCSeq          = []byte("cseq")
+	hdrContentType   = []byte("content-type")
+	hdrContentLength = []byte("content-length")
+	hdrRoute         = []byte("route")
+	hdrRecordRoute   = []byte("record-route")
+	hdrMaxForwards   = []byte("max-forwards")
+	hdrTimestamp     = []byte("timestamp")
+)
+
+func headerToLower(s []byte) []byte {
+	if len(s) == 1 {
+		c := s[0]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		switch c {
+		case 't':
+			return hdrTo
+		case 'f':
+			return hdrFrom
+		case 'v':
+			return hdrVia
+		case 'i':
+			return hdrCallID
+		case 'l':
+			return hdrContentLength
+		case 'c':
+			return hdrContentType
+		case 'm':
+			return hdrContact
+		}
+	}
+	// Avoid allocations
+	switch string(s) {
+	case "Via", "via":
+		return hdrVia
+	case "From", "from":
+		return hdrFrom
+	case "To", "to":
+		return hdrTo
+	case "Call-ID", "call-id":
+		return hdrCallID
+	case "Contact", "contact":
+		return hdrContact
+	case "CSeq", "CSEQ", "cseq":
+		return hdrCSeq
+	case "Content-Type", "content-type":
+		return hdrContentType
+	case "Content-Length", "content-length":
+		return hdrContentLength
+	case "Route", "route":
+		return hdrRoute
+	case "Record-Route", "record-route":
+		return hdrRecordRoute
+	case "Max-Forwards":
+		return hdrMaxForwards
+	case "Timestamp", "timestamp":
+		return hdrTimestamp
+	}
+
+	// This creates one allocation if we really need to lower
+	return asciiToLower(s)
+}
+
 // HeaderToLower is fast ASCII lower string
 func HeaderToLower(s string) string {
 	// Avoid allocations
@@ -125,6 +221,8 @@ func HeaderToLower(s string) string {
 		return "cseq"
 	case "Content-Type", "content-type":
 		return "content-type"
+	case "Content-Length", "content-length":
+		return "content-length"
 	case "Route", "route":
 		return "route"
 	case "Record-Route", "record-route":

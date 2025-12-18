@@ -68,6 +68,9 @@ func (hp HeaderParams) Clone() HeaderParams {
 }
 
 func (hp HeaderParams) clone() HeaderParams {
+	if hp == nil {
+		return nil
+	}
 	dup := make(HeaderParams, len(hp))
 
 	for k, v := range hp {

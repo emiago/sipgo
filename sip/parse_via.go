@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func headerParserVia(headerName string, headerText string) (
+func headerParserVia(headerName []byte, headerText string) (
 	header Header, err error) {
 	// sections := strings.Split(headerText, ",")
 	h := ViaHeader{

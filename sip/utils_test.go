@@ -14,9 +14,7 @@ import (
 
 func testCreateMessage(t testing.TB, rawMsg []string) Message {
 	msg, err := ParseMessage([]byte(strings.Join(rawMsg, "\r\n")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return msg
 }
 
