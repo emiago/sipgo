@@ -539,6 +539,14 @@ func ClientRequestIncreaseCSEQ(c *Client, req *sip.Request) error {
 	return nil
 }
 
+func ClientRequestForceLocalAddr(c *Client, req *sip.Request) error {
+	// Set request local address if it defined
+	if c.connAddr.IP != nil {
+		c.connAddr.Copy(&req.Laddr)
+	}
+	return nil
+}
+
 func digestProxyAuthApply(req *sip.Request, res *sip.Response, opts digest.Options) error {
 	authHeader := res.GetHeader("Proxy-Authenticate")
 	if authHeader == nil {
