@@ -341,7 +341,7 @@ func TestParserStreamMultiple(t *testing.T) {
 	})
 }
 
-func TestParserStreamMessageSizeLimit(t *testing.T) {
+func TestParserStreamMessageSizeLimitBody(t *testing.T) {
 	p := NewParser()
 	parser := p.NewSIPStream()
 
@@ -369,7 +369,100 @@ func TestParserStreamMessageSizeLimit(t *testing.T) {
 
 	_, err := parser.parseSIPStreamFull(data)
 	require.Error(t, err)
-	require.Equal(t, "Message exceeds ParseMaxMessageLength", err.Error())
+	require.Equal(t, ErrMessageTooLarge, err)
+}
+
+func TestParserStreamMessageSizeLimitHeaders(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines := []string{
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
+		"CSeq: 100 INVITE",
+		"Contact: <sip:192.168.1.155:44861;transport=tcp>;some.tag.here;other-tag=here",
+		"From: <sip:192.168.1.155>;tag=76fb12e7e2241ed6",
+		"To: <sip:192.168.1.254:5060>",
+		"Max-Forwards: 70",
+		"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,INFO,OPTIONS,REFER,NOTIFY",
+		"User-Agent: MyUserAgent v2.3.6. b53ee2632df (DEV) Client",
+		"Supported: replaces,100rel,timer,gruu,path,outbound",
+		"Session-Expires: 1800",
+		"Session-ID: e937754d76855249814a9b7f8b3bf556;remote=00000000000000000000000000000000",
+	}
+	for range 6500 {
+		lines = append(lines, "X-Data: 10") // ~10 B
+	}
+	lines = append(lines,
+		"Content-Length: 0",
+		"",
+		"",
+	)
+
+	data := []byte(strings.Join(lines, "\r\n"))
+
+	_, err := parser.parseSIPStreamFull(data)
+	require.Error(t, err)
+	require.Equal(t, ErrMessageTooLarge, err)
+}
+
+func TestParserStreamMessageSizeLimitRecover(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines := []string{
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
+		"CSeq: 100 INVITE",
+		"Contact: <sip:192.168.1.155:44861;transport=tcp>;some.tag.here;other-tag=here",
+		"From: <sip:192.168.1.155>;tag=76fb12e7e2241ed6",
+		"To: <sip:192.168.1.254:5060>",
+		"Max-Forwards: 70",
+		"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,INFO,OPTIONS,REFER,NOTIFY",
+		"User-Agent: MyUserAgent v2.3.6. b53ee2632df (DEV) Client",
+		"Supported: replaces,100rel,timer,gruu,path,outbound",
+		"Session-Expires: 1800",
+		"Session-ID: e937754d76855249814a9b7f8b3bf556;remote=00000000000000000000000000000000",
+	}
+	for range 6500 {
+		lines = append(lines, "X-Data: 10") // ~10 B
+	}
+	lines = append(lines,
+		"Content-Length: 0",
+		"",
+		"",
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 2",
+		"Content-Length: 0",
+		"",
+		"",
+	)
+
+	data := []byte(strings.Join(lines, "\r\n"))
+	_, err := parser.Write(data)
+	require.NoError(t, err)
+
+	var (
+		out     []Message
+		lastErr error
+	)
+	for range 3 {
+		m, _, err := parser.ParseNext()
+		if m != nil {
+			out = append(out, m)
+		}
+		lastErr = err
+		if err == nil {
+			break
+		}
+		require.Equal(t, ErrMessageTooLarge, err)
+	}
+	require.NoError(t, lastErr)
+	require.Equal(t, 2, len(out))
+	require.Equal(t, "2", out[1].CallID().Value())
 }
 
 func TestParserStreamPartialAfterStartLine(t *testing.T) {
