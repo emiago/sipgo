@@ -116,10 +116,7 @@ func (p *ParserStream) Discard(n int) {
 // Write data to the internal buffer. Must be called before ParseNext.
 func (p *ParserStream) Write(data []byte) (int, error) {
 	buf := p.Buffer()
-	if buf.Len()+len(data) > p.p.MaxMessageLength {
-		return 0, errors.New("Message exceeds ParseMaxMessageLength")
-	}
-	buf.Write(data) // This should append to our already buffer
+	buf.Write(data) // This should append to our existing buffer
 	return len(data), nil
 }
 
@@ -130,8 +127,12 @@ func (p *ParserStream) ParseNext() (Message, int, error) {
 		return nil, 0, io.ErrUnexpectedEOF
 	}
 	err := p.parseSingle()
+	reset := err == nil
 	msg, n := p.msg, p.totalRead
-	if err == nil {
+	if err == nil && p.totalRead > p.p.MaxMessageLength {
+		err = ErrMessageTooLarge
+	}
+	if reset {
 		p.reset()
 	}
 	return msg, n, err

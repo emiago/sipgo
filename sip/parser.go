@@ -24,6 +24,7 @@ var (
 	// Stream parse errors
 	ErrParseSipPartial         = errors.New("SIP partial data")
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
+	ErrMessageTooLarge         = errors.New("Message exceeds ParseMaxMessageLength")
 
 	defaultParser = NewParser()
 )
@@ -191,7 +192,7 @@ func (p *Parser) parseHeadersOnly(msg Message, data []byte) (*ContentLengthHeade
 // an ErrParseReadBodyIncomplete is returned.
 func (p *Parser) Parse(data []byte, stream bool) (Message, int, error) {
 	if len(data) > p.MaxMessageLength {
-		return nil, 0, errors.New("Message exceeds ParseMaxMessageLength")
+		return nil, 0, ErrMessageTooLarge
 	}
 	msg, contentLength, total, err := p.parseHeaders(data, stream)
 	if err != nil {
