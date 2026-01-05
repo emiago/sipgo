@@ -246,6 +246,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		select {
 		case r = <-tx.Responses():
 			s.InviteResponse = r
+
 			// just pass
 		case <-ctx.Done():
 			// Send cancel
@@ -297,6 +298,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				if err != nil {
 					return err
 				}
+				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
 				continue
 			}
 		}
@@ -322,10 +324,10 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				// This keeps transaction within dialog
 				inviteRequest.RemoveHeader("Via")
 				tx, err = s.TransactionRequest(ctx, inviteRequest)
-
 				if err != nil {
 					return err
 				}
+				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
 				continue
 			}
 		}
