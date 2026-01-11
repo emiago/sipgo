@@ -121,7 +121,6 @@ func (p *Parser) parseStartLine(data []byte, stream bool) (Message, int, error) 
 		}
 		return nil, total, err
 	}
-	data = data[n:]
 	total += n
 
 	msg, err := parseLine(string(startLine))
@@ -134,25 +133,27 @@ func (p *Parser) parseStartLine(data []byte, stream bool) (Message, int, error) 
 var errParseNoMoreHeaders = errors.New("no more headers")
 
 func (p *Parser) parseNextHeader(out []Header, data []byte) ([]Header, int, error) {
-	var total int
 	line, n, err := nextLine(data)
-	if err == io.EOF {
-		return out, total, io.ErrUnexpectedEOF
-	} else if err != nil {
-		return out, total, err
+	if err != nil {
+		if err == io.EOF {
+			return out, 0, io.ErrUnexpectedEOF
+		}
+
+		// NOTE: n > 0  but we return 0 as we need to read more bytes
+		return out, 0, err
 	}
+
 	// Advance only after a successful parse.
-	data = data[n:]
-	total += n
 	if len(line) == 0 {
 		// We've hit the end of the header section.
-		return out, total, errParseNoMoreHeaders
+		return out, n, errParseNoMoreHeaders
 	}
 	out, err = p.headersParsers.ParseHeader(out, line)
 	if err != nil {
-		return out, total, err
+		// We might not need to return n here?
+		return out, n, err
 	}
-	return out, total, nil
+	return out, n, nil
 }
 
 func (p *Parser) parseHeadersOnly(msg Message, data []byte) (*ContentLengthHeader, int, error) {

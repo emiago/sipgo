@@ -180,7 +180,7 @@ func (p *ParserStream) parseSingle() error {
 				return err
 			}
 		}
-		if p.contentLength == nil || *p.contentLength < 0 {
+		if p.contentLength == nil {
 			// RFC 3261 - 7.5.
 			// The Content-Length header field value is used to locate the end of
 			// each SIP message in a stream. It will always be present when SIP
