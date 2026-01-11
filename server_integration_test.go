@@ -207,7 +207,7 @@ func TestIntegrationServerResponse(t *testing.T) {
 	t.Run("UDP", func(t *testing.T) {
 		ua, _ := NewUA()
 		defer ua.Close()
-		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:15152"), WithClientNAT())
+		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:15152"))
 		// Make cli to listen on this port
 		l, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15152})
 		require.NoError(t, err)
