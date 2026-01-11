@@ -114,7 +114,7 @@ func (p *Parser) parseStartLine(data []byte, stream bool) (Message, int, error) 
 		}
 	}
 
-	startLine, n, err := NextLine(data)
+	startLine, n, err := nextLine(data)
 	if err != nil {
 		if err == io.EOF && skipped {
 			return nil, total, io.ErrUnexpectedEOF
@@ -135,7 +135,7 @@ var errParseNoMoreHeaders = errors.New("no more headers")
 
 func (p *Parser) parseNextHeader(out []Header, data []byte) ([]Header, int, error) {
 	var total int
-	line, n, err := NextLine(data)
+	line, n, err := nextLine(data)
 	if err == io.EOF {
 		return out, total, io.ErrUnexpectedEOF
 	} else if err != nil {
@@ -273,12 +273,12 @@ func parseLine(startLine string) (msg Message, err error) {
 	return nil, fmt.Errorf("transmission beginning '%s' is not a SIP message", startLine)
 }
 
-// NextLine reads the next line of a SIP message and the number of bytes read.
+// nextLine reads the next line of a SIP message and the number of bytes read.
 //
 // It returns io.ErrUnexpectedEOF is there's no CRLF (\r\n) in the data.
 // If there's a CR (\r) which is not followed by LF (\n), a ErrParseLineNoCRLF is returned.
 // As a special case, it returns io.EOF if data is empty.
-func NextLine(data []byte) ([]byte, int, error) {
+func nextLine(data []byte) ([]byte, int, error) {
 	if len(data) == 0 {
 		return nil, 0, io.EOF
 	}
