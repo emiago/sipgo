@@ -3,6 +3,7 @@ package sip
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,6 +82,53 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, conn, conn3)
 	})
+
+	testParallel := func(t *testing.T, transport string) {
+		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.SetTransport(transport)
+		connections := sync.Map{}
+		wg := sync.WaitGroup{}
+
+		for i := range 10 {
+			wg.Add(1)
+			go func(req *Request) {
+				defer wg.Done()
+				conn, err := tp.ClientRequestConnection(context.TODO(), req)
+				t.Log("Created connect", conn.LocalAddr().String())
+				require.NoError(t, err)
+				connections.Store(i, conn)
+			}(req.Clone())
+		}
+
+		wg.Wait()
+		connFirst, _ := connections.Load(0)
+		connections.Range(func(key, value any) bool {
+			assert.Equal(t, connFirst, value)
+			assert.Equal(t, connFirst.(Connection), value.(Connection))
+			return true
+		})
+	}
+
+	t.Run("ParallelUDP", func(t *testing.T) {
+		testParallel(t, "UDP")
+	})
+	t.Run("ParallelTCP", func(t *testing.T) {
+		l, err := net.Listen("tcp4", "127.0.0.1:5066")
+		require.NoError(t, err)
+		defer l.Close()
+		go func() {
+			for {
+				conn, err := l.Accept()
+				if err != nil {
+					break
+				}
+				go func() { conn.Read([]byte{}) }()
+			}
+		}()
+		testParallel(t, "TCP")
+	})
+
 }
 
 func TestTransportLayerClientConnectionNoReuse(t *testing.T) {

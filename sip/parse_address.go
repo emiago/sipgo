@@ -36,7 +36,6 @@ func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) 
 // parseNameAddress
 // name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
 // addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
-// TODO Consider exporting this
 func parseNameAddress(addressText string, a *nameAddress) (err error) {
 	state := addressStateDisplayName
 	str := addressText
@@ -189,7 +188,7 @@ func addressStateHeaderParams(a *nameAddress, s string) (addressFSM, string, err
 }
 
 // headerParserTo generates ToHeader
-func headerParserTo(headerName string, headerText string) (header Header, err error) {
+func headerParserTo(headerName []byte, headerText string) (header Header, err error) {
 	h := &ToHeader{}
 	return h, parseToHeader(headerText, h)
 }
@@ -215,7 +214,7 @@ func parseToHeader(headerText string, h *ToHeader) error {
 }
 
 // headerParserFrom generates FromHeader
-func headerParserFrom(headerName string, headerText string) (header Header, err error) {
+func headerParserFrom(headerName []byte, headerText string) (header Header, err error) {
 	h := &FromHeader{}
 	return h, parseFromHeader(headerText, h)
 }
@@ -241,7 +240,7 @@ func parseFromHeader(headerText string, h *FromHeader) error {
 	return nil
 }
 
-func headerParserContact(headerName string, headerText string) (header Header, err error) {
+func headerParserContact(headerName []byte, headerText string) (header Header, err error) {
 	h := ContactHeader{}
 	return &h, parseContactHeader(headerText, &h)
 }
@@ -286,7 +285,7 @@ func parseContactHeader(headerText string, h *ContactHeader) error {
 	return err
 }
 
-func headerParserRoute(headerName string, headerText string) (header Header, err error) {
+func headerParserRoute(headerName []byte, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RouteHeader{}
@@ -299,7 +298,7 @@ func parseRouteHeader(headerText string, h *RouteHeader) error {
 }
 
 // parseRouteHeader generates RecordRouteHeader
-func headerParserRecordRoute(headerName string, headerText string) (header Header, err error) {
+func headerParserRecordRoute(headerName []byte, headerText string) (header Header, err error) {
 	// Append a comma to simplify the parsing code; we split address sections
 	// on commas, so use a comma to signify the end of the final address section.
 	h := RecordRouteHeader{}
@@ -310,7 +309,7 @@ func parseRecordRouteHeader(headerText string, h *RecordRouteHeader) error {
 	return parseRouteAddress(headerText, &h.Address)
 }
 
-func headerParserReferTo(headerName string, headerText string) (header Header, err error) {
+func headerParserReferTo(headerName []byte, headerText string) (header Header, err error) {
 	h := ReferToHeader{}
 	return &h, parseReferToHeader(headerText, &h)
 }
@@ -319,7 +318,7 @@ func parseReferToHeader(headerText string, h *ReferToHeader) error {
 	return parseRouteAddress(headerText, &h.Address) // calling parseRouteAddress because the structure is same
 }
 
-func headerParserReferredBy(headerName string, headerText string) (header Header, err error) {
+func headerParserReferredBy(headerName []byte, headerText string) (header Header, err error) {
 	h := &ReferredByHeader{}
 	return h, parseReferredByHeader(headerText, h)
 }

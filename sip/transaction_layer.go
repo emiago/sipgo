@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 type TransactionRequestHandler func(req *Request, tx *ServerTx)
@@ -11,11 +12,11 @@ type UnhandledResponseHandler func(req *Response)
 type ErrorHandler func(err error)
 
 func defaultRequestHandler(r *Request, tx *ServerTx) {
-	slog.Info("Unhandled sip request. OnRequest handler not added", "caller", "transactionLayer", "msg", r.Short())
+	DefaultLogger().Info("Unhandled sip request. OnRequest handler not added", "caller", "transactionLayer", "msg", r.Short())
 }
 
 func defaultUnhandledRespHandler(r *Response) {
-	slog.Info("TransactionLayer: Unhandled sip response. Possible retransmissions. Set UnhandledResponseHandler", "caller", "transactionLayer", "msg", r.Short())
+	DefaultLogger().Info("TransactionLayer: Unhandled sip response. Possible retransmissions. Set UnhandledResponseHandler", "caller", "transactionLayer", "msg", r.Short())
 }
 
 type TransactionLayer struct {
@@ -156,9 +157,11 @@ func (txl *TransactionLayer) serverTxRequest(req *Request, key string) error {
 }
 
 func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx, error) {
-	// Connection must exist by transport layer.
-	// TODO: What if we are getting BYE and client closed connection
-	conn, err := txl.tpl.GetConnection(req.Transport(), req.Source())
+	// Connection must exist by transport layer or it will be created
+	// What if connection setup can not be made fast enough?
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := txl.tpl.serverRequestConnection(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("server tx get connection failed: %w", err)
 	}
@@ -174,7 +177,7 @@ func (txl *TransactionLayer) handleResponseBackground(res *Response) {
 }
 
 func (txl *TransactionLayer) handleResponse(res *Response) error {
-	key, err := MakeClientTxKey(res)
+	key, err := ClientTxKeyMake(res)
 	if err != nil {
 		return fmt.Errorf("make key failed: %w", err)
 	}
@@ -209,7 +212,7 @@ func (txl *TransactionLayer) NewClientTransaction(ctx context.Context, req *Requ
 		return nil, fmt.Errorf("ACK request must be sent directly through transport")
 	}
 
-	key, err := MakeClientTxKey(req)
+	key, err := ClientTxKeyMake(req)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +246,7 @@ func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, 
 }
 
 func (txl *TransactionLayer) Respond(res *Response) (*ServerTx, error) {
-	key, err := MakeServerTxKey(res)
+	key, err := ServerTxKeyMake(res)
 	if err != nil {
 		return nil, err
 	}

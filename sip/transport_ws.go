@@ -30,7 +30,7 @@ type TransportWS struct {
 
 	connectionReuse bool
 
-	pool   *ConnectionPool
+	pool   *connectionPool
 	dialer ws.Dialer
 
 	DialerCreate func(laddr net.Addr) ws.Dialer
@@ -39,24 +39,22 @@ type TransportWS struct {
 func newWSTransport(par *Parser) *TransportWS {
 	p := &TransportWS{
 		parser:    par,
-		pool:      NewConnectionPool(),
+		pool:      newConnectionPool(),
 		transport: "WS",
 		dialer:    ws.DefaultDialer,
 	}
-	p.dialer.Protocols = WebSocketProtocols
-	// p.log = log.Logger.With().Str("caller", "transport<WS>").Logger()
 	return p
 }
 
 func (t *TransportWS) init(par *Parser) {
 	t.parser = par
-	t.pool = NewConnectionPool()
+	t.pool = newConnectionPool()
 	t.transport = "WS"
 	t.dialer = ws.DefaultDialer
 	t.dialer.Protocols = WebSocketProtocols
 
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
 	}
 
 	if t.DialerCreate == nil {
@@ -150,7 +148,7 @@ func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	t.log.Debug("New WS connection", "raddr", raddr)
 	c := &WSConnection{
 		Conn:       conn,
-		refcount:   1 + IdleConnection,
+		refcount:   1 + TransportIdleConnection,
 		clientSide: clientSide,
 	}
 	t.pool.Add(laddr, c)
@@ -217,7 +215,7 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 
 // TODO: Try to reuse this from TCP transport as func are same
 func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
-	msg, err := t.parser.ParseSIP(data) //Very expensive operation
+	msg, err := t.parser.ParseSIP(data) //Very expensive operationParseSIP
 	if err != nil {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
 		return
@@ -269,16 +267,16 @@ func (t *TransportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 		t.log.Debug("New WS connection", "raddr", raddr)
 		c := &WSConnection{
 			Conn:       conn,
-			refcount:   2 + IdleConnection,
+			refcount:   2 + TransportIdleConnection,
 			clientSide: true,
 		}
+		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	c := conn.(*WSConnection)
-	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }
 
@@ -343,7 +341,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 
 		if SIPDebug {
 			str := fmt.Sprintf("WS read connection header <- %s opcode=%d len=%d", c.Conn.RemoteAddr(), header.OpCode, header.Length)
-			slog.Debug(str, "caller", c.RemoteAddr().String())
+			DefaultLogger().Debug(str, "caller", c.RemoteAddr().String())
 		}
 
 		if header.OpCode.IsControl() {

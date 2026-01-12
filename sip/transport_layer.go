@@ -16,6 +16,9 @@ var (
 
 	// Errors
 	ErrTransportNotSuported = errors.New("protocol not supported")
+
+	// No need yet to expose
+	errTransportConnectionDoesNotExists = errors.New("connection does not exists")
 )
 
 // TransportLayer implementation.
@@ -37,8 +40,9 @@ type TransportLayer struct {
 	// connectionReuse will force connection reuse when passing request
 	connectionReuse bool
 
-	// PreferSRV does always SRV lookup first
-	DNSPreferSRV bool
+	// dnsPreferSRV does always SRV lookup first
+	dnsPreferSRV bool
+	dnsPreferIP  int // 0 - no preference , 1 -ip4, 2 - ip6
 }
 
 type TransportLayerOption func(l *TransportLayer)
@@ -54,6 +58,28 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.connectionReuse = f
+	}
+}
+
+func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.dnsPreferSRV = preferSRV
+	}
+}
+
+// TODO will be exposed
+// withTransportLayerDNSLookupIP allows to set which ip4 or ip6 to prefer on resolve
+// default is ip4
+func withTransportLayerDNSLookupIP(preferIP string) TransportLayerOption {
+	return func(l *TransportLayer) {
+		switch preferIP {
+		case "ip4":
+			l.dnsPreferIP = 1
+		case "ip6":
+			l.dnsPreferIP = 2
+		default:
+			l.dnsPreferIP = 0
+		}
 	}
 }
 
@@ -86,6 +112,7 @@ func NewTransportLayer(
 		dnsResolver:     dnsResolver,
 		connectionReuse: true,
 		log:             DefaultLogger().With("caller", "TransportLayer"),
+		dnsPreferIP:     1, // IPV4
 	}
 
 	for _, o := range option {
@@ -332,20 +359,6 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 		return err
 	}
 
-	// transport, ok := l.transports[network]
-	// if !ok {
-	// 	return fmt.Errorf("transport %s is not supported", network)
-	// }
-
-	// raddr, err := transport.ResolveAddr(addr)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = transport.WriteMsg(msg, raddr)
-	// if err != nil {
-	// 	err = fmt.Errorf("send SIP message through %s protocol to %s: %w", network, addr, err)
-	// }
 	return err
 }
 
@@ -357,7 +370,7 @@ func (l *TransportLayer) WriteMsgTo(msg Message, addr string, network string) er
 // other words SetDestination will be called
 func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
 	network := NetworkToLower(req.Transport())
-	transport := l.GetTransport(network)
+	transport := l.getTransport(network)
 	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -390,7 +403,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		// Save destination in request to avoid repeated resolving
 		// This also solves problem where subsequent request like NON 2xx ACK can
 		// send on same destination without resolving again.
-		req.SetDestination(raddr.String())
+		// req.SetDestination(raddr.String())
 	}
 
 	// Now use Via header to determine our local address
@@ -412,12 +425,12 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 
 	// Should we use default transport ports here?
 	laddr := req.Laddr
+	req.raddr = raddr
 
 	// This is probably client forcing host:port
 	if laddr.IP != nil && laddr.Port > 0 {
 		c = transport.GetConnection(laddr.String())
 	} else if l.connectionReuse {
-		// viaHop.Params.Add("alias", "")
 		addr := raddr.String()
 		c = transport.GetConnection(addr)
 	}
@@ -438,6 +451,134 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	return c, nil
+}
+
+// serverRequestConnection implements serving connection when response needs to be returned
+// Based on: https://datatracker.ietf.org/doc/html/rfc3261#section-18.2.2
+//
+// NOTE: this normally should be called one time for request transaction
+func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Request) (c Connection, err error) {
+	network := NetworkToLower(req.Transport())
+	transport := l.getTransport(network)
+	if transport == nil {
+		return nil, fmt.Errorf("transport %s is not supported", network)
+	}
+
+	sourceAddr := req.MessageData.Source()
+	if IsReliable(network) && sourceAddr != "" {
+		// If the "sent-protocol" is a reliable transport protocol such as
+		//  TCP or SCTP, or TLS over those, the response MUST be sent using
+		//  the existing connection to the source of the original request
+
+		// connection can be matched by source(remote) addr
+		conn := transport.GetConnection(req.MessageData.Source())
+		if conn != nil {
+			return conn, nil
+		}
+	}
+
+	viaHop := req.Via()
+	if viaHop == nil {
+		return nil, fmt.Errorf("no Via Header present")
+	}
+
+	// TODO: refactor bellow to remove duplicate code
+
+	viaHost, viaPort := req.sourceViaHostPort()
+	if sourceAddr != "" {
+		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
+		// 		for unreliable transport protocols, to the source
+		//    address of the request, and the port in the Via header field
+
+		// Use source host and port
+		sourceHost, sourcePort, err := ParseAddr(sourceAddr)
+		if err != nil {
+			return nil, err
+		}
+		// Use source address and via port
+		raddr := Addr{
+			IP:       net.ParseIP(sourceHost),
+			Port:     viaPort,
+			Hostname: sourceHost,
+		}
+
+		// https://datatracker.ietf.org/doc/html/rfc3581#section-4
+		// If rport is set then we must use sourcePort instead
+		if viaHop != nil && viaHop.Params != nil {
+			if rport, ok := viaHop.Params.Get("rport"); ok && rport == "" {
+				raddr.Port = sourcePort
+			}
+		}
+
+		// Should never be case but for safety
+		if raddr.Port == 0 {
+			// Use default port for transport
+			raddr.Port = DefaultPort(network)
+		}
+
+		/// Set request addr here which is used for response build and setting received and rport if needed
+		req.raddr = raddr
+
+		// Check by source
+		if c := transport.GetConnection(sourceAddr); c != nil {
+			return c, nil
+		}
+		if c := transport.GetConnection(raddr.String()); c != nil {
+			return c, nil
+		}
+
+		// Fail with via host
+		// NOTE: This can happen at any point when server sending response and we are not handling those cases.
+		// Generally this may have issue with setups where connections are closed after each response
+	}
+
+	raddr := Addr{
+		IP:       net.ParseIP(uriNetIP(viaHost)),
+		Port:     viaPort,
+		Hostname: viaHost,
+	}
+
+	if raddr.Port == 0 {
+		// Use default port for transport
+		raddr.Port = DefaultPort(network)
+	}
+
+	if raddr.IP == nil {
+		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
+		// NOTE: Full RFC may require we do this differentely
+		// Whe port exists AAAA is used otherwise it should go immediately by SRV
+		// In our case we do both by default
+		if err := l.resolveAddr(ctx, network, viaHost, req.Recipient.Scheme, &raddr); err != nil {
+			return nil, err
+		}
+	}
+
+	// Set request remote address to be used for further responses
+	// NOTE: for race reasons this should not be exposed
+	req.raddr = raddr
+
+	// Check by source
+	if sourceAddr != "" {
+		if c := transport.GetConnection(sourceAddr); c != nil {
+			return c, nil
+		}
+	}
+
+	// Check is there some connection to be reused
+	addr := raddr.String()
+	if c := transport.GetConnection(addr); c != nil {
+		return c, nil
+	}
+
+	// Fail with new connection :(
+	// What about local Addr? It has usage for client
+	laddr := Addr{}
+	if l.log.Enabled(ctx, slog.LevelDebug) {
+		// printing laddr adds some execution
+		l.log.Debug("Creating server connection", "laddr", laddr.String(), "raddr", raddr.String(), "network", network)
+	}
+	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
+	return c, err
 }
 
 func (l *TransportLayer) overrideSentBy(c Connection, viaHop *ViaHeader) error {
@@ -479,7 +620,7 @@ func (l *TransportLayer) resolveAddr(ctx context.Context, network string, host s
 		}
 	}(time.Now())
 
-	if l.DNSPreferSRV {
+	if l.dnsPreferSRV {
 		err := l.resolveAddrSRV(ctx, network, host, sipScheme, addr)
 		if err == nil {
 			return nil
@@ -510,14 +651,24 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 		return fmt.Errorf("lookup ip addr did not return any ip addr")
 	}
 
-	for _, ip := range ips {
-		// This is only correct way to check is ipv4.
-		//  len(ip.IP) == net.IPv4len IS NOT working in all cases
-		if ip.IP.To4() != nil {
-			addr.IP = ip.IP
-			return nil
+	// Prefer IPV4
+	if l.dnsPreferIP > 0 {
+		checkIp := func(ip net.IP) bool {
+			// This is only correct way to check is ipv4.
+			if l.dnsPreferIP == 1 {
+				return ip.To4() != nil
+			}
+			return ip.To4() == nil
+		}
+
+		for _, ip := range ips {
+			if checkIp(ip.IP) {
+				addr.IP = ip.IP
+				return nil
+			}
 		}
 	}
+
 	addr.IP = ips[0].IP
 	return nil
 }
@@ -569,7 +720,7 @@ func (l *TransportLayer) GetConnection(network, addr string) (Connection, error)
 }
 
 func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
-	transport := l.GetTransport(network)
+	transport := l.getTransport(network)
 	if transport == nil {
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
@@ -577,7 +728,7 @@ func (l *TransportLayer) getConnection(network, addr string) (Connection, error)
 	l.log.Debug("getting connection", "network", network, "addr", addr)
 	c := transport.GetConnection(addr)
 	if c == nil {
-		return nil, fmt.Errorf("connection %q does not exist", addr)
+		return nil, errTransportConnectionDoesNotExists
 	}
 
 	return c, nil
@@ -600,7 +751,7 @@ func (l *TransportLayer) Close() error {
 	return werr
 }
 
-func (l *TransportLayer) GetTransport(network string) Transport {
+func (l *TransportLayer) getTransport(network string) transport {
 	switch network {
 	case "udp":
 		return l.udp
@@ -616,8 +767,8 @@ func (l *TransportLayer) GetTransport(network string) Transport {
 	return nil
 }
 
-func (l *TransportLayer) allTransports() []Transport {
-	return []Transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
+func (l *TransportLayer) allTransports() []transport {
+	return []transport{l.udp, l.tcp, l.tls, l.ws, l.wss}
 }
 
 func IsReliable(network string) bool {

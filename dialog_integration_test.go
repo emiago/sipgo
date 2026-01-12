@@ -113,7 +113,7 @@ func TestIntegrationDialog(t *testing.T) {
 		}
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
+	srv.serveRequest(func(r *sip.Request) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
@@ -136,7 +136,7 @@ func TestIntegrationDialog(t *testing.T) {
 			err := dialogCli.ReadBye(req, tx)
 			require.NoError(t, err)
 		})
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
@@ -220,17 +220,17 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 
 		err = dlg.Respond(sip.StatusTrying, "Trying", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		err = dlg.Respond(sip.StatusRinging, "Ringing", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		err = dlg.Respond(sip.StatusOK, "OK", nil)
 		if err != nil {
-			t.Log("Error OnInvite", err)
+			fmt.Println("Error OnInvite", err)
 			return
 		}
 		<-dlg.Context().Done()
@@ -240,7 +240,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 		dialogSrv.ReadAck(req, tx)
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
+	srv.serveRequest(func(r *sip.Request) {
 		t.Log("UAS server: ", r.StartLine())
 	})
 
@@ -264,7 +264,7 @@ func TestIntegrationDialogBrokenUAC(t *testing.T) {
 			err := dialogCli.ReadBye(req, tx)
 			require.NoError(t, err)
 		})
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 
@@ -331,7 +331,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 	defer ua.Close()
 	srv, _ := NewServer(ua)
 	cli, _ := NewClient(ua)
-	sip.SetTimers(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	// sip.SetTimers(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -358,11 +358,11 @@ func TestIntegrationDialogCancel(t *testing.T) {
 	})
 
 	srv.OnCancel(func(req *sip.Request, tx sip.ServerTransaction) {
-		t.Log("Cancel received")
+		fmt.Println("Cancel received")
 	})
 
-	srv.ServeRequest(func(r *sip.Request) {
-		t.Log("UAS server: ", r.StartLine())
+	srv.serveRequest(func(r *sip.Request) {
+		fmt.Println("UAS server: ", r.StartLine())
 	})
 
 	startTestServer(ctx, srv, uasContact.Address.HostPort())
@@ -380,7 +380,7 @@ func TestIntegrationDialogCancel(t *testing.T) {
 		}
 		dialogCli := NewDialogClientCache(cli, contactHDR)
 
-		srv.ServeRequest(func(r *sip.Request) {
+		srv.serveRequest(func(r *sip.Request) {
 			t.Log("UAC server: ", r.StartLine())
 		})
 

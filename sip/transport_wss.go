@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
@@ -14,8 +13,6 @@ import (
 // TLS transport implementation
 type TransportWSS struct {
 	*TransportWS
-
-	// rootPool *x509.CertPool
 }
 
 func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {
@@ -35,7 +32,7 @@ func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {
 	}
 
 	if t.log == nil {
-		t.log = slog.Default()
+		t.log = DefaultLogger()
 	}
 }
 
@@ -113,15 +110,15 @@ func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 
 		c := &WSConnection{
 			Conn:       tlsConn,
-			refcount:   2 + IdleConnection,
+			refcount:   2 + TransportIdleConnection,
 			clientSide: true,
 		}
+		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	c := conn.(*WSConnection)
-	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }

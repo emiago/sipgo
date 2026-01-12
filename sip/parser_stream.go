@@ -2,19 +2,19 @@ package sip
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
 )
 
-const (
-	stateStartLine = 0
-	stateHeader    = 1
-	stateContent   = 2
-	// stateParsed = 1
-)
+type parserState int
 
-var ()
+const (
+	stateStartLine = parserState(iota)
+	stateHeader
+	stateContent
+)
 
 var streamBufReader = sync.Pool{
 	New: func() interface{} {
@@ -26,158 +26,188 @@ var streamBufReader = sync.Pool{
 }
 
 type ParserStream struct {
-	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
-	headersParsers mapHeadersParser
+	p *Parser
 
 	// runtime values
-	reader            *bytes.Buffer
-	msg               Message
-	readContentLength int
-	state             int
+	buf           *bytes.Buffer
+	state         parserState
+	totalRead     int
+	msg           Message
+	headerBuf     []Header
+	contentLength *ContentLengthHeader
+	contentOff    int
 }
 
 func (p *ParserStream) reset() {
 	p.state = stateStartLine
-	p.reader = nil
+	p.totalRead = 0
 	p.msg = nil
-	p.readContentLength = 0
+	for i := range p.headerBuf {
+		p.headerBuf[i] = nil
+	}
+	p.headerBuf = p.headerBuf[:0]
+	p.contentLength = nil
+	p.contentOff = 0
 }
 
-// ParseSIPStream parsing messages comming in stream
+// Reset the parser and the internal buffer.
+func (p *ParserStream) Reset() {
+	p.reset()
+	if p.buf != nil {
+		p.buf.Reset()
+	}
+}
+
+// Close the parser and free the associated resources.
+func (p *ParserStream) Close() {
+	p.reset()
+	buf := p.buf
+	p.buf = nil
+	if buf != nil {
+		streamBufReader.Put(buf)
+	}
+}
+
+// parseSIPStreamFull parsing messages comming in stream
 // It has slight overhead vs parsing full message
-func (p *ParserStream) ParseSIPStream(data []byte) (msgs []Message, err error) {
-	return msgs, p.ParseSIPStreamEach(data, func(msg Message) {
+func (p *ParserStream) parseSIPStreamFull(data []byte) (msgs []Message, err error) {
+	err = p.ParseSIPStream(data, func(msg Message) {
 		msgs = append(msgs, msg)
 	})
+	return msgs, err
 }
 
-func (p *ParserStream) ParseSIPStreamEach(data []byte, cb func(msg Message)) (err error) {
-	if p.reader == nil {
-		p.reader = streamBufReader.Get().(*bytes.Buffer)
-		p.reader.Reset()
+// ParseSIPStream parses SIP stream and calls callback as soon first SIP message is parsed
+func (p *ParserStream) ParseSIPStream(data []byte, cb func(msg Message)) error {
+	if _, err := p.Write(data); err != nil {
+		return err
 	}
-
-	reader := p.reader
-	if reader.Len()+len(data) > ParseMaxMessageLength {
-		return fmt.Errorf("Message exceeds ParseMaxMessageLength")
-	}
-
-	reader.Write(data) // This should append to our already buffer
-
-	unparsed := reader.Bytes() // TODO find a better way as we only want to move our offset
-	for {
-		err := p.parseSingle(reader, &unparsed)
-		switch err {
-		case ErrParseLineNoCRLF, ErrParseReadBodyIncomplete:
-			reader.Reset()
-			reader.Write(unparsed)
+	for p.buf.Len() > 0 {
+		msg, _, err := p.ParseNext()
+		if errors.Is(err, io.ErrUnexpectedEOF) {
 			return ErrParseSipPartial
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return err
 		}
-
-		cb(p.msg)
-		if len(unparsed) == 0 {
-			// Maybe we need to check did empty spaces left
-			break
-		}
-
-		p.reset()
-		reader.Reset()
-		reader.Write(unparsed)
-		p.reader = reader
+		cb(msg)
 	}
-
-	// IN all other cases do reset
-	streamBufReader.Put(reader)
-	p.reset()
-
-	return
+	return nil
 }
 
-func (p *ParserStream) parseSingle(reader *bytes.Buffer, unparsed *[]byte) (err error) {
-	// TODO change this with functions and store last function state
+// Buffer returns an internal buffer used by the parser.
+// This allows to inspect the current parser state and possibly recover the stream with Discard.
+func (p *ParserStream) Buffer() *bytes.Buffer {
+	if p.buf == nil {
+		p.buf = streamBufReader.Get().(*bytes.Buffer)
+		p.buf.Reset()
+	}
+	return p.buf
+}
+
+// Discard specified amount of data and reset the parser.
+// Can be used to skip malformed messages and recover the stream.
+func (p *ParserStream) Discard(n int) {
+	p.reset()
+	if p.buf != nil {
+		_ = p.buf.Next(n)
+	}
+}
+
+// Write data to the internal buffer. Must be called before ParseNext.
+func (p *ParserStream) Write(data []byte) (int, error) {
+	buf := p.Buffer()
+	buf.Write(data) // This should append to our existing buffer
+	return len(data), nil
+}
+
+// ParseNext parses the next SIP message from an internal buffer.
+// It may return io.ErrUnexpectedEOF, indicating that more data needs to be written with Write.
+func (p *ParserStream) ParseNext() (Message, int, error) {
+	if p.buf == nil {
+		return nil, 0, io.ErrUnexpectedEOF
+	}
+	err := p.parseSingle()
+	reset := err == nil
+	msg, n := p.msg, p.totalRead
+	if err == nil && p.totalRead > p.p.MaxMessageLength {
+		err = ErrMessageTooLarge
+	}
+	if reset {
+		p.reset()
+	}
+	return msg, n, err
+}
+
+func (p *ParserStream) advance(n int) {
+	p.totalRead += n
+	_ = p.buf.Next(n)
+}
+
+func (p *ParserStream) parseSingle() error {
+	if p.buf == nil {
+		return io.ErrUnexpectedEOF
+	}
+	var (
+		n   int
+		err error
+	)
 	switch p.state {
 	case stateStartLine:
-		startLine, err := nextLine(reader)
-
-		if err != nil {
-			if err == io.EOF {
-				return ErrParseLineNoCRLF
-			}
-			return err
-		}
-
-		msg, err := parseLine(startLine)
+		var msg Message
+		msg, n, err = p.p.parseStartLine(p.buf.Bytes(), true)
+		p.advance(n)
 		if err != nil {
 			return err
 		}
-
-		*unparsed = reader.Bytes()
 		p.state = stateHeader
 		p.msg = msg
 		fallthrough
 	case stateHeader:
-		msg := p.msg
 		for {
-			line, err := nextLine(reader)
-
-			if err != nil {
-				if err == io.EOF {
-					// No more to read
-					return ErrParseLineNoCRLF
+			p.headerBuf, n, err = p.p.parseNextHeader(p.headerBuf[:0], p.buf.Bytes())
+			p.advance(n)
+			for _, h := range p.headerBuf {
+				switch h := h.(type) {
+				case *ContentLengthHeader:
+					p.contentLength = h
 				}
-				return err
+				p.msg.AppendHeader(h)
 			}
-
-			if len(line) == 0 {
-				// We've hit second CRLF
+			if err == errParseNoMoreHeaders {
 				break
 			}
-
-			err = p.headersParsers.parseMsgHeader(msg, line)
 			if err != nil {
-				return fmt.Errorf("%s: %w", err.Error(), ErrParseEOF)
-				// log.Info().Err(err).Str("line", line).Msg("skip header due to error")
+				return err
 			}
-			*unparsed = reader.Bytes()
 		}
-		*unparsed = reader.Bytes()
-
-		h := msg.ContentLength()
-		if h == nil {
+		if p.contentLength == nil {
+			// RFC 3261 - 7.5.
+			// The Content-Length header field value is used to locate the end of
+			// each SIP message in a stream. It will always be present when SIP
+			// messages are sent over stream-oriented transports.
+			return ErrParseReadBodyIncomplete
+		}
+		contentLength := int(*p.contentLength)
+		if contentLength == 0 {
+			p.state = -1
 			return nil
 		}
-
-		contentLength := int(*h)
-		if contentLength <= 0 {
-			return nil
-		}
-
 		body := make([]byte, contentLength)
-		msg.SetBody(body)
-
+		p.msg.SetBody(body)
 		p.state = stateContent
 		fallthrough
 	case stateContent:
-		msg := p.msg
-		body := msg.Body()
+		body := p.msg.Body()
 		contentLength := len(body)
 
-		n, err := reader.Read(body[p.readContentLength:])
-		*unparsed = reader.Bytes()
-		if err != nil {
-			return fmt.Errorf("read message body failed: %w", err)
-		}
-		p.readContentLength += n
+		n = copy(body[p.contentOff:], p.buf.Bytes())
+		p.advance(n)
+		p.contentOff += n
 
-		if p.readContentLength < contentLength {
-			return ErrParseReadBodyIncomplete
+		if p.contentOff < contentLength {
+			return io.ErrUnexpectedEOF
 		}
-
-		p.state = -1 // Clear state
+		p.state = -1
 		return nil
 	default:
 		return fmt.Errorf("Parser is in unknown state")

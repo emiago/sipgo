@@ -101,7 +101,8 @@ type Transaction interface {
 
 	// Done when transaction fsm terminates. Can be called multiple times
 	Done() <-chan struct{}
-	// Last error. Useful to check when transaction terminates
+
+	// Err that stopped transaction. Useful to check when transaction terminates
 	Err() error
 }
 
@@ -295,8 +296,8 @@ func isRFC3261(branch string) bool {
 		strings.TrimPrefix(branch, RFC3261BranchMagicCookie) != ""
 }
 
-// MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
-func MakeServerTxKey(msg Message) (string, error) {
+// ServerTxKeyMake creates server key for matching retransmitting requests - RFC 3261 17.2.3.
+func ServerTxKeyMake(msg Message) (string, error) {
 	return makeServerTxKey(msg, "")
 }
 
@@ -305,12 +306,12 @@ func MakeServerTxKey(msg Message) (string, error) {
 func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
-		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", messageShortString(msg))
 	}
 
 	cseq := msg.CSeq()
 	if cseq == nil {
-		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'CSeq' header not found in message '%s'", messageShortString(msg))
 	}
 	method := cseq.MethodName
 	if method == ACK {
@@ -357,15 +358,15 @@ func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	// RFC 2543 compliant
 	from := msg.From()
 	if from == nil {
-		return "", fmt.Errorf("'From' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'From' header not found in message '%s'", messageShortString(msg))
 	}
 	fromTag, ok := from.Params.Get("tag")
 	if !ok {
-		return "", fmt.Errorf("'tag' param not found in 'From' header of message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'tag' param not found in 'From' header of message '%s'", messageShortString(msg))
 	}
 	callId := msg.CallID()
 	if callId == nil {
-		return "", fmt.Errorf("'Call-ID' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Call-ID' header not found in message '%s'", messageShortString(msg))
 	}
 
 	builder.WriteString(fromTag)
@@ -382,15 +383,15 @@ func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	return builder.String(), nil
 }
 
-// MakeClientTxKey creates client key for matching responses - RFC 3261 17.1.3.
-func MakeClientTxKey(msg Message) (string, error) {
+// ClientTxKeyMake creates client key for matching responses - RFC 3261 17.1.3.
+func ClientTxKeyMake(msg Message) (string, error) {
 	return makeClientTxKey(msg, "")
 }
 
 func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	cseq := msg.CSeq()
 	if cseq == nil {
-		return "", fmt.Errorf("'CSeq' header not found in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'CSeq' header not found in message '%s'", messageShortString(msg))
 	}
 	method := cseq.MethodName
 	if method == ACK {
@@ -403,14 +404,14 @@ func makeClientTxKey(msg Message, asMethod RequestMethod) (string, error) {
 
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
-		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", messageShortString(msg))
 	}
 
 	branch, ok := firstViaHop.Params.Get("branch")
 	if !ok || len(branch) == 0 ||
 		!strings.HasPrefix(branch, RFC3261BranchMagicCookie) ||
 		len(strings.TrimPrefix(branch, RFC3261BranchMagicCookie)) == 0 {
-		return "", fmt.Errorf("'branch' not found or empty in 'Via' header of message '%s'", MessageShortString(msg))
+		return "", fmt.Errorf("'branch' not found or empty in 'Via' header of message '%s'", messageShortString(msg))
 	}
 
 	var builder strings.Builder

@@ -24,21 +24,26 @@ var (
 	// Stream parse errors
 	ErrParseSipPartial         = errors.New("SIP partial data")
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
-	ErrParseMoreMessages       = errors.New("Stream has more message")
+	ErrMessageTooLarge         = errors.New("Message exceeds ParseMaxMessageLength")
 
+	defaultParser = NewParser()
+)
+
+var (
 	ParseMaxMessageLength = 65535
 )
 
 func ParseMessage(msgData []byte) (Message, error) {
-	parser := NewParser()
-	return parser.ParseSIP(msgData)
+	return defaultParser.ParseSIP(msgData)
 }
 
 // Parser is implementation of SIPParser
 // It is optimized with faster header parsing
 type Parser struct {
 	// HeadersParsers uses default list of headers to be parsed. Smaller list parser will be faster
-	headersParsers mapHeadersParser
+	headersParsers HeadersParser
+
+	MaxMessageLength int
 }
 
 // ParserOption are addition option for NewParser. Check WithParser...
@@ -47,7 +52,8 @@ type ParserOption func(p *Parser)
 // Create a new Parser.
 func NewParser(options ...ParserOption) *Parser {
 	p := &Parser{
-		headersParsers: headersParsers,
+		headersParsers:   DefaultHeadersParser(),
+		MaxMessageLength: ParseMaxMessageLength,
 	}
 
 	for _, o := range options {
@@ -68,218 +74,289 @@ func WithHeadersParsers(m map[string]HeaderParser) ParserOption {
 	}
 }
 
+// ParseHeaders parses all headers of a SIP message. It returns the number of bytes read.
+// Data must contain a full SIP message header section, including double CRLF (\r\n).
+//
+// If the message is cut in the middle of a header or the first line, io.ErrUnexpectedEOF is returned.
+// It may return an error wrapping ErrParseLineNoCRLF if one of the header lines is malformed,
+// or if there's no CRLF (\r\n) delimiter after headers.
+func (p *Parser) ParseHeaders(data []byte, stream bool) (Message, int, error) {
+	msg, _, n, err := p.parseHeaders(data, stream)
+	return msg, n, err
+}
+
+func (p *Parser) parseHeaders(data []byte, stream bool) (Message, *ContentLengthHeader, int, error) {
+	msg, total, err := p.parseStartLine(data, stream)
+	if err != nil {
+		return msg, nil, total, err
+	}
+	data = data[total:]
+
+	contentLength, n, err := p.parseHeadersOnly(msg, data)
+	total += n
+	return msg, contentLength, total, err
+}
+
+func (p *Parser) parseStartLine(data []byte, stream bool) (Message, int, error) {
+	var (
+		total   int
+		skipped bool
+	)
+
+	if stream {
+		// RFC 3261 - 7.5.
+		// Implementations processing SIP messages over stream-oriented
+		// transports MUST ignore any CRLF appearing before the start-line.
+		for len(data) >= 2 && data[0] == '\r' && data[1] == '\n' {
+			data = data[2:]
+			total += 2
+			skipped = true
+		}
+	}
+
+	startLine, n, err := nextLine(data)
+	if err != nil {
+		if err == io.EOF && skipped {
+			return nil, total, io.ErrUnexpectedEOF
+		}
+		return nil, total, err
+	}
+	total += n
+
+	msg, err := parseLine(string(startLine))
+	if err != nil {
+		return nil, total, err
+	}
+	return msg, total, nil
+}
+
+var errParseNoMoreHeaders = errors.New("no more headers")
+
+func (p *Parser) parseNextHeader(out []Header, data []byte) ([]Header, int, error) {
+	line, n, err := nextLine(data)
+	if err != nil {
+		if err == io.EOF {
+			return out, 0, io.ErrUnexpectedEOF
+		}
+
+		// NOTE: n > 0  but we return 0 as we need to read more bytes
+		return out, 0, err
+	}
+
+	// Advance only after a successful parse.
+	if len(line) == 0 {
+		// We've hit the end of the header section.
+		return out, n, errParseNoMoreHeaders
+	}
+	out, err = p.headersParsers.ParseHeader(out, line)
+	if err != nil {
+		// We might not need to return n here?
+		return out, n, err
+	}
+	return out, n, nil
+}
+
+func (p *Parser) parseHeadersOnly(msg Message, data []byte) (*ContentLengthHeader, int, error) {
+	var (
+		total, n      int
+		headerBuf     []Header
+		contentLength *ContentLengthHeader
+		err           error
+	)
+	for {
+		headerBuf, n, err = p.parseNextHeader(headerBuf[:0], data)
+		data = data[n:]
+		total += n
+		for _, h := range headerBuf {
+			switch h := h.(type) {
+			case *ContentLengthHeader:
+				contentLength = h
+			}
+			msg.AppendHeader(h)
+		}
+		if err == errParseNoMoreHeaders {
+			return contentLength, total, nil
+		}
+		if err != nil {
+			return contentLength, total, err
+		}
+	}
+}
+
+// Parse data to a SIP message. It returns the number of bytes read. Data must contain a full SIP message.
+//
+// If the message is cut in the middle of a header or a first line, io.ErrUnexpectedEOF is returned.
+// It may return an error wrapping ErrParseLineNoCRLF if one of the header lines is malformed,
+// or if there's no CRLF (\r\n) delimiter after headers.
+//
+// In case the end of the body cannot be determined, or the body is incomplete,
+// an ErrParseReadBodyIncomplete is returned.
+func (p *Parser) Parse(data []byte, stream bool) (Message, int, error) {
+	if len(data) > p.MaxMessageLength {
+		return nil, 0, ErrMessageTooLarge
+	}
+	msg, contentLength, total, err := p.parseHeaders(data, stream)
+	if err != nil {
+		return msg, total, err
+	}
+	data = data[total:]
+	bodySize := -1
+	if contentLength != nil {
+		bodySize = int(*contentLength)
+	} else if !stream {
+		bodySize = len(data)
+	}
+	if bodySize < 0 {
+		// RFC 3261 - 7.5.
+		// The Content-Length header field value is used to locate the end of
+		// each SIP message in a stream. It will always be present when SIP
+		// messages are sent over stream-oriented transports.
+		return msg, total, ErrParseReadBodyIncomplete
+	}
+	if bodySize == 0 {
+		return msg, total, nil
+	}
+	body := make([]byte, bodySize)
+	n := copy(body, data)
+	total += n
+	msg.SetBody(body)
+	// RFC 3261 - 18.3.
+	if n != bodySize {
+		return msg, total, ErrParseReadBodyIncomplete
+	}
+	return msg, total, nil
+}
+
 // ParseSIP converts data to sip message. Buffer must contain full sip message
 func (p *Parser) ParseSIP(data []byte) (msg Message, err error) {
-	reader := bytes.NewBuffer(data)
-
-	startLine, err := nextLine(reader)
-	if err != nil {
-		return nil, err
+	msg, _, err = p.Parse(data, false)
+	if err == io.ErrUnexpectedEOF {
+		err = ErrParseEOF
 	}
-
-	msg, err = parseLine(startLine)
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		line, err := nextLine(reader)
-
-		if err != nil {
-			if err == io.EOF {
-				return nil, ErrParseEOF
-			}
-			return nil, err
-		}
-		size := len(line)
-		if size == 0 {
-			// We've hit the end of the header section.
-			break
-		}
-
-		err = p.headersParsers.parseMsgHeader(msg, line)
-		if err != nil {
-			err := fmt.Errorf("parsing header failed line=%q: %w", line, err)
-			return nil, err
-		}
-	}
-
-	// TODO Use Content Length header
-	contentLength := getBodyLength(data)
-	if contentLength <= 0 {
-		return msg, nil
-	}
-
-	// p.log.Debugf("%s reads body with length = %d bytes", p, contentLength)
-	body := make([]byte, contentLength)
-	total, err := reader.Read(body)
-	if err != nil {
-		return nil, fmt.Errorf("read message body failed: %w", err)
-	}
-	// RFC 3261 - 18.3.
-	if total != contentLength {
-		return nil, fmt.Errorf(
-			"incomplete message body: read %d bytes, expected %d bytes",
-			len(body),
-			contentLength,
-		)
-	}
-
-	// Should we trim this?
-	// if len(bytes.TrimSpace(body)) > 0 {
-	if len(body) > 0 {
-		msg.SetBody(body)
-	}
-	return msg, nil
+	return msg, err
 }
 
 // NewSIPStream implements SIP parsing contructor for IO that stream SIP message
 // It should be created per each stream
 func (p *Parser) NewSIPStream() *ParserStream {
+	if p == nil {
+		p = NewParser()
+	}
 	return &ParserStream{
-		headersParsers: p.headersParsers, // safe as it read only
+		p: p, // safe as it read only
 	}
 }
 
 func parseLine(startLine string) (msg Message, err error) {
-	if isRequest(startLine) {
-		recipient := Uri{}
-		method, sipVersion, err := parseRequestLine(startLine, &recipient)
-		if err != nil {
-			return nil, err
+	if parts, ok := split3(startLine); ok {
+		if isRequest(parts) {
+			recipient := Uri{}
+			method, sipVersion, err := parseRequestLine(parts, &recipient)
+			if err != nil {
+				return nil, err
+			}
+
+			m := NewRequest(method, recipient)
+			m.SipVersion = sipVersion
+			return m, nil
 		}
+		if isResponse(parts) {
+			sipVersion, statusCode, reason, err := parseStatusLine(parts)
+			if err != nil {
+				return nil, err
+			}
 
-		m := NewRequest(method, recipient)
-		m.SipVersion = sipVersion
-		return m, nil
-	}
-
-	if isResponse(startLine) {
-		sipVersion, statusCode, reason, err := parseStatusLine(startLine)
-		if err != nil {
-			return nil, err
+			m := NewResponse(statusCode, reason)
+			m.SipVersion = sipVersion
+			return m, nil
 		}
-
-		m := NewResponse(statusCode, reason)
-		m.SipVersion = sipVersion
-		return m, nil
 	}
 	return nil, fmt.Errorf("transmission beginning '%s' is not a SIP message", startLine)
 }
 
-// nextLine should read until it hits CRLF
-// ErrParseLineNoCRLF -> could not find CRLF in line
+// nextLine reads the next line of a SIP message and the number of bytes read.
 //
-// https://datatracker.ietf.org/doc/html/rfc3261#section-7
-// empty line MUST be
-// terminated by a carriage-return line-feed sequence (CRLF).  Note that
-// the empty line MUST be present even if the message-body is not.
-func nextLine(reader *bytes.Buffer) (line string, err error) {
+// It returns io.ErrUnexpectedEOF is there's no CRLF (\r\n) in the data.
+// If there's a CR (\r) which is not followed by LF (\n), a ErrParseLineNoCRLF is returned.
+// As a special case, it returns io.EOF if data is empty.
+func nextLine(data []byte) ([]byte, int, error) {
+	if len(data) == 0 {
+		return nil, 0, io.EOF
+	}
 	// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
 	// The start-line, each message-header line, and the empty line MUST be
 	// terminated by a carriage-return line-feed sequence (CRLF).  Note that
 	// the empty line MUST be present even if the message-body is not.
 
 	// Lines could be multiline as well so this is also acceptable
-	// TO :
+	// TO :\n
 	// sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n
-	line, err = reader.ReadString('\r')
-	if err != nil {
-		// We may get io.EOF and line till it was read
-		return line, err
+	i := bytes.IndexByte(data, '\r')
+	if i < 0 {
+		return data, len(data), io.ErrUnexpectedEOF
 	}
-	br, err := reader.ReadByte()
-	if err != nil {
-		return line, err
+	line := data[:i]
+	if i+1 >= len(data) {
+		return line, i + 1, io.ErrUnexpectedEOF
 	}
-
-	if br != '\n' {
-		return line, ErrParseLineNoCRLF
+	if data[i+1] != '\n' {
+		return line, i + 1, ErrParseLineNoCRLF
 	}
-	lenline := len(line)
-	if lenline < 1 {
-		return line, ErrParseLineNoCRLF
-	}
-
-	line = line[:lenline-1]
-	return line, nil
+	return line, i + 2, nil
 }
 
-// Calculate the size of a SIP message's body, given the entire contents of the message as a byte array.
-func getBodyLength(data []byte) int {
-	// Body starts with first character following a double-CRLF.
-	idx := bytes.Index(data, []byte("\r\n\r\n"))
-	if idx == -1 {
-		return -1
-	}
-
-	bodyStart := idx + 4
-
-	return len(data) - bodyStart
-}
-
-// detet is request by spaces
-func isRequest(startLine string) bool {
+// detect is request by spaces
+func isRequest(parts [3]string) bool {
 	// SIP request lines contain precisely two spaces.
-	ind := strings.IndexRune(startLine, ' ')
-	if ind <= 0 {
-		return false
-	}
-
-	// part0 := startLine[:ind]
-	ind1 := strings.IndexRune(startLine[ind+1:], ' ')
-	if ind1 <= 0 {
-		return false
-	}
-
-	part2 := startLine[ind+1+ind1+1:]
-	ind2 := strings.IndexRune(part2, ' ')
-	if ind2 >= 0 {
-		return false
-	}
-
+	part2 := parts[2]
 	if len(part2) < 3 {
 		return false
 	}
-
+	i := strings.IndexByte(part2, ' ')
+	if i >= 0 {
+		return false
+	}
 	return UriIsSIP(part2[:3])
 }
 
 // Detect is response by spaces
-func isResponse(startLine string) bool {
-	// SIP status lines contain at least two spaces.
-	ind := strings.IndexRune(startLine, ' ')
-	if ind <= 0 {
+func isResponse(parts [3]string) bool {
+	part0 := parts[0]
+	if len(part0) < 3 {
 		return false
 	}
+	return UriIsSIP(part0[:3])
+}
 
-	// part0 := startLine[:ind]
-	ind1 := strings.IndexRune(startLine[ind+1:], ' ')
-	if ind1 <= 0 {
-		return false
+func split3(s string) (parts [3]string, ok bool) {
+	i := strings.IndexByte(s, ' ')
+	if i < 0 {
+		return
 	}
+	parts[0] = s[:i]
+	s = s[i+1:]
 
-	return UriIsSIP(startLine[:3])
+	i = strings.IndexByte(s, ' ')
+	if i < 0 {
+		return
+	}
+	parts[1] = s[:i]
+	s = s[i+1:]
+	parts[2] = s
+	return parts, true
 }
 
 // Parse the first line of a SIP request, e.g:
 //
 //	INVITE bob@example.com SIP/2.0
 //	REGISTER jane@telco.com SIP/1.0
-func parseRequestLine(requestLine string, recipient *Uri) (
-	method RequestMethod, sipVersion string, err error) {
-	parts := strings.Split(requestLine, " ")
-	if len(parts) != 3 {
-		err = fmt.Errorf("request line should have 2 spaces: '%s'", requestLine)
-		return
-	}
-
+func parseRequestLine(parts [3]string, recipient *Uri) (method RequestMethod, sipVersion string, err error) {
 	method = RequestMethod(strings.ToUpper(parts[0]))
 	err = ParseUri(parts[1], recipient)
 	sipVersion = parts[2]
 
 	if recipient.Wildcard {
-		err = fmt.Errorf("wildcard URI '*' not permitted in request line: '%s'", requestLine)
+		err = fmt.Errorf("wildcard URI '*' not permitted in request line")
 		return
 	}
 
@@ -290,50 +367,10 @@ func parseRequestLine(requestLine string, recipient *Uri) (
 //
 //	SIP/2.0 200 OK
 //	SIP/1.0 403 Forbidden
-func parseStatusLine(statusLine string) (
-	sipVersion string, statusCode int, reasonPhrase string, err error) {
-	parts := strings.Split(statusLine, " ")
-	if len(parts) < 3 {
-		err = fmt.Errorf("status line has too few spaces: '%s'", statusLine)
-		return
-	}
-
+func parseStatusLine(parts [3]string) (sipVersion string, statusCode int, reasonPhrase string, err error) {
 	sipVersion = parts[0]
 	statusCodeRaw, err := strconv.ParseUint(parts[1], 10, 16)
 	statusCode = int(statusCodeRaw)
-	reasonPhrase = strings.Join(parts[2:], " ")
-
+	reasonPhrase = parts[2]
 	return
-}
-
-func filterABNF(s string) string {
-	b := strings.Builder{}
-	for _, c := range s {
-		c = filterABNFRune(c)
-		if c < 0 {
-			continue
-		}
-		b.WriteRune(c)
-	}
-
-	return b.String()
-}
-
-// From std
-var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}
-
-// https://datatracker.ietf.org/doc/html/rfc3261#section-25.1
-// returns negative rune in case shouldbe skipped
-// TODO need to handle SWS, LWS cases better
-func filterABNFRune(c rune) rune {
-	// We need to detect empty space
-	// LWS (Linear Whitespace).
-	// All linear white space, including folding, has the same meaning as a single space (SP)
-	//
-	// SWS (Separating Whitespace) is used when linear white space is optional, typically between tokens and separators.
-
-	if asciiSpace[c] == 1 {
-		return -1
-	}
-	return c
 }

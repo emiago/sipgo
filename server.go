@@ -44,8 +44,7 @@ type Server struct {
 
 	log *slog.Logger
 
-	requestMiddlewares  []func(r *sip.Request)
-	responseMiddlewares []func(r *sip.Response)
+	requestMiddlewares []func(r *sip.Request)
 }
 
 type ServerOption func(s *Server) error
@@ -77,9 +76,8 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		UserAgent: ua,
 		// userAgent:           "SIPGO",
 		// dnsResolver:         net.DefaultResolver,
-		requestMiddlewares:  make([]func(r *sip.Request), 0),
-		responseMiddlewares: make([]func(r *sip.Response), 0),
-		requestHandlers:     make(map[sip.RequestMethod]RequestHandler),
+		requestMiddlewares: make([]func(r *sip.Request), 0),
+		requestHandlers:    make(map[sip.RequestMethod]RequestHandler),
 		// log:                 log.Logger.With().Str("caller", "Server").Logger(),
 		log: sip.DefaultLogger().With("caller", "Server"),
 	}
@@ -89,7 +87,6 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 		}
 	}
 
-	// TODO have this exported as option
 	s.noRouteHandler = s.defaultUnhandledHandler
 
 	return s, nil
@@ -389,20 +386,9 @@ func (srv *Server) defaultUnhandledHandler(req *sip.Request, tx sip.ServerTransa
 	}
 }
 
-// ServeRequest can be used as middleware for preprocessing message
-func (srv *Server) ServeRequest(f func(r *sip.Request)) {
+// serveRequest can be used as middleware for preprocessing message
+func (srv *Server) serveRequest(f func(r *sip.Request)) {
 	srv.requestMiddlewares = append(srv.requestMiddlewares, f)
-}
-
-func (srv *Server) onTransportMessage(m sip.Message) {
-	//Register transport middleware
-	// this avoids allocations and it forces devs to avoid sip.Message usage
-	switch r := m.(type) {
-	case *sip.Response:
-		for _, mid := range srv.responseMiddlewares {
-			mid(r)
-		}
-	}
 }
 
 // Transport is function to get transport layer of server

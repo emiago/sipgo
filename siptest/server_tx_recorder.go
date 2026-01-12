@@ -13,9 +13,7 @@ type ServerTxRecorder struct {
 }
 
 func NewServerTxRecorder(req *sip.Request) *ServerTxRecorder {
-	// stx := transaction.NewServerTx()
-
-	key, err := sip.MakeServerTxKey(req)
+	key, err := sip.ServerTxKeyMake(req)
 	if err != nil {
 		panic(err)
 	}
@@ -66,5 +64,3 @@ func (r *ServerTxRecorder) Result() []*sip.Response {
 // func (r *ServerTxRecorder) Cancels() <-chan *sip.Request {
 
 // }
-
-// var _ sip.ServerTransaction = &ServerTxRecorder{}

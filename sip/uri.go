@@ -79,7 +79,7 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 	}
 
 	// Compulsory hostname.
-	buffer.WriteString(uri.Host)
+	buffer.WriteString(uriIP(uri.Host))
 
 	// Optional port number.
 	if uri.Port > 0 {

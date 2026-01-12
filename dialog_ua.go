@@ -21,12 +21,12 @@ type DialogUA struct {
 	RewriteContact bool
 }
 
-func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
+func (c *DialogUA) ReadInvite(inviteRequest *sip.Request, tx sip.ServerTransaction) (*DialogServerSession, error) {
 	// do some minimal validation
-	if inviteReq.Contact() == nil {
+	if inviteRequest.Contact() == nil {
 		return nil, ErrDialogInviteNoContact
 	}
-	if inviteReq.CSeq() == nil {
+	if inviteRequest.CSeq() == nil {
 		return nil, fmt.Errorf("no CSEQ header present")
 	}
 
@@ -36,8 +36,10 @@ func (c *DialogUA) ReadInvite(inviteReq *sip.Request, tx sip.ServerTransaction) 
 	if err != nil {
 		return nil, fmt.Errorf("generating dialog to tag failed: %w", err)
 	}
+	// As we are modifying request we need to perform shallow clone to avoid transaction races
+	inviteReq := inviteRequest.Clone()
 	inviteReq.To().Params["tag"] = uuid.String()
-	id, err := sip.UASReadRequestDialogID(inviteReq)
+	id, err := sip.DialogIDFromRequestUAS(inviteReq)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +96,12 @@ func (ua *DialogUA) Invite(ctx context.Context, recipient sip.Uri, body []byte, 
 		req.SetBody(body)
 	}
 
+	if recipient.UriParams != nil {
+		if tran, _ := recipient.UriParams.Get("transport"); tran != "" {
+			req.SetTransport(tran)
+		}
+	}
+
 	for _, h := range headers {
 		req.AppendHeader(h)
 	}
@@ -116,40 +124,4 @@ func (c *DialogUA) WriteInvite(ctx context.Context, inviteReq *sip.Request, opti
 	dtx.Dialog.Init()
 
 	return dtx, dtx.Invite(ctx, options...)
-}
-
-func (d *DialogClientSession) Invite(ctx context.Context, options ...ClientRequestOption) error {
-	cli := d.UA.Client
-	inviteReq := d.InviteRequest
-
-	var err error
-	d.inviteTx, err = func() (sip.ClientTransaction, error) {
-		// Try overriding contact header with via or local connection host port
-		if cont := inviteReq.Contact(); cont.Address.Port == 0 {
-			return cli.newTransaction(ctx, inviteReq, func(conn sip.Connection) error {
-				// Using via instead connection to avoid double parsing
-				// host, port, err = sip.ParseAddr(conn.LocalAddr().String())
-				via := inviteReq.Via()
-				if cont.Address.Host == "" {
-					cont.Address.Host = via.Host
-					cont.Address.Port = via.Port
-					return nil
-				}
-
-				// In case host is FQDN we will not override
-				if via.Host == cont.Address.Host {
-					cont.Address.Port = via.Port
-				}
-				return nil
-			}, options...)
-		}
-
-		return cli.TransactionRequest(ctx, inviteReq, options...)
-	}()
-
-	if err == nil {
-		d.lastCSeqNo.Store(inviteReq.CSeq().SeqNo)
-	}
-
-	return err
 }

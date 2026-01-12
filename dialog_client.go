@@ -179,6 +179,43 @@ func (s *DialogClientSession) Close() error {
 	return nil
 }
 
+// Invite creates transaction and sends invite.
+func (d *DialogClientSession) Invite(ctx context.Context, options ...ClientRequestOption) error {
+	cli := d.UA.Client
+	inviteReq := d.InviteRequest
+
+	var err error
+	d.inviteTx, err = func() (sip.ClientTransaction, error) {
+		// Try overriding contact header with via or local connection host port
+		if cont := inviteReq.Contact(); cont.Address.Port == 0 {
+			return cli.newTransaction(ctx, inviteReq, func(conn sip.Connection) error {
+				// Using via instead connection to avoid double parsing
+				// host, port, err = sip.ParseAddr(conn.LocalAddr().String())
+				via := inviteReq.Via()
+				if cont.Address.Host == "" {
+					cont.Address.Host = via.Host
+					cont.Address.Port = via.Port
+					return nil
+				}
+
+				// In case host is FQDN we will not override
+				if via.Host == cont.Address.Host {
+					cont.Address.Port = via.Port
+				}
+				return nil
+			}, options...)
+		}
+
+		return cli.TransactionRequest(ctx, inviteReq, options...)
+	}()
+
+	if err == nil {
+		d.lastCSeqNo.Store(inviteReq.CSeq().SeqNo)
+	}
+
+	return err
+}
+
 type AnswerOptions struct {
 	OnResponse func(res *sip.Response) error
 
@@ -209,6 +246,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		select {
 		case r = <-tx.Responses():
 			s.InviteResponse = r
+
 			// just pass
 		case <-ctx.Done():
 			// Send cancel
@@ -260,6 +298,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				if err != nil {
 					return err
 				}
+				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
 				continue
 			}
 		}
@@ -285,10 +324,10 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				// This keeps transaction within dialog
 				inviteRequest.RemoveHeader("Via")
 				tx, err = s.TransactionRequest(ctx, inviteRequest)
-
 				if err != nil {
 					return err
 				}
+				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
 				continue
 			}
 		}
@@ -296,7 +335,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		return &ErrDialogResponse{Res: r}
 	}
 
-	id, err := sip.MakeDialogIDFromResponse(r)
+	id, err := sip.DialogIDFromResponse(r)
 	if err != nil {
 		return err
 	}
@@ -375,13 +414,14 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	// request is passed to the transport layer directly for transmission,
 	// rather than a client transaction.  This is because the UAC core
 	// handles retransmissions of the ACK, not the transaction layer.
+	retransmissionAck := ack.Clone() // We need to clone for RACE safety
 	s.inviteTx.OnRetransmission(func(r *sip.Response) {
 		// Detect retransmission
 		if r.StatusCode != 200 {
 			return
 		}
 
-		if err := s.WriteRequest(ack); err != nil {
+		if err := s.WriteRequest(retransmissionAck); err != nil {
 			s.endWithCause(fmt.Errorf("ACK retransmission failed: %w", err))
 		}
 	})
@@ -605,7 +645,7 @@ func (s *DialogClientCache) loadDialog(id string) *DialogClientSession {
 }
 
 func (s *DialogClientCache) MatchRequestDialog(req *sip.Request) (*DialogClientSession, error) {
-	id, err := sip.UACReadRequestDialogID(req)
+	id, err := sip.DialogIDFromRequestUAC(req)
 	if err != nil {
 		return nil, errors.Join(err, ErrDialogOutsideDialog)
 	}

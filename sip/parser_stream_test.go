@@ -2,6 +2,7 @@ package sip
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestParserStreamBadMessage(t *testing.T) {
-	parser := ParserStream{}
+	parser := NewParser().NewSIPStream()
 
 	// 		The start-line, each message-header line, and the empty line MUST be
 	//    terminated by a carriage-return line-feed sequence (CRLF).  Note that
@@ -26,8 +27,8 @@ func TestParserStreamBadMessage(t *testing.T) {
 			"s=-", // We need at least 2 line to detect bad message
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
-		_, err := parser.ParseSIPStream([]byte(msgstr))
-		require.ErrorIs(t, err, ErrParseEOF)
+		_, err := parser.parseSIPStreamFull([]byte(msgstr))
+		require.Error(t, err)
 	})
 	t.Run("finish empty line", func(t *testing.T) {
 		rawMsg := []string{
@@ -37,7 +38,7 @@ func TestParserStreamBadMessage(t *testing.T) {
 			"",
 		}
 		msgstr := strings.Join(rawMsg, "\r\n")
-		_, err := parser.ParseSIPStream([]byte(msgstr))
+		_, err := parser.parseSIPStreamFull([]byte(msgstr))
 		require.Error(t, err, ErrParseSipPartial)
 	})
 }
@@ -47,6 +48,7 @@ func TestParserStreamMessage(t *testing.T) {
 	parser := p.NewSIPStream()
 
 	lines := []string{
+		"", "", // Check that stream ignores CRLF in the beginning
 		"INVITE sip:192.168.1.254:5060 SIP/2.0",
 		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
 		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
@@ -153,46 +155,91 @@ func TestParserStreamMessage(t *testing.T) {
 		"", // Content length includes last CRLF
 	}
 	data := []byte((strings.Join(lines, "\r\n")))
+	const bodySize = 3119
 
-	// make partials
-	part1 := data[:500]
-	part2 := data[500:1000]
-	part3 := data[1000:]
+	for _, c := range []struct {
+		Name  string
+		Skip  int
+		Split []int
+	}{
+		// arbitrary split points
+		{Split: []int{500, 1000}, Skip: 4},
+		{Split: []int{300, 2000}, Skip: 4},
+		{Split: []int{500, 1000}},
+		{Split: []int{300, 2000}},
+		// split at specific places
+		{
+			Name:  "few bytes",
+			Split: []int{1, 2, 3, 4, 5, 6},
+		},
+		{
+			Name:  "CRLF pings",
+			Split: []int{2, 4},
+		},
+		{
+			Name:  "after start line",
+			Split: []int{37 + 2}, Skip: 4,
+		},
+		{
+			Name:  "after header",
+			Split: []int{37 + 2 + 89 + 2}, Skip: 4,
+		},
+		{
+			Name:  "after all headers",
+			Split: []int{702}, Skip: 4,
+		},
+		{
+			Name:  "before body",
+			Split: []int{704}, Skip: 4,
+		},
+		// completely random split (try a few times)
+		{Split: []int{rand.IntN(len(data))}},
+		{Split: []int{rand.IntN(len(data))}},
+		{Split: []int{rand.IntN(len(data))}},
+	} {
+		name := c.Name
+		if name == "" {
+			name = fmt.Sprintf("split_%v_skip_%d", c.Split, c.Skip)
+			name = strings.ReplaceAll(name, "[", "")
+			name = strings.ReplaceAll(name, "]", "")
+		}
+		t.Run(name, func(t *testing.T) {
+			data := data
+			if c.Skip != 0 {
+				data = data[c.Skip:]
+			}
+			var parts [][]byte
+			for i := range c.Split {
+				start := 0
+				if i > 0 {
+					start = c.Split[i-1]
+				}
+				end := c.Split[i]
+				parts = append(parts, data[start:end])
+			}
+			lastPart := data[c.Split[len(c.Split)-1]:]
 
-	t.Run("first run", func(t *testing.T) {
-		t.Logf("Parsing part 1:\n%s", string(part1))
-		_, err := parser.ParseSIPStream(part1)
-		require.Error(t, err)
-		require.ErrorIs(t, err, ErrParseSipPartial)
+			for i, part := range parts {
+				t.Logf("Parsing part %d:\n%s", i+1, string(part))
+				_, err := parser.parseSIPStreamFull(part)
+				require.Error(t, err)
+				require.ErrorIs(t, err, ErrParseSipPartial)
+			}
+			t.Logf("Parsing final part:\n%s", string(lastPart))
+			msgs, err := parser.parseSIPStreamFull(lastPart)
+			require.NoError(t, err)
+			msg := msgs[0]
+			require.NotNil(t, msg)
+			require.Len(t, msg.Body(), bodySize)
+		})
+	}
 
-		t.Logf("Parsing part 2:\n%s", string(part2))
-		_, err = parser.ParseSIPStream(part2)
-		require.Error(t, err)
-		require.ErrorIs(t, err, ErrParseSipPartial)
-
-		t.Logf("Parsing part 3:\n%s", string(part3))
-		msgs, err := parser.ParseSIPStream(part3)
-		msg := msgs[0]
-		require.NoError(t, err)
-		require.NotNil(t, msg)
-		require.Len(t, msg.Body(), 3119)
-		// Check is parser reset it self
-		require.Nil(t, parser.reader)
+	t.Run("reset", func(t *testing.T) {
+		// Check is parser resets itself
+		require.True(t, parser.state == stateStartLine)
+		parser.Close()
+		require.Nil(t, parser.buf)
 	})
-
-	t.Run("second run", func(t *testing.T) {
-		part1 := data[:300]
-		part2 := data[300:2000]
-		part3 := data[2000:]
-
-		parser.ParseSIPStream(part1)
-		parser.ParseSIPStream(part2)
-		msg, err := parser.ParseSIPStream(part3)
-		require.NoError(t, err)
-		require.NotNil(t, msg)
-		require.Nil(t, parser.reader)
-	})
-
 }
 
 func TestParserStreamChunky(t *testing.T) {
@@ -201,12 +248,12 @@ func TestParserStreamChunky(t *testing.T) {
 
 	// Broken first line
 	line := []byte("INVITE sip:192.168.1.254:5060 SIP/")
-	_, err := parser.ParseSIPStream(line)
+	_, err := parser.parseSIPStreamFull(line)
 	require.ErrorIs(t, err, ErrParseSipPartial)
 
 	// Full first line
 	line = []byte("2.0\r\n")
-	_, err = parser.ParseSIPStream(line)
+	_, err = parser.parseSIPStreamFull(line)
 	require.ErrorIs(t, err, ErrParseSipPartial)
 
 	// broken header
@@ -214,10 +261,8 @@ func TestParserStreamChunky(t *testing.T) {
 		"Via: SIP/2.0",
 	}
 	data := []byte((strings.Join(lines, "\r\n")))
-	_, err = parser.ParseSIPStream(data)
+	_, err = parser.parseSIPStreamFull(data)
 	require.ErrorIs(t, err, ErrParseSipPartial)
-
-	// TODO add more here chunks
 
 	// rest of sip
 	lines = []string{
@@ -235,7 +280,7 @@ func TestParserStreamChunky(t *testing.T) {
 	}
 
 	data = []byte((strings.Join(lines, "\r\n")))
-	_, err = parser.ParseSIPStream(data)
+	_, err = parser.parseSIPStreamFull(data)
 	require.NoError(t, err)
 }
 
@@ -273,7 +318,7 @@ func TestParserStreamMultiple(t *testing.T) {
 
 	data := []byte((strings.Join(lines, "\r\n")))
 
-	msgs, err := parser.ParseSIPStream(data)
+	msgs, err := parser.parseSIPStreamFull(data)
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 	require.Equal(t, msgs[0].(*Response).StartLine(), "SIP/2.0 100 Trying")
@@ -289,14 +334,14 @@ func TestParserStreamMultiple(t *testing.T) {
 		var msgs []Message
 		var err error
 		for _, c := range chunks {
-			msgs, err = parser.ParseSIPStream(c)
+			msgs, err = parser.parseSIPStreamFull(c)
 		}
 		require.NoError(t, err)
 		require.Len(t, msgs, 2)
 	})
 }
 
-func TestParserStreamMessageSizeLimit(t *testing.T) {
+func TestParserStreamMessageSizeLimitBody(t *testing.T) {
 	p := NewParser()
 	parser := p.NewSIPStream()
 
@@ -322,9 +367,102 @@ func TestParserStreamMessageSizeLimit(t *testing.T) {
 
 	data := []byte(strings.Join(lines, "\r\n"))
 
-	_, err := parser.ParseSIPStream(data)
+	_, err := parser.parseSIPStreamFull(data)
 	require.Error(t, err)
-	require.Equal(t, "Message exceeds ParseMaxMessageLength", err.Error())
+	require.Equal(t, ErrMessageTooLarge, err)
+}
+
+func TestParserStreamMessageSizeLimitHeaders(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines := []string{
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
+		"CSeq: 100 INVITE",
+		"Contact: <sip:192.168.1.155:44861;transport=tcp>;some.tag.here;other-tag=here",
+		"From: <sip:192.168.1.155>;tag=76fb12e7e2241ed6",
+		"To: <sip:192.168.1.254:5060>",
+		"Max-Forwards: 70",
+		"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,INFO,OPTIONS,REFER,NOTIFY",
+		"User-Agent: MyUserAgent v2.3.6. b53ee2632df (DEV) Client",
+		"Supported: replaces,100rel,timer,gruu,path,outbound",
+		"Session-Expires: 1800",
+		"Session-ID: e937754d76855249814a9b7f8b3bf556;remote=00000000000000000000000000000000",
+	}
+	for range 6500 {
+		lines = append(lines, "X-Data: 10") // ~10 B
+	}
+	lines = append(lines,
+		"Content-Length: 0",
+		"",
+		"",
+	)
+
+	data := []byte(strings.Join(lines, "\r\n"))
+
+	_, err := parser.parseSIPStreamFull(data)
+	require.Error(t, err)
+	require.Equal(t, ErrMessageTooLarge, err)
+}
+
+func TestParserStreamMessageSizeLimitRecover(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+
+	lines := []string{
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 25be1c3be64adb89fa2e86772dd99db1",
+		"CSeq: 100 INVITE",
+		"Contact: <sip:192.168.1.155:44861;transport=tcp>;some.tag.here;other-tag=here",
+		"From: <sip:192.168.1.155>;tag=76fb12e7e2241ed6",
+		"To: <sip:192.168.1.254:5060>",
+		"Max-Forwards: 70",
+		"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,INFO,OPTIONS,REFER,NOTIFY",
+		"User-Agent: MyUserAgent v2.3.6. b53ee2632df (DEV) Client",
+		"Supported: replaces,100rel,timer,gruu,path,outbound",
+		"Session-Expires: 1800",
+		"Session-ID: e937754d76855249814a9b7f8b3bf556;remote=00000000000000000000000000000000",
+	}
+	for range 6500 {
+		lines = append(lines, "X-Data: 10") // ~10 B
+	}
+	lines = append(lines,
+		"Content-Length: 0",
+		"",
+		"",
+		"INVITE sip:192.168.1.254:5060 SIP/2.0",
+		"Via: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK954690f3012120bc5d064d3f7b5d8a24;rport",
+		"Call-ID: 2",
+		"Content-Length: 0",
+		"",
+		"",
+	)
+
+	data := []byte(strings.Join(lines, "\r\n"))
+	_, err := parser.Write(data)
+	require.NoError(t, err)
+
+	var (
+		out     []Message
+		lastErr error
+	)
+	for range 3 {
+		m, _, err := parser.ParseNext()
+		if m != nil {
+			out = append(out, m)
+		}
+		lastErr = err
+		if err == nil {
+			break
+		}
+		require.Equal(t, ErrMessageTooLarge, err)
+	}
+	require.NoError(t, lastErr)
+	require.Equal(t, 2, len(out))
+	require.Equal(t, "2", out[1].CallID().Value())
 }
 
 func TestParserStreamPartialAfterStartLine(t *testing.T) {
@@ -349,9 +487,9 @@ func TestParserStreamPartialAfterStartLine(t *testing.T) {
 	}
 	input2 := []byte(strings.Join(lines2, "\r\n"))
 
-	_, err := parser.ParseSIPStream(input1)
+	_, err := parser.parseSIPStreamFull(input1)
 	require.Error(t, err)
-	_, err = parser.ParseSIPStream(input2)
+	_, err = parser.parseSIPStreamFull(input2)
 	require.NoError(t, err)
 }
 
@@ -392,7 +530,7 @@ func BenchmarkParserStream(b *testing.B) {
 			var msg Message
 			var err error
 
-			msgs, err := pstream.ParseSIPStream(data)
+			msgs, err := pstream.parseSIPStreamFull(data)
 			if err != nil {
 				b.Fatal("Parsing failed", err)
 			}
@@ -412,7 +550,7 @@ func BenchmarkParserStream(b *testing.B) {
 			var err error
 
 			for _, data := range chunks {
-				msgs, err = pstream.ParseSIPStream(data)
+				msgs, err = pstream.parseSIPStreamFull(data)
 			}
 
 			if err != nil {
@@ -435,7 +573,7 @@ func BenchmarkParserStream(b *testing.B) {
 				var err error
 
 				for _, data := range chunks {
-					msgs, err = pstream.ParseSIPStream(data)
+					msgs, err = pstream.parseSIPStreamFull(data)
 				}
 				if err != nil {
 					b.Fatal("Parsing failed", err)

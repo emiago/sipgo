@@ -17,7 +17,7 @@ import (
 func TestUnmarshalParams(t *testing.T) {
 	s := "transport=tls;lr"
 	params := HeaderParams{}
-	UnmarshalParams(s, ';', '?', params)
+	UnmarshalHeaderParams(s, ';', '?', params)
 	assert.Equal(t, 2, len(params))
 	assert.Equal(t, "tls", params["transport"])
 	assert.Equal(t, "", params["lr"])
@@ -33,8 +33,11 @@ func testParseHeaderOnRequest(t *testing.T, parser *Parser, header string) (*Req
 	// This is fake way to get parsing done. We use fake message and read first header
 	msg := NewRequest(INVITE, Uri{})
 	name := strings.Split(header, ":")[0]
-	err := parser.headersParsers.parseMsgHeader(msg, header)
+	out, err := parser.headersParsers.ParseHeader(nil, []byte(header))
 	require.Nil(t, err)
+	for _, h := range out {
+		msg.AppendHeader(h)
+	}
 	return msg, msg.GetHeader(name)
 }
 
@@ -46,7 +49,7 @@ func TestParseHeaders(t *testing.T) {
 		h := testParseHeader(t, parser, header)
 
 		hstr := h.String()
-		// TODO find better way to compare
+		// Not best way to compare, just lazy
 		unordered := header[:strings.Index(header, ";")] + ";branch=" + branch + ";rport"
 		assert.True(t, hstr == header || hstr == unordered, hstr)
 
@@ -172,9 +175,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 		branch := GenerateBranch()
 		header := "Via: SIP/2.0/UDP 127.0.0.2:5060;branch=" + branch
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserVia(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserVia(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -184,9 +188,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 	b.Run("ToHeader", func(b *testing.B) {
 		header := "To: \"Bob\" <sip:bob@127.0.0.1:5060>"
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserTo(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserTo(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -196,9 +201,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 	b.Run("FromHeader", func(b *testing.B) {
 		header := "From: \"Bob\" <sip:bob@127.0.0.1:5060>"
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserFrom(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserFrom(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -208,9 +214,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 	b.Run("ContactHeader", func(b *testing.B) {
 		header := "Contact: <sip:sipp@127.0.0.3:5060>"
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserContact(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserContact(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -220,9 +227,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 	b.Run("CSEQ", func(b *testing.B) {
 		header := "CSEQ: 1234 INVITE"
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserCSeq(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserCSeq(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -232,9 +240,10 @@ func BenchmarkParserHeaders(b *testing.B) {
 	b.Run("Route", func(b *testing.B) {
 		header := "Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
 		colonIdx := strings.Index(header, ":")
+		name := []byte(header[:colonIdx])
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := headerParserRoute(header[:colonIdx], header[colonIdx+2:])
+			_, err := headerParserRoute(name, header[colonIdx+2:])
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -260,6 +269,8 @@ func TestParseBadMessages(t *testing.T) {
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.ParseSIP([]byte(msgstr))
 		require.ErrorIs(t, err, ErrParseEOF)
+		_, _, err = parser.Parse([]byte(msgstr), false)
+		require.Error(t, err, io.ErrUnexpectedEOF)
 	})
 	t.Run("finish empty line", func(t *testing.T) {
 		rawMsg := []string{
@@ -271,6 +282,8 @@ func TestParseBadMessages(t *testing.T) {
 		msgstr := strings.Join(rawMsg, "\r\n")
 		_, err := parser.ParseSIP([]byte(msgstr))
 		require.Error(t, err, ErrParseEOF)
+		_, _, err = parser.Parse([]byte(msgstr), false)
+		require.Error(t, err, io.ErrUnexpectedEOF)
 	})
 
 }
@@ -282,12 +295,8 @@ func TestParseRequest(t *testing.T) {
 	t.Run("NoCRLF", func(t *testing.T) {
 		// https://www.rfc-editor.org/rfc/rfc3261.html#section-7
 		// In case of missing CRLF
-		m := "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0"
-		_, err := parser.ParseSIP([]byte(m))
-		assert.ErrorIs(t, err, io.EOF)
-
 		for _, msgstr := range []string{
-			// "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
+			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\n",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
@@ -484,7 +493,6 @@ a=rtpmap:31 LPC`,
 	msg, err := parser.ParseSIP(data)
 	require.Nil(t, err, err)
 
-	// TODO check each header
 	t.Log(msg.String())
 }
 
@@ -546,16 +554,6 @@ func BenchmarkParser(b *testing.B) {
 			}
 		})
 	})
-
-	// b.Run("Paralel", func(b *testing.B) {
-	// 	b.RunParallel(func(p *testing.PB) {
-	// 		b.ResetTimer()
-	// 		for p.Next() {
-	// 			testcase(b)
-	// 		}
-	// 	})
-	// })
-
 }
 
 func BenchmarkParseStartLine(b *testing.B) {
@@ -571,9 +569,10 @@ func BenchmarkParseStartLine(b *testing.B) {
 
 func BenchmarkParserAddressValue(b *testing.B) {
 	header := "To: \"Bob\" <sip:bob:pass@127.0.0.1:5060>;tag=1928301774;xxx=xxx;yyyy=yyyy"
+	name := []byte("To")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := headerParserTo("To", header[4:])
+		_, err := headerParserTo(name, header[4:])
 		if err != nil {
 			b.Fatal(err)
 		}

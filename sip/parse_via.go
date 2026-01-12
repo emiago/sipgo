@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func headerParserVia(headerName string, headerText string) (
+func headerParserVia(headerName []byte, headerText string) (
 	header Header, err error) {
 	// sections := strings.Split(headerText, ",")
 	h := ViaHeader{
@@ -36,10 +36,6 @@ func parseViaHeader(headerText string, h *ViaHeader) error {
 			}
 			return err
 		}
-		// If we alocated next hop this means we hit coma
-		// if hop.Next != nil {
-		// 	hop = h.Next
-		// }
 		ind += nextInd
 	}
 	return nil
@@ -112,20 +108,13 @@ func viaStateParams(h *ViaHeader, s string) (viaFSM, int, error) {
 	var err error
 	coma := strings.IndexRune(s, ',')
 	if coma > 0 {
-		// h.Params, _, err = ParseParams(s[:coma], ';', ';', 0, true, true)
-		// h.Params, _, err = ParseParams(s[:coma], ';', ';')
-		_, err = UnmarshalParams(s[:coma], ';', ',', h.Params)
+		_, err = UnmarshalHeaderParams(s[:coma], ';', ',', h.Params)
 		if err != nil {
 			return nil, 0, err
 		}
-		// h.Next = &ViaHeader{
-		// 	Params: HeaderParams{},
-		// }
 		return viaStateProtocol, coma, errComaDetected(coma)
 	}
 
-	// h.Params, _, err = ParseParams(s, ';', ';', 0, true, true)
-	// h.Params, _, err = ParseParams(s, ';', ';')
-	_, err = UnmarshalParams(s, ';', '\r', h.Params)
+	_, err = UnmarshalHeaderParams(s, ';', '\r', h.Params)
 	return nil, 0, err
 }

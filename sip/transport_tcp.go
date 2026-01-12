@@ -19,14 +19,14 @@ type TransportTCP struct {
 	log             *slog.Logger
 	connectionReuse bool
 
-	pool *ConnectionPool
+	pool *connectionPool
 
 	DialerCreate func(laddr net.Addr) net.Dialer
 }
 
 func (t *TransportTCP) init(par *Parser) {
 	t.parser = par
-	t.pool = NewConnectionPool()
+	t.pool = newConnectionPool()
 	t.transport = "TCP"
 	if t.log == nil {
 		t.log = DefaultLogger()
@@ -115,18 +115,17 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
 			Conn:     conn,
-			refcount: 2 + IdleConnection,
+			refcount: 2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
 		}
 
-		// Increase ref by 1 before returnin
-		// c.Ref(1)
+		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 		return c, nil
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	c := conn.(*TCPConnection)
-	go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
 	return c, nil
 }
 
@@ -137,7 +136,7 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	t.log.Debug("New connection", "raddr", raddr)
 	c := &TCPConnection{
 		Conn:     conn,
-		refcount: 1 + IdleConnection,
+		refcount: 1 + TransportIdleConnection,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
@@ -201,7 +200,7 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 }
 
 func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
-	err := par.ParseSIPStreamEach(data, func(msg Message) {
+	err := par.ParseSIPStream(data, func(msg Message) {
 		msg.SetTransport(t.Network())
 		msg.SetSource(src)
 		handler(msg)

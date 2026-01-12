@@ -3,7 +3,6 @@ package sip
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"strconv"
 	"strings"
 )
@@ -223,13 +222,9 @@ func (hs *headers) ReplaceHeader(header Header) {
 	}
 }
 
-// Headers gets some headers.
+// Headers  returns list of headers.
+// NOT THREAD SAFE for updating. Clone them
 func (hs *headers) Headers() []Header {
-	// hdrs := make([]Header, 0)
-	// for _, key := range hs.headerOrder {
-	// 	hdrs = append(hdrs, hs.headers[key])
-	// }
-
 	return hs.headerOrder
 }
 
@@ -884,17 +879,15 @@ func (h ContentLengthHeader) Value() string { return strconv.Itoa(int(h)) }
 func (h *ContentLengthHeader) headerClone() Header { return h }
 
 // ViaHeader is Via header representation.
-// It can be linked list of multiple via if they are part of one header
 type ViaHeader struct {
 	// E.g. 'SIP'.
 	ProtocolName string
 	// E.g. '2.0'.
 	ProtocolVersion string
 	Transport       string
-	// TODO consider changing Host Port as struct Addr from transport
-	Host   string
-	Port   int // This is optional
-	Params HeaderParams
+	Host            string
+	Port            int // This is optional
+	Params          HeaderParams
 }
 
 func (hop *ViaHeader) SentBy() string {
@@ -934,7 +927,7 @@ func (h *ViaHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString("/")
 	buffer.WriteString(h.Transport)
 	buffer.WriteString(" ")
-	buffer.WriteString(h.Host)
+	buffer.WriteString(uriIP(h.Host))
 
 	if h.Port > 0 {
 		buffer.WriteString(":")
@@ -988,7 +981,6 @@ func (h *ContentTypeHeader) valueStringWrite(buffer io.StringWriter) {
 	buffer.WriteString(h.Value())
 }
 
-// func (h **ContentTypeHeader) Name() string { return "Content-Type" }
 func (h *ContentTypeHeader) Name() string { return "Content-Type" }
 
 func (h *ContentTypeHeader) Value() string { return string(*h) }
@@ -1201,7 +1193,7 @@ func parseHeaderLazy[T any, HP headerPointerReceiver[T]](hs *headers, f func(hea
 		}
 
 		if err := f(hdr.Value(), h); err != nil {
-			slog.Debug("Lazy header parsing failed", "header", hdr.Name(), "error", err)
+			DefaultLogger().Debug("Lazy header parsing failed", "header", hdr.Name(), "error", err)
 			return false
 		}
 		return true

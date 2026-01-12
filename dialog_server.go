@@ -259,6 +259,8 @@ func (s *DialogServerSession) authDigest(chal *digest.Challenge, opts digest.Opt
 }
 
 // WriteResponse allows passing you custom response
+// NOTE: Make sure you have built response based on dialog.InviteRequest which makes sure
+// that dialog ID do match
 func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	tx := s.inviteTx
 
@@ -298,7 +300,7 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 		return nil
 	}
 
-	id, err := sip.MakeDialogIDFromResponse(res)
+	id, err := sip.DialogIDFromResponse(res)
 	if err != nil {
 		return err
 	}
@@ -430,7 +432,7 @@ func (dt *DialogServerSession) validateRequest(req *sip.Request) (err error) {
 // DialogServerCache serves as quick way to start building dialog server
 // It is not optimized version and it is recomended that you build own dialog caching
 type DialogServerCache struct {
-	dialogs sync.Map // TODO replace with typed version
+	dialogs sync.Map
 	ua      DialogUA
 }
 
@@ -445,7 +447,7 @@ func (s *DialogServerCache) loadDialog(id string) *DialogServerSession {
 }
 
 func (s *DialogServerCache) MatchDialogRequest(req *sip.Request) (*DialogServerSession, error) {
-	id, err := sip.UASReadRequestDialogID(req)
+	id, err := sip.DialogIDFromRequestUAS(req)
 	if err != nil {
 		return nil, errors.Join(ErrDialogOutsideDialog, err)
 	}

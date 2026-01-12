@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -172,6 +173,69 @@ func TestIntegrationClientServer(t *testing.T) {
 			tx.Terminate()
 		})
 	}
+}
+
+func TestIntegrationServerResponse(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+	// Per rfc 18.2.2 server should
+	// use Headers for unreliable requests while connection addr for reliable
+	ua, _ := NewUA()
+	defer ua.Close()
+	srv, _ := NewServer(ua)
+
+	serverResDestination := atomic.Pointer[string]{}
+	srv.OnOptions(func(req *sip.Request, tx sip.ServerTransaction) {
+		res := sip.NewResponseFromRequest(req, 200, "", nil)
+		dst := res.Destination()
+		serverResDestination.Store(&dst)
+		tx.Respond(res)
+	})
+
+	ludp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15151})
+	require.NoError(t, err)
+	defer ludp.Close()
+	go srv.ServeUDP(ludp)
+
+	ltcp, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15151})
+	require.NoError(t, err)
+	defer ltcp.Close()
+	go srv.ServeTCP(ltcp)
+
+	t.Run("UDP", func(t *testing.T) {
+		ua, _ := NewUA()
+		defer ua.Close()
+		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:15152"))
+		// Make cli to listen on this port
+		l, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15152})
+		require.NoError(t, err)
+		defer l.Close()
+		go ua.TransportLayer().ServeUDP(l)
+
+		req := sip.NewRequest(sip.OPTIONS, sip.Uri{Scheme: "sip", User: "test", Host: "127.0.0.1", Port: 15151})
+		res, err := cli.Do(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, 200, res.StatusCode)
+		// Now this is important that server choosed this addr instead client default
+		// This confirms server is actually sending request over VIA
+		assert.Equal(t, "127.0.0.1:15152", *serverResDestination.Load())
+	})
+
+	t.Run("TCP", func(t *testing.T) {
+		ua, _ := NewUA()
+		defer ua.Close()
+		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:9999"), WithClientConnectionAddr("127.0.0.1:15000"))
+
+		// TCP should always receive response over same connection and ignoring Via
+		req := sip.NewRequest(sip.OPTIONS, sip.Uri{Scheme: "sip", User: "test", Host: "127.0.0.1", Port: 15151})
+		req.SetTransport("TCP")
+		res, err := cli.Do(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, 200, res.StatusCode)
+		assert.Equal(t, "127.0.0.1:15000", *serverResDestination.Load())
+	})
 }
 
 func BenchmarkIntegrationClientServer(t *testing.B) {

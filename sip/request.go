@@ -3,6 +3,7 @@ package sip
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -15,6 +16,8 @@ type Request struct {
 
 	// Laddr is Connection local Addr used to sent request
 	Laddr Addr
+	// raddr is address set after resolving Via
+	raddr Addr
 }
 
 // NewRequest creates base for building sip Request
@@ -95,6 +98,8 @@ func (req *Request) StringWrite(buffer io.StringWriter) {
 	// buffer.WriteString("\r\n")
 }
 
+// Clone performs shallow clone, that is clones everything except Body
+// If full clone is needed make sure body is also cloned
 func (req *Request) Clone() *Request {
 	return cloneRequest(req)
 }
@@ -150,16 +155,25 @@ func (req *Request) Transport() string {
 	return tp
 }
 
-// Source will return host:port address
+// Source will return host:port address using what is set by SetSource or based on Via header value
 // In case of network parsed request source will be connection remote address
 func (req *Request) Source() string {
 	if src := req.MessageData.Source(); src != "" {
 		return src
 	}
+	return req.sourceVia()
+}
 
+// sourceVia returns addr based on Via Header.
+func (req *Request) sourceVia() string {
+	host, port := req.sourceViaHostPort()
+	return fmt.Sprintf("%s:%d", uriNetIP(host), port)
+}
+
+func (req *Request) sourceViaHostPort() (string, int) {
 	viaHop := req.Via()
 	if viaHop == nil {
-		return ""
+		return "", 0
 	}
 
 	var (
@@ -186,7 +200,7 @@ func (req *Request) Source() string {
 		}
 	}
 
-	return fmt.Sprintf("%v:%v", host, port)
+	return host, port
 }
 
 // TODO: return Addr instead string, to remove double string parsing
@@ -328,18 +342,12 @@ func cloneRequest(req *Request) *Request {
 	for _, h := range req.CloneHeaders() {
 		newReq.AppendHeader(h)
 	}
-	// for _, h := range cloneHeaders(req) {
-	// 	newReq.AppendHeader(h)
-	// }
-
-	// newReq.SetBody(req.Body())
+	newReq.SetBody(slices.Clone(req.Body()))
 	newReq.SetTransport(req.Transport())
 	newReq.SetSource(req.Source())
 	newReq.SetDestination(req.Destination())
+	newReq.raddr = req.raddr
+	newReq.Laddr = req.Laddr
 
 	return newReq
-}
-
-func CopyRequest(req *Request) *Request {
-	return cloneRequest(req)
 }

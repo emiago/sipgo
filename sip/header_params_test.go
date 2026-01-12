@@ -41,14 +41,6 @@ func BenchmarkHeaderParams(b *testing.B) {
 		}
 	}
 
-	// Lot of allocations makes slower parsing
-	// b.Run("GOSIP", func(b *testing.B) {
-	// 	for i := 0; i < b.N; i++ {
-	// 		hp := NewParams()
-	// 		testParams(b, hp.(Params))
-	// 	}
-	// })
-
 	// Our version must be faster than GOSIP
 	b.Run("MAP", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -82,9 +74,6 @@ func BenchmarkStringConcetationVsBuffer(b *testing.B) {
 			buf.WriteString(name)
 			buf.WriteString(":")
 			buf.WriteString(value)
-			// if buf.String() != expected {
-			// 	b.FailNow()
-			// }
 		}
 		if buf.Len() == 0 {
 			b.FailNow()
