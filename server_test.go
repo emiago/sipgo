@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emiago/sipgo/fakes"
-	"github.com/emiago/sipgo/sip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/emiago/sipgo/fakes"
+	"github.com/emiago/sipgo/sip"
 )
 
 func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
@@ -26,8 +27,8 @@ func testCreateMessage(t testing.TB, rawMsg []string) sip.Message {
 
 func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip.Uri, transport string) *sip.Request {
 	req := sip.NewRequest(method, recipment)
-	params := sip.NewParams()
-	params["branch"] = sip.GenerateBranch()
+	var params sip.HeaderParams
+	params.Add("branch", sip.GenerateBranch())
 	req.AppendHeader(&sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
@@ -39,22 +40,18 @@ func createSimpleRequest(method sip.RequestMethod, sender sip.Uri, recipment sip
 	req.AppendHeader(&sip.FromHeader{
 		DisplayName: strings.ToUpper(sender.User),
 		Address: sip.Uri{
-			User:      sender.User,
-			Host:      sender.Host,
-			Port:      sender.Port,
-			UriParams: sip.NewParams(),
+			User: sender.User,
+			Host: sender.Host,
+			Port: sender.Port,
 		},
-		Params: sip.NewParams(),
 	})
 	req.AppendHeader(&sip.ToHeader{
 		DisplayName: strings.ToUpper(recipment.User),
 		Address: sip.Uri{
-			User:      recipment.User,
-			Host:      recipment.Host,
-			Port:      recipment.Port,
-			UriParams: sip.NewParams(),
+			User: recipment.User,
+			Host: recipment.Host,
+			Port: recipment.Port,
 		},
-		Params: sip.NewParams(),
 	})
 	callid := sip.CallIDHeader("gotest-" + time.Now().Format(time.RFC3339Nano))
 	req.AppendHeader(&callid)

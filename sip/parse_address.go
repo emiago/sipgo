@@ -9,7 +9,7 @@ import (
 type nameAddress struct {
 	displayName  string
 	uri          *Uri
-	headerParams HeaderParams
+	headerParams *HeaderParams
 }
 
 type addressFSM func(dispName *nameAddress, s string) (addressFSM, string, error)
@@ -17,7 +17,7 @@ type addressFSM func(dispName *nameAddress, s string) (addressFSM, string, error
 // ParseAddressValue parses an address - such as from a From, To, or
 // Contact header. It returns:
 // See RFC 3261 section 20.10 for details on parsing an address.
-func ParseAddressValue(addressText string, uri *Uri, headerParams HeaderParams) (displayName string, err error) {
+func ParseAddressValue(addressText string, uri *Uri, headerParams *HeaderParams) (displayName string, err error) {
 	if len(addressText) == 0 {
 		return "", errors.New("Empty Address")
 	}
@@ -196,8 +196,8 @@ func headerParserTo(headerName []byte, headerText string) (header Header, err er
 func parseToHeader(headerText string, h *ToHeader) error {
 	var err error
 
-	h.Params = NewParams()
-	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
+	h.Params = nil
+	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, &h.Params)
 	if err != nil {
 		return err
 	}
@@ -222,8 +222,8 @@ func headerParserFrom(headerName []byte, headerText string) (header Header, err 
 func parseFromHeader(headerText string, h *FromHeader) error {
 	var err error
 
-	h.Params = NewParams()
-	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
+	h.Params = nil
+	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, &h.Params)
 	// h.DisplayName, h.Address, h.Params, err = ParseAddressValue(headerText)
 	if err != nil {
 		return err
@@ -276,8 +276,8 @@ func parseContactHeader(headerText string, h *ContactHeader) error {
 	}
 
 	var e error
-	h.Params = NewParams()
-	h.DisplayName, e = ParseAddressValue(headerText[:endInd], &h.Address, h.Params)
+	h.Params = nil
+	h.DisplayName, e = ParseAddressValue(headerText[:endInd], &h.Address, &h.Params)
 	if e != nil {
 		return e
 	}
@@ -326,8 +326,8 @@ func headerParserReferredBy(headerName []byte, headerText string) (header Header
 func parseReferredByHeader(headerText string, h *ReferredByHeader) error {
 	var err error
 
-	h.Params = NewParams()
-	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, h.Params)
+	h.Params = nil
+	h.DisplayName, err = ParseAddressValue(headerText, &h.Address, &h.Params)
 	if err != nil {
 		return err
 	}

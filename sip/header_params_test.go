@@ -8,7 +8,7 @@ import (
 )
 
 func TestSepToString(t *testing.T) {
-	hp := NewParams()
+	var hp HeaderParams
 	hp.Add("tag", "aaa")
 	hp.Add("branch", "bbb")
 
@@ -22,10 +22,10 @@ func TestSepToString(t *testing.T) {
 func BenchmarkHeaderParams(b *testing.B) {
 
 	testParams := func(b *testing.B, hp HeaderParams) {
-		hp = hp.Add("branch", "assadkjkgeijdas")
-		hp = hp.Add("received", "127.0.0.1")
-		hp = hp.Add("toremove", "removeme")
-		hp = hp.Remove("toremove")
+		hp.Add("branch", "assadkjkgeijdas")
+		hp.Add("received", "127.0.0.1")
+		hp.Add("toremove", "removeme")
+		hp.Remove("toremove")
 
 		if _, exists := hp.Get("received"); !exists {
 			b.Fatal("received does not exists")
@@ -36,7 +36,7 @@ func BenchmarkHeaderParams(b *testing.B) {
 			b.Fatal("Params empty")
 		}
 
-		if s != "branch=assadkjkgeijdas;received=127.0.0.1" && s != "received=127.0.0.1;branch=assadkjkgeijdas" {
+		if s != "branch=assadkjkgeijdas;received=127.0.0.1" {
 			b.Fatal("Bad parsing")
 		}
 	}
