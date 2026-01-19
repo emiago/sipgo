@@ -332,6 +332,10 @@ func newCancelRequest(requestForCancel *Request) *Request {
 	return cancelReq
 }
 
+func (r *Request) remoteAddress() Addr {
+	return r.raddr
+}
+
 func cloneRequest(req *Request) *Request {
 	newReq := NewRequest(
 		req.Method,

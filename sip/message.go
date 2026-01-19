@@ -120,6 +120,8 @@ type Message interface {
 	SetSource(src string)
 	Destination() string
 	SetDestination(dest string)
+
+	remoteAddress() Addr
 }
 
 type MessageData struct {

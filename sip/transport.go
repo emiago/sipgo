@@ -59,6 +59,7 @@ type Addr struct {
 	IP       net.IP // Must be in IP format
 	Port     int
 	Hostname string // Original hostname before resolved to IP
+	Zone     string
 }
 
 func (a *Addr) String() string {

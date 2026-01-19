@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -375,35 +376,9 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		return nil, fmt.Errorf("transport %s is not supported", network)
 	}
 
-	// Resolve our remote address
-	a := req.Destination()
-	host, port, err := ParseAddr(a)
-	if err != nil {
-		return nil, fmt.Errorf("build address target for %s: %w", a, err)
-	}
-
-	// dns srv lookup
-
-	raddr := Addr{
-		IP:       net.ParseIP(host),
-		Port:     port,
-		Hostname: host,
-	}
-
-	if raddr.Port == 0 {
-		// Use default port for transport
-		raddr.Port = DefaultPort(network)
-	}
-
-	if raddr.IP == nil {
-		if err := l.resolveAddr(ctx, network, host, req.Recipient.Scheme, &raddr); err != nil {
-			return nil, err
-		}
-
-		// Save destination in request to avoid repeated resolving
-		// This also solves problem where subsequent request like NON 2xx ACK can
-		// send on same destination without resolving again.
-		// req.SetDestination(raddr.String())
+	raddr := Addr{}
+	if err := l.resolveRemoteAddr(ctx, network, req.Destination(), req.Recipient.Scheme, &raddr); err != nil {
+		return nil, err
 	}
 
 	// Now use Via header to determine our local address
@@ -533,24 +508,11 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 
 	raddr := Addr{
-		IP:       net.ParseIP(uriNetIP(viaHost)),
-		Port:     viaPort,
-		Hostname: viaHost,
+		// IP:       net.ParseIP(uriNetIP(viaHost)),
 	}
 
-	if raddr.Port == 0 {
-		// Use default port for transport
-		raddr.Port = DefaultPort(network)
-	}
-
-	if raddr.IP == nil {
-		// https://datatracker.ietf.org/doc/html/rfc3263#section-5
-		// NOTE: Full RFC may require we do this differentely
-		// Whe port exists AAAA is used otherwise it should go immediately by SRV
-		// In our case we do both by default
-		if err := l.resolveAddr(ctx, network, viaHost, req.Recipient.Scheme, &raddr); err != nil {
-			return nil, err
-		}
+	if err := l.resolveRemoteAddr(ctx, network, uriNetIP(viaHost), req.Recipient.Scheme, &raddr); err != nil {
+		return nil, err
 	}
 
 	// Set request remote address to be used for further responses
@@ -579,6 +541,41 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	}
 	c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 	return c, err
+}
+
+func (l *TransportLayer) resolveRemoteAddr(ctx context.Context, network string, a string, sipScheme string, raddr *Addr) error {
+	host, port, err := ParseAddr(a)
+	if err != nil {
+		return fmt.Errorf("parse address failed for %s: %w", a, err)
+	}
+	raddr.Hostname = host
+	raddr.Port = port
+	if raddr.Port == 0 {
+		// Use default port for transport
+		raddr.Port = DefaultPort(network)
+	}
+
+	netaddr, err := netip.ParseAddr(host)
+	// dns srv lookup
+	if err != nil || !netaddr.IsValid() {
+		// 	// https://datatracker.ietf.org/doc/html/rfc3263#section-5
+		// 	// NOTE: Full RFC may require we do this differentely
+		// 	// Whe port exists AAAA is used otherwise it should go immediately by SRV
+		// 	// In our case we do both by default
+
+		if err := l.resolveAddr(ctx, network, host, sipScheme, raddr); err != nil {
+			return err
+		}
+
+		// We have did this before. This fixes only UDP as it is connectionless protocol
+		// Now this is fixed with extra raddr var, in order to avoid Destination changes done by user
+		// req.SetDestination(raddr.String())
+		return nil
+	}
+
+	ipBytes := netaddr.As16()
+	raddr.IP = net.IP(ipBytes[:])
+	return nil
 }
 
 func (l *TransportLayer) overrideSentBy(c Connection, viaHop *ViaHeader) error {
@@ -664,12 +661,14 @@ func (l *TransportLayer) resolveAddrIP(ctx context.Context, hostname string, add
 		for _, ip := range ips {
 			if checkIp(ip.IP) {
 				addr.IP = ip.IP
+				addr.Zone = ip.Zone
 				return nil
 			}
 		}
 	}
 
 	addr.IP = ips[0].IP
+	addr.Zone = ips[0].Zone
 	return nil
 }
 

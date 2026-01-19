@@ -16,6 +16,9 @@ type Response struct {
 
 	Reason     string // e.g. "200 OK"
 	StatusCode int    // e.g. 200
+
+	// raddr is resolved address from request
+	raddr Addr
 }
 
 // NewResponse creates base structure of response.
@@ -257,6 +260,17 @@ func NewResponseFromRequest(
 	}
 
 	return res
+}
+
+// TODO we may want to have resolved IP destination as seperate variable like request
+func (r *Response) remoteAddress() Addr {
+	dst := r.dest
+	host, port, _ := ParseAddr(dst)
+	return Addr{
+		IP:       net.ParseIP(host),
+		Port:     port,
+		Hostname: dst,
+	}
 }
 
 // NewSDPResponseFromRequest is wrapper for 200 response with SDP body
