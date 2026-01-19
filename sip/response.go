@@ -226,8 +226,8 @@ func NewResponseFromRequest(
 		// https://datatracker.ietf.org/doc/html/rfc3581#section-4
 		if val, exists := h.Params.Get("rport"); exists && val == "" {
 			host, port, _ := net.SplitHostPort(req.Source())
-			h.Params.Add("rport", port)
-			h.Params.Add("received", host)
+			h.Params.Set("rport", port)
+			h.Params.Set("received", host)
 		}
 	}
 
@@ -243,8 +243,8 @@ func NewResponseFromRequest(
 		CopyHeaders("Timestamp", req, res)
 	default:
 		if h := res.To(); h != nil {
-			if _, ok := h.Params["tag"]; !ok {
-				h.Params["tag"] = uuid.NewString()
+			if !h.Params.Has("tag") {
+				h.Params.Append("tag", uuid.NewString())
 			}
 		}
 	}

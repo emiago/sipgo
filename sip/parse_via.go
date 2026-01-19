@@ -20,7 +20,7 @@ func headerParserVia(headerName []byte, headerText string) (
 // these should not be treated as separate logical Via headers, but as multiple values on a single
 // Via header.
 func parseViaHeader(headerText string, h *ViaHeader) error {
-	h.Params = NewParams()
+	h.Params = nil
 
 	state := viaStateProtocol
 	str := headerText
@@ -108,13 +108,13 @@ func viaStateParams(h *ViaHeader, s string) (viaFSM, int, error) {
 	var err error
 	coma := strings.IndexRune(s, ',')
 	if coma > 0 {
-		_, err = UnmarshalHeaderParams(s[:coma], ';', ',', h.Params)
+		_, err = UnmarshalHeaderParams(s[:coma], ';', ',', &h.Params)
 		if err != nil {
 			return nil, 0, err
 		}
 		return viaStateProtocol, coma, errComaDetected(coma)
 	}
 
-	_, err = UnmarshalHeaderParams(s, ';', '\r', h.Params)
+	_, err = UnmarshalHeaderParams(s, ';', '\r', &h.Params)
 	return nil, 0, err
 }

@@ -17,10 +17,10 @@ import (
 func TestUnmarshalParams(t *testing.T) {
 	s := "transport=tls;lr"
 	params := HeaderParams{}
-	UnmarshalHeaderParams(s, ';', '?', params)
+	UnmarshalHeaderParams(s, ';', '?', &params)
 	assert.Equal(t, 2, len(params))
-	assert.Equal(t, "tls", params["transport"])
-	assert.Equal(t, "", params["lr"])
+	assert.Equal(t, "tls", params.GetOr("transport", ""))
+	assert.Equal(t, "", params.GetOr("lr", "<missing>"))
 }
 
 func testParseHeader(t *testing.T, parser *Parser, header string) Header {
@@ -128,7 +128,7 @@ func TestParseHeaders(t *testing.T) {
 
 		for header, expected := range map[string]contactFields{
 			"Contact: <sip:2000@dkanrjsk.invalid>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:a369bd8d-f310-4a95-8328-98c7ed3d5439>\";expires=300": {
-				address: "sip:2000@dkanrjsk.invalid", headers: map[string]string{"+sip.ice": "", "reg-id": "1", "+sip.instance": "\"<urn:uuid:a369bd8d-f310-4a95-8328-98c7ed3d5439>\"", "expires": "300"}},
+				address: "sip:2000@dkanrjsk.invalid", headers: HeaderParams{{"+sip.ice", ""}, {"reg-id", "1"}, {"+sip.instance", "\"<urn:uuid:a369bd8d-f310-4a95-8328-98c7ed3d5439>\""}, {"expires", "300"}}},
 			// "m: <sip:test@10.5.0.1:50267;transport=TCP;ob>;reg-id=1;+instance=\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\"": {
 			// 	address: "sip:test@10.5.0.1:50267;transport=TCP;ob", headers: map[string]string{"reg-id": "1", "+instance": "\"<urn:uuid:00000000-0000-0000-0000-0000eb83488d>\""}},
 		} {
@@ -392,12 +392,12 @@ func TestParseResponse(t *testing.T) {
 
 	// Make sure via ref is correct set
 	via := r.Via()
-	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", via.Params["branch"])
+	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", via.Params.GetOr("branch", ""))
 
 	// Check all vias branch
 	vias := r.GetHeaders("via")
-	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", vias[0].(*ViaHeader).Params["branch"])
-	assert.Equal(t, "z9hG4bK-543537-1-0", vias[1].(*ViaHeader).Params["branch"])
+	assert.Equal(t, "z9hG4bK.VYWrxJJyeEJfngAjKXELr8aPYuX8tR22", vias[0].(*ViaHeader).Params.GetOr("branch", ""))
+	assert.Equal(t, "z9hG4bK-543537-1-0", vias[1].(*ViaHeader).Params.GetOr("branch", ""))
 	// Check no comma present
 	assert.False(t, strings.Contains(vias[1].String(), ","))
 
