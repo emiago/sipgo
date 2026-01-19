@@ -18,7 +18,7 @@ func TestTransportLayerClosing(t *testing.T) {
 		t.Run(tran, func(t *testing.T) {
 			tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 			req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-			req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+			req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 			conn, err := tp.ClientRequestConnection(context.TODO(), req)
 			require.NoError(t, err)
@@ -43,13 +43,13 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 
 	t.Run("Default", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 		conn, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
 
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 		conn2, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
@@ -59,14 +59,14 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 
 	t.Run("WithClientHostPort", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "localhost", Port: 12345, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "localhost", Port: 12345})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:12345")
 
 		conn, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
 
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "localhost", Port: 12345, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "localhost", Port: 12345})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:12345")
 
 		conn2, err := tp.ClientRequestConnection(context.TODO(), req)
@@ -75,7 +75,7 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 
 		// Now same destination but forcing port
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:9876")
 		conn3, err := tp.ClientRequestConnection(context.TODO(), req)
 
@@ -85,7 +85,7 @@ func TestTransportLayerClientConnectionReuse(t *testing.T) {
 
 	testParallel := func(t *testing.T, transport string) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 		req.SetTransport(transport)
 		connections := sync.Map{}
 		wg := sync.WaitGroup{}
@@ -143,13 +143,13 @@ func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 
 	t.Run("Default", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 		conn, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
 
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 		conn2, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
@@ -159,14 +159,14 @@ func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 
 	t.Run("WithClientHostPort", func(t *testing.T) {
 		req := NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 12345, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 12345})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:12345")
 
 		conn, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
 
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 12345, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 12345})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:12345")
 
 		conn2, err := tp.ClientRequestConnection(context.TODO(), req)
@@ -175,7 +175,7 @@ func TestTransportLayerClientConnectionNoReuse(t *testing.T) {
 
 		// Now same destination but forcing port
 		req = NewRequest(OPTIONS, Uri{Host: "localhost", Port: 5066})
-		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876, Params: NewParams()})
+		req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 9876})
 		req.Laddr = testCreateAddr(t, "127.0.0.1:9876")
 		conn3, err := tp.ClientRequestConnection(context.TODO(), req)
 		require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestTransportLayerDefaultPort(t *testing.T) {
 		t.Run(tran, func(t *testing.T) {
 			tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
 			req := NewRequest(OPTIONS, Uri{Host: "127.0.0.99"})
-			req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0, Params: NewParams()})
+			req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
 
 			_, err := tp.ClientRequestConnection(context.TODO(), req)
 			require.NoError(t, err)

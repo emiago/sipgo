@@ -243,8 +243,8 @@ func NewResponseFromRequest(
 		CopyHeaders("Timestamp", req, res)
 	default:
 		if h := res.To(); h != nil {
-			if _, ok := h.Params["tag"]; !ok {
-				h.Params["tag"] = uuid.NewString()
+			if !h.Params.Has("tag") {
+				h.Params.Add("tag", uuid.NewString())
 			}
 		}
 	}

@@ -2,107 +2,133 @@ package sip
 
 import (
 	"io"
+	"slices"
 	"strings"
 )
 
+// HeaderKV is a key-value pair for URI or header params.
 type HeaderKV struct {
 	K string
 	V string
 }
 
-// HeaderParams are key value params. They do not provide order by default due to performance reasons
-type HeaderParams map[string]string
+// HeaderParams are key value params.
+type HeaderParams []HeaderKV
 
-// Create an empty set of parameters.
+// NewParams creates an empty set of parameters.
 func NewParams() HeaderParams {
-	return HeaderParams{}
+	// Typical number of params:
+	// URI: 1-2
+	// Via: 1-2
+	// Route: 4
+	return make(HeaderParams, 0, 4)
 }
 
 // Items returns the entire parameter map.
 func (hp HeaderParams) Items() map[string]string {
 	m := make(map[string]string, len(hp))
-	for k, v := range hp {
-		m[k] = v
+	for _, kv := range hp {
+		m[kv.K] = kv.V
 	}
 	return m
 }
 
-// Keys return a slice of keys, in order.
+// Keys return a slice of keys, in order of appearance.
 func (hp HeaderParams) Keys() []string {
-	s := make([]string, len(hp))
-	i := 0
-	for k := range hp {
-		s[i] = k
-		i++
+	s := make([]string, 0, len(hp))
+	for _, kv := range hp {
+		if slices.Contains(s, kv.K) {
+			continue
+		}
+		s = append(s, kv.K)
 	}
 	return s
 }
 
-// Get returns existing key
+func (hp HeaderParams) index(key string) int {
+	for i, kv := range hp {
+		if kv.K == key {
+			return i
+		}
+	}
+	return -1
+}
+
+// Get returns a value for a given key, if it exists.
 func (hp HeaderParams) Get(key string) (string, bool) {
-	v, ok := hp[key]
-	return v, ok
+	for _, kv := range hp {
+		if kv.K == key {
+			return kv.V, true
+		}
+	}
+	return "", false
 }
 
-// Add will add new key:val. If key exists it will be overwriten
-func (hp HeaderParams) Add(key string, val string) HeaderParams {
-	hp[key] = val
-	return hp
+// GetOr returns a value for a given key, oe a default, if it doesn't exist.
+func (hp HeaderParams) GetOr(key, def string) string {
+	for _, kv := range hp {
+		if kv.K == key {
+			return kv.V
+		}
+	}
+	return def
 }
 
-// Remove removes param with exact key
-func (hp HeaderParams) Remove(key string) HeaderParams {
-	delete(hp, key)
-	return hp
+// Add will add new key-value. If key exists it will be overwritten.
+func (hp *HeaderParams) Add(key string, val string) HeaderParams {
+	if i := hp.index(key); i >= 0 {
+		(*hp)[i].V = val
+	} else {
+		*hp = append(*hp, HeaderKV{K: key, V: val})
+	}
+	return *hp
+}
+
+// Remove removes all values with a given key.
+func (hp *HeaderParams) Remove(key string) HeaderParams {
+	for {
+		i := hp.index(key)
+		if i < 0 {
+			return *hp
+		}
+		*hp = slices.Delete(*hp, i, i+1)
+	}
 }
 
 // Has checks does key exists
 func (hp HeaderParams) Has(key string) bool {
-	_, exists := hp[key]
-	return exists
+	return hp.index(key) >= 0
 }
 
-// Clone returns underneath map copied
+// Clone returns underneath params copied
 func (hp HeaderParams) Clone() HeaderParams {
 	return hp.clone()
 }
 
 func (hp HeaderParams) clone() HeaderParams {
-	if hp == nil {
-		return nil
-	}
-	dup := make(HeaderParams, len(hp))
-
-	for k, v := range hp {
-		dup.Add(k, v)
-	}
-
-	return dup
+	return slices.Clone(hp)
 }
 
 // ToString renders params to a string.
 // Note that this does not escape special characters, this should already have been done before calling this method.
-func (hp HeaderParams) ToString(sep uint8) string {
-	if hp == nil || len(hp) == 0 {
+func (hp HeaderParams) ToString(sep byte) string {
+	if len(hp) == 0 {
 		return ""
 	}
 
-	// sepstr := fmt.Sprintf("%c", sep)
-	sepstr := string(sep)
 	var buffer strings.Builder
-
-	for k, v := range hp {
-		buffer.WriteString(sepstr)
-		buffer.WriteString(k)
+	for _, kv := range hp {
+		buffer.WriteByte(sep)
+		buffer.WriteString(kv.K)
 		// This could be removed
-		if strings.ContainsAny(v, abnf) {
+		if strings.ContainsAny(kv.V, abnf) {
 			buffer.WriteString("=\"")
-			buffer.WriteString(v)
-			buffer.WriteString("\"")
-		} else if v != "" {
+			buffer.WriteString(kv.V)
+			buffer.WriteByte('"')
+		} else if kv.V != "" {
 			// Params can be without value like ;lr;
-			buffer.WriteString("=")
-			buffer.WriteString(v)
+			buffer.WriteByte('=')
+			buffer.WriteString(kv.V)
 		}
 	}
 
@@ -110,31 +136,31 @@ func (hp HeaderParams) ToString(sep uint8) string {
 }
 
 // ToStringWrite is same as ToString but it stores to defined buffer instead returning string
-func (hp HeaderParams) ToStringWrite(sep uint8, buffer io.StringWriter) {
+func (hp HeaderParams) ToStringWrite(sep byte, buffer io.StringWriter) {
 	if hp == nil || len(hp) == 0 {
 		return
 	}
 
 	sepstr := string(sep)
 	i := 0
-	for k, v := range hp {
+	for _, kv := range hp {
 		if i > 0 {
 			buffer.WriteString(sepstr)
 		}
 		i++
 
-		buffer.WriteString(k)
-		if v == "" {
+		buffer.WriteString(kv.K)
+		if kv.V == "" {
 			continue
 		}
 		// This could be removed
-		if strings.ContainsAny(v, abnf) {
+		if strings.ContainsAny(kv.V, abnf) {
 			buffer.WriteString("=\"")
-			buffer.WriteString(v)
+			buffer.WriteString(kv.V)
 			buffer.WriteString("\"")
 		} else {
 			buffer.WriteString("=")
-			buffer.WriteString(v)
+			buffer.WriteString(kv.V)
 		}
 	}
 }

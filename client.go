@@ -8,9 +8,10 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/emiago/sipgo/sip"
 	"github.com/google/uuid"
 	"github.com/icholy/digest"
+
+	"github.com/emiago/sipgo/sip"
 )
 
 func Init() {
@@ -348,13 +349,10 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 		from := sip.FromHeader{
 			DisplayName: c.UserAgent.name,
 			Address: sip.Uri{
-				Scheme:    req.Recipient.Scheme,
-				User:      c.UserAgent.name,
-				Host:      c.UserAgent.hostname,
-				UriParams: sip.NewParams(),
-				Headers:   sip.NewParams(),
+				Scheme: req.Recipient.Scheme,
+				User:   c.UserAgent.name,
+				Host:   c.UserAgent.hostname,
 			},
-			Params: sip.NewParams(),
 		}
 
 		if from.Address.Host == "" {
@@ -369,13 +367,10 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	if v := req.To(); v == nil {
 		to := sip.ToHeader{
 			Address: sip.Uri{
-				Scheme:    req.Recipient.Scheme,
-				User:      req.Recipient.User,
-				Host:      req.Recipient.Host,
-				UriParams: sip.NewParams(),
-				Headers:   sip.NewParams(),
+				Scheme: req.Recipient.Scheme,
+				User:   req.Recipient.User,
+				Host:   req.Recipient.Host,
 			},
-			Params: sip.NewParams(),
 		}
 		mustHeader = append(mustHeader, &to)
 	}
@@ -466,7 +461,6 @@ func clientRequestCreateVia(c *Client, r *sip.Request) *sip.ViaHeader {
 		Transport:       r.Transport(),
 		Host:            c.host, // This can be rewritten by transport layer
 		Port:            c.port, // This can be rewritten by transport layer
-		Params:          sip.NewParams(),
 	}
 	// NOTE: Consider lenght of branch configurable
 	newvia.Params.Add("branch", sip.GenerateBranchN(16))
@@ -499,10 +493,9 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 			UriParams: sip.HeaderParams{
 				// Transport must be provided as wesll
 				// https://datatracker.ietf.org/doc/html/rfc5658
-				"transport": sip.NetworkToLower(r.Transport()),
-				"lr":        "",
+				{"transport", sip.NetworkToLower(r.Transport())},
+				{"lr", ""},
 			},
-			Headers: sip.NewParams(),
 		},
 	}
 
