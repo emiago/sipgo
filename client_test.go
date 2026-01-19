@@ -35,19 +35,19 @@ func TestClientRequestBuild(t *testing.T) {
 		User:      "bob",
 		Host:      "10.2.2.2",
 		Port:      5060,
-		Headers:   sip.HeaderParams{"transport": "udp"},
-		UriParams: sip.HeaderParams{"foo": "bar"},
+		Headers:   sip.HeaderParams{{"transport", "udp"}},
+		UriParams: sip.HeaderParams{{"foo", "bar"}},
 	}
 
 	req := sip.NewRequest(sip.OPTIONS, recipment)
 	clientRequestBuildReq(c, req)
 
 	via := req.Via()
-	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"], via.Value())
+	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params.GetOr("branch", ""), via.Value())
 
 	from := req.From()
 	// No ports should exists, headers, uriparams should exists, except tag
-	assert.Equal(t, "\"sipgo\" <sip:sipgo@mydomain.com>;tag="+from.Params["tag"], from.Value())
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@mydomain.com>;tag="+from.Params.GetOr("tag", ""), from.Value())
 
 	to := req.To()
 	// No ports should exists, headers, uriparams should exists
@@ -79,11 +79,9 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 	require.Nil(t, err)
 
 	recipment := sip.Uri{
-		User:      "bob",
-		Host:      "10.2.2.2",
-		Port:      5060,
-		Headers:   sip.NewParams(),
-		UriParams: sip.NewParams(),
+		User: "bob",
+		Host: "10.2.2.2",
+		Port: 5060,
 	}
 
 	req := sip.NewRequest(sip.OPTIONS, recipment)
@@ -93,7 +91,7 @@ func TestClientRequestBuildWithNAT(t *testing.T) {
 	val := via.Value()
 	params := strings.Split(val, ";")
 	sort.Slice(params, func(i, j int) bool { return params[i] < params[j] })
-	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"]+";rport", strings.Join(params, ";"))
+	assert.Equal(t, "SIP/2.0/UDP 10.0.0.0;branch="+via.Params.GetOr("branch", "")+";rport", strings.Join(params, ";"))
 }
 
 func TestClientRequestBuildWithHostAndPort(t *testing.T) {
@@ -119,11 +117,11 @@ func TestClientRequestBuildWithHostAndPort(t *testing.T) {
 	clientRequestBuildReq(c, req)
 
 	via := req.Via()
-	assert.Equal(t, "SIP/2.0/UDP sip.myserver.com:5066;branch="+via.Params["branch"], via.Value())
+	assert.Equal(t, "SIP/2.0/UDP sip.myserver.com:5066;branch="+via.Params.GetOr("branch", ""), via.Value())
 
 	from := req.From()
 	// No ports should exists
-	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com>;tag="+from.Params["tag"], from.Value())
+	assert.Equal(t, "\"sipgo\" <sip:sipgo@sip.myserver.com>;tag="+from.Params.GetOr("tag", ""), from.Value())
 
 	to := req.To()
 	// No port should exists or special values
@@ -154,15 +152,15 @@ func TestClientRequestOptions(t *testing.T) {
 	// Proxy receives this request
 	req := createSimpleRequest(sip.INVITE, sender, recipment, "UDP")
 	oldvia := req.Via()
-	assert.Equal(t, "Via: SIP/2.0/UDP 10.1.1.1:5060;branch="+oldvia.Params["branch"], oldvia.String())
+	assert.Equal(t, "Via: SIP/2.0/UDP 10.1.1.1:5060;branch="+oldvia.Params.GetOr("branch", ""), oldvia.String())
 
 	// Proxy will add via header with client host
 	err = ClientRequestAddVia(c, req)
 	require.Nil(t, err)
 	via := req.Via()
 	tmpvia := *via // Save this for later usage
-	assert.Equal(t, "Via: SIP/2.0/UDP 10.0.0.0;branch="+via.Params["branch"], via.String())
-	assert.NotEqual(t, via.Params["branch"], oldvia.Params["branch"])
+	assert.Equal(t, "Via: SIP/2.0/UDP 10.0.0.0;branch="+via.Params.GetOr("branch", ""), via.String())
+	assert.NotEqual(t, via.Params.GetOr("branch", ""), oldvia.Params.GetOr("branch", ""))
 
 	// Add Record Route
 	err = ClientRequestAddRecordRoute(c, req)

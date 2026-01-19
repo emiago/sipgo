@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -19,8 +20,6 @@ import (
 
 	"github.com/arl/statsviz"
 	"github.com/emiago/sipgo/sip"
-
-	_ "net/http/pprof"
 
 	"github.com/emiago/sipgo"
 
@@ -258,9 +257,9 @@ func setupSipProxy(proxydst string, ip string) *sipgo.Server {
 		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 		// log.Debug().Msgf("Sending response: \n%s", res.String())
 
-		// URI params must be reset or this should be regenetad
+		// URI params must be reset or this should be regenerated
 		cont.Address.UriParams = sip.NewParams()
-		cont.Address.UriParams.Add("transport", req.Transport())
+		cont.Address.UriParams.Append("transport", req.Transport())
 
 		if err := tx.Respond(res); err != nil {
 			log.Error("Sending REGISTER OK failed", "error", err)
