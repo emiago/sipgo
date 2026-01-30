@@ -542,6 +542,8 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
+	ackRequest.SetDestination(inviteRequest.Destination())
+	ackRequest.Laddr = inviteRequest.Laddr
 	return ackRequest
 }
 
