@@ -542,7 +542,6 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
-	ackRequest.SetDestination(inviteRequest.Destination())
 	ackRequest.Laddr = inviteRequest.Laddr
 	return ackRequest
 }
@@ -603,7 +602,7 @@ func newCancelRequest(inviteRequest *sip.Request) *sip.Request {
 	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.CallID()))
 	sip.CopyHeaders("Route", inviteRequest, cancelReq)
 	cancelReq.SetSource(inviteRequest.Source())
-	cancelReq.SetDestination(inviteRequest.Destination())
+	cancelReq.Laddr = inviteRequest.Laddr
 	return cancelReq
 }
 
