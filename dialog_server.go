@@ -310,6 +310,11 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	}
 
 	s.setState(sip.DialogStateEstablished)
+
+	// Register dialog state read channel before transmitting 200 OK. This prevents a race
+	// condition where the ACK is received before we start waiting for it.
+	readStateCh := s.StateRead()
+
 	if err := tx.Respond(res); err != nil {
 		return err
 	}
@@ -322,7 +327,6 @@ func (s *DialogServerSession) WriteResponse(res *sip.Response) error {
 	defer timer.Stop()
 
 	state := sip.DialogStateEstablished
-	readStateCh := s.StateRead()
 	for state == sip.DialogStateEstablished {
 		select {
 		case <-timer.C:
