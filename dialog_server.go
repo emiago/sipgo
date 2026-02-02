@@ -26,7 +26,7 @@ type DialogServerSession struct {
 // ReadAck changes dialog state to confiremed
 func (s *DialogServerSession) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
 	// cseq must match to our last dialog cseq
-	if req.CSeq().SeqNo != s.lastCSeqNo.Load() {
+	if req.CSeq().SeqNo != s.remoteCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
 	s.setState(sip.DialogStateConfirmed)
@@ -370,9 +370,9 @@ func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) er
 	// However, the callee's UA MUST NOT send a BYE on a confirmed dialog
 	// until it has received an ACK for its 2xx response or until the server
 	// transaction times out.
-	if sip.DialogState(state) != sip.DialogStateConfirmed {
-		return nil
-	}
+	// if sip.DialogState(state) != sip.DialogStateConfirmed {
+	// 	return nil
+	// }
 
 	res := s.Dialog.InviteResponse
 

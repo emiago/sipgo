@@ -145,22 +145,22 @@ func (d *Dialog) Context() context.Context {
 	return d.ctx
 }
 
-func (d *Dialog) validateRemoteRequest(req *sip.Request) (err error) {
-	// Make sure this is bye for this dialog
-	if req.CSeq().SeqNo < d.remoteCSeqNo.Load() {
-		return ErrDialogInvalidCseq
-	}
-	return nil
-}
-
 func (d *Dialog) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
 	// UAS role of dialog SHOULD be
 	// prepared to receive and process requests with CSeq values more than
 	// one higher than the previous received request.
-	if err := d.validateRemoteRequest(req); err != nil {
-		return err
+	oldCseq := d.remoteCSeqNo.Load()
+	newSeqNo := req.CSeq().SeqNo
+	if newSeqNo < oldCseq {
+		return ErrDialogInvalidCseq
 	}
 
-	d.remoteCSeqNo.Store(req.CSeq().SeqNo)
+	// 	A UAS that receives a second INVITE before it sends the final
+	//    response to a first INVITE with a lower CSeq sequence number on the
+	//    same dialog MUST return a 500 (Server Internal Error) respons
+	if !d.remoteCSeqNo.CompareAndSwap(oldCseq, newSeqNo) {
+		return ErrDialogInvalidCseq
+	}
+
 	return nil
 }

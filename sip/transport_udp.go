@@ -310,17 +310,22 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	var n int
 	var err error
 
-	// TODO lets return this better
-	dst := msg.Destination() // Destination should be already resolved by transport layer
-	host, port, err := ParseAddr(dst)
-	if err != nil {
-		return err
-	}
-	raddr := net.UDPAddr{
-		IP:   net.ParseIP(host),
-		Port: port,
+	a := msg.remoteAddress() // Destination should be already resolved by transport layer
+	if a.IP == nil {
+		// Do fallback
+		host, port, err := ParseAddr(msg.Destination())
+		if err != nil {
+			return err
+		}
+		a.IP = net.ParseIP(host)
+		a.Port = port
 	}
 
+	raddr := net.UDPAddr{
+		IP:   a.IP,
+		Port: a.Port,
+		Zone: a.Zone,
+	}
 	if raddr.Port == 0 {
 		raddr.Port = DefaultUdpPort
 	}

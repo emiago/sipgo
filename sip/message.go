@@ -52,6 +52,7 @@ const (
 	StatusBusyHere                     = 486
 	StatusRequestTerminated            = 487
 	StatusNotAcceptableHere            = 488
+	StatusRequestPending               = 491
 
 	StatusInternalServerError = 500
 	StatusNotImplemented      = 501
@@ -120,6 +121,8 @@ type Message interface {
 	SetSource(src string)
 	Destination() string
 	SetDestination(dest string)
+
+	remoteAddress() Addr
 }
 
 type MessageData struct {

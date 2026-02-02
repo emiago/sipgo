@@ -437,6 +437,9 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 
 // Bye sends bye and terminates session. Use WriteBye if you want to customize bye request
 func (s *DialogClientSession) Bye(ctx context.Context) error {
+	if s.InviteResponse == nil {
+		return fmt.Errorf("bye: can not send as no invite response present")
+	}
 	bye := newByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
 	return s.WriteBye(ctx, bye)
 }
@@ -539,6 +542,7 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	ackRequest.SetBody(body)
 	ackRequest.SetTransport(inviteRequest.Transport())
 	ackRequest.SetSource(inviteRequest.Source())
+	ackRequest.Laddr = inviteRequest.Laddr
 	return ackRequest
 }
 
@@ -598,7 +602,7 @@ func newCancelRequest(inviteRequest *sip.Request) *sip.Request {
 	cancelReq.AppendHeader(sip.HeaderClone(inviteRequest.CallID()))
 	sip.CopyHeaders("Route", inviteRequest, cancelReq)
 	cancelReq.SetSource(inviteRequest.Source())
-	cancelReq.SetDestination(inviteRequest.Destination())
+	cancelReq.Laddr = inviteRequest.Laddr
 	return cancelReq
 }
 
