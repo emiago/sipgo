@@ -108,14 +108,13 @@ func (txl *TransactionLayer) handleRequest(req *Request) error {
 
 		tx, exists := txl.getServerTx(key)
 		if exists {
-			// If ok this should terminate this transaction
-			if err := tx.Receive(req); err != nil {
-				return fmt.Errorf("failed to receive req: %w", err)
-			}
-
 			// Reuse connection and send 200 for CANCEL
 			if err := tx.conn.WriteMsg(NewResponseFromRequest(req, StatusOK, "OK", nil)); err != nil {
 				return fmt.Errorf("Failed to respond 200 for CANCEL: %w", err)
+			}
+			// If ok this should terminate this transaction
+			if err := tx.Receive(req); err != nil {
+				return fmt.Errorf("failed to receive req: %w", err)
 			}
 			return nil
 		}
