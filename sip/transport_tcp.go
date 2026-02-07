@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -159,7 +160,7 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 
 	for {
 		num, err := conn.Read(buf)
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug("connection was closed", "error", err)
 				return
@@ -183,7 +184,7 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 				t.log.Debug("Keep alive CRLF received")
 				if datalen == 4 {
 					// 2 CRLF is ping
-					if _, err := conn.Write(data[:2]); err != nil {
+					if _, err := conn.Write(data[:2]); err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 						t.log.Error("Failed to pong keep alive", "error", err)
 						return
 					}
@@ -260,6 +261,9 @@ func (c *TCPConnection) TryClose() (int, error) {
 
 func (c *TCPConnection) Read(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
+	if err := c.Conn.SetReadDeadline(time.Now().Add(time.Millisecond * 500)); err != nil {
+		slog.Warn("Failed to set read deadline", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "error", err)
+	}
 	n, err = c.Conn.Read(b)
 	if SIPDebug {
 		logSIPRead("TCP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
@@ -269,6 +273,9 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 
 func (c *TCPConnection) Write(b []byte) (n int, err error) {
 	// Some debug hook. TODO move to proper way
+	if err := c.Conn.SetWriteDeadline(time.Now().Add(time.Millisecond * 500)); err != nil {
+		slog.Warn("Failed to set write deadline", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "error", err)
+	}
 	n, err = c.Conn.Write(b)
 	if SIPDebug {
 		logSIPWrite("TCP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
