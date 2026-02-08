@@ -2,6 +2,7 @@ package sip
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -86,6 +87,14 @@ func BenchmarkLazyParsing(b *testing.B) {
 			b.Fatal("contact is nil")
 		}
 		headers.contact = nil
+	}
+}
+
+func BenchmarkAddingHeader(b *testing.B) {
+	headers := new(headers)
+
+	for i := 0; i < b.N; i++ {
+		headers.AppendHeader(NewHeader("Contact", "<sip:alice@example.com>;id="+strconv.Itoa(i)))
 	}
 }
 
