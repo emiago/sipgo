@@ -377,7 +377,12 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	}
 
 	raddr := Addr{}
-	if err := l.resolveRemoteAddr(ctx, network, req.Destination(), req.Recipient.Scheme, &raddr); err != nil {
+	dhost, dport, err := ParseAddr(req.Destination())
+	if err != nil {
+		return nil, fmt.Errorf("parse address failed for %s: %w", req.Destination(), err)
+	}
+
+	if err := l.resolveRemoteAddr(ctx, network, dhost, dport, req.Recipient.Scheme, &raddr); err != nil {
 		return nil, err
 	}
 
@@ -511,7 +516,7 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 		// IP:       net.ParseIP(uriNetIP(viaHost)),
 	}
 
-	if err := l.resolveRemoteAddr(ctx, network, uriNetIP(viaHost), req.Recipient.Scheme, &raddr); err != nil {
+	if err := l.resolveRemoteAddr(ctx, network, uriNetIP(viaHost), viaPort, req.Recipient.Scheme, &raddr); err != nil {
 		return nil, err
 	}
 
@@ -543,11 +548,7 @@ func (l *TransportLayer) serverRequestConnection(ctx context.Context, req *Reque
 	return c, err
 }
 
-func (l *TransportLayer) resolveRemoteAddr(ctx context.Context, network string, a string, sipScheme string, raddr *Addr) error {
-	host, port, err := ParseAddr(a)
-	if err != nil {
-		return fmt.Errorf("parse address failed for %s: %w", a, err)
-	}
+func (l *TransportLayer) resolveRemoteAddr(ctx context.Context, network string, host string, port int, sipScheme string, raddr *Addr) error {
 	raddr.Hostname = host
 	raddr.Port = port
 	if raddr.Port == 0 {
