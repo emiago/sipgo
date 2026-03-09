@@ -22,6 +22,8 @@ type TransportTCP struct {
 	pool *connectionPool
 
 	DialerCreate func(laddr net.Addr) net.Dialer
+
+	onConnClose func(conn Connection)
 }
 
 func (t *TransportTCP) init(par *Parser) {
@@ -151,6 +153,11 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
+		}
+	}()
+	defer func() {
+		if t.onConnClose != nil {
+			t.onConnClose(conn)
 		}
 	}()
 
