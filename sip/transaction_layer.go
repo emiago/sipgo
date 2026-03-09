@@ -27,6 +27,8 @@ type TransactionLayer struct {
 	clientTransactions *transactionStore[*ClientTx]
 	serverTransactions *transactionStore[*ServerTx]
 
+	terminateOnConnClose bool
+
 	log *slog.Logger
 }
 
@@ -43,6 +45,17 @@ func WithTransactionLayerLogger(l *slog.Logger) TransactionLayerOption {
 func WithTransactionLayerUnhandledResponseHandler(f func(r *Response)) TransactionLayerOption {
 	return func(txl *TransactionLayer) {
 		txl.unRespHandler = f
+	}
+}
+
+// WithTransactionLayerTerminateOnConnClose enables termination of pending
+// client transactions when the underlying connection closes, instead of
+// waiting for Timer_B to expire.
+//
+// Experimental
+func WithTransactionLayerTerminateOnConnClose() TransactionLayerOption {
+	return func(txl *TransactionLayer) {
+		txl.terminateOnConnClose = true
 	}
 }
 
@@ -64,14 +77,18 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
 
-	// When a TCP/TLS connection closes, terminate pending client transactions
-	// on that connection instead of waiting for Timer_B (32s).
-	notify := func(conn Connection) { txl.onConnectionClose(conn) }
+	notify := func(conn Connection) { txl.OnConnectionClose(conn) }
 	if tpl.tcp != nil {
 		tpl.tcp.onConnClose = notify
 	}
 	if tpl.tls != nil {
 		tpl.tls.onConnClose = notify
+	}
+	if tpl.ws != nil {
+		tpl.ws.onConnClose = notify
+	}
+	if tpl.wss != nil {
+		tpl.wss.onConnClose = notify
 	}
 
 	return txl
@@ -81,7 +98,15 @@ func (txl *TransactionLayer) OnRequest(h TransactionRequestHandler) {
 	txl.reqHandler = h
 }
 
-func (txl *TransactionLayer) onConnectionClose(conn Connection) {
+// OnConnectionClose is called when a reliable transport connection (TCP, TLS,
+// WS, WSS) is closed by the remote side or due to a read error.
+func (txl *TransactionLayer) OnConnectionClose(conn Connection) {
+	if txl.terminateOnConnClose {
+		txl.terminateClientTransactions(conn)
+	}
+}
+
+func (txl *TransactionLayer) terminateClientTransactions(conn Connection) {
 	txl.clientTransactions.mu.RLock()
 	for _, tx := range txl.clientTransactions.items {
 		if tx.conn == conn {
