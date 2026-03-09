@@ -63,11 +63,33 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
+
+	// When a TCP/TLS connection closes, terminate pending client transactions
+	// on that connection instead of waiting for Timer_B (32s).
+	notify := func(conn Connection) { txl.onConnectionClose(conn) }
+	if tpl.tcp != nil {
+		tpl.tcp.onConnClose = notify
+	}
+	if tpl.tls != nil {
+		tpl.tls.onConnClose = notify
+	}
+
 	return txl
 }
 
 func (txl *TransactionLayer) OnRequest(h TransactionRequestHandler) {
 	txl.reqHandler = h
+}
+
+func (txl *TransactionLayer) onConnectionClose(conn Connection) {
+	txl.clientTransactions.mu.RLock()
+	for _, tx := range txl.clientTransactions.items {
+		if tx.conn == conn {
+			go tx.spinFsmWithError(client_input_transport_err,
+				fmt.Errorf("connection closed: %w", ErrTransactionTransport))
+		}
+	}
+	txl.clientTransactions.mu.RUnlock()
 }
 
 // handleMessage is entry for handling requests and responses from transport
