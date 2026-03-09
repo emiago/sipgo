@@ -34,6 +34,8 @@ type TransportWS struct {
 	dialer ws.Dialer
 
 	DialerCreate func(laddr net.Addr) ws.Dialer
+
+	onConnClose func(conn Connection)
 }
 
 func newWSTransport(par *Parser) *TransportWS {
@@ -167,6 +169,11 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
+		}
+	}()
+	defer func() {
+		if t.onConnClose != nil {
+			t.onConnClose(conn)
 		}
 	}()
 	defer log.Debug("Websocket read connection stopped", "raddr", raddr)
