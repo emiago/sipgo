@@ -108,14 +108,17 @@ func (txl *TransactionLayer) handleRequest(req *Request) error {
 
 		tx, exists := txl.getServerTx(key)
 		if exists {
-			// If ok this should terminate this transaction
-			if err := tx.Receive(req); err != nil {
-				return fmt.Errorf("failed to receive req: %w", err)
-			}
-
-			// Reuse connection and send 200 for CANCEL
+			// Send 200 OK for CANCEL first, then terminate the INVITE.
+			// The CANCEL client transaction retransmits until it receives
+			// a response; sending 200 OK before the 487 ensures the UAC
+			// stops retransmitting immediately.
 			if err := tx.conn.WriteMsg(NewResponseFromRequest(req, StatusOK, "OK", nil)); err != nil {
 				return fmt.Errorf("Failed to respond 200 for CANCEL: %w", err)
+			}
+
+			// Now let the FSM terminate the INVITE transaction (sends 487)
+			if err := tx.Receive(req); err != nil {
+				return fmt.Errorf("failed to receive req: %w", err)
 			}
 			return nil
 		}
