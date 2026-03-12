@@ -49,8 +49,8 @@ func WithTransactionLayerUnhandledResponseHandler(f func(r *Response)) Transacti
 }
 
 // WithTransactionLayerTerminateOnConnClose enables termination of pending
-// client transactions when the underlying connection closes, instead of
-// waiting for Timer_B to expire.
+// client and server transactions when the underlying connection closes,
+// instead of waiting for timers to expire.
 //
 // Experimental
 func WithTransactionLayerTerminateOnConnClose() TransactionLayerOption {
@@ -103,6 +103,7 @@ func (txl *TransactionLayer) OnRequest(h TransactionRequestHandler) {
 func (txl *TransactionLayer) OnConnectionClose(conn Connection) {
 	if txl.terminateOnConnClose {
 		txl.terminateClientTransactions(conn)
+		txl.terminateServerTransactions(conn)
 	}
 }
 
@@ -115,6 +116,17 @@ func (txl *TransactionLayer) terminateClientTransactions(conn Connection) {
 		}
 	}
 	txl.clientTransactions.mu.RUnlock()
+}
+
+func (txl *TransactionLayer) terminateServerTransactions(conn Connection) {
+	txl.serverTransactions.mu.RLock()
+	for _, tx := range txl.serverTransactions.items {
+		if tx.conn == conn {
+			go tx.spinFsmWithError(server_input_transport_err,
+				fmt.Errorf("connection closed: %w", ErrTransactionTransport))
+		}
+	}
+	txl.serverTransactions.mu.RUnlock()
 }
 
 // handleMessage is entry for handling requests and responses from transport
