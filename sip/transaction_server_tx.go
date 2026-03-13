@@ -28,9 +28,8 @@ func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	tx.key = key
 	tx.conn = conn
 
-	// Buffer of 1 so that ACK delivery (e.g. after CANCEL→487) does not
-	// block when nobody is reading the channel.
-	tx.acks = make(chan *Request, 1)
+	// about ~10 retransmits
+	tx.acks = make(chan *Request)
 	// tx.cancels = make(chan *Request)
 	tx.done = make(chan struct{})
 	tx.log = logger
