@@ -289,10 +289,7 @@ func (tx *ServerTx) actConfirm() fsmInput {
 
 	tx.mu.Unlock()
 
-	// ACK for a CANCEL-triggered 487 is not relevant to the application.
-	if tx.fsmErr != ErrTransactionCanceled {
-		tx.passAck()
-	}
+	tx.passAck()
 	return FsmInputNone
 }
 
