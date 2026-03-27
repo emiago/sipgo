@@ -107,10 +107,19 @@ func (p *Parser) parseStartLine(data []byte, stream bool) (Message, int, error) 
 		// RFC 3261 - 7.5.
 		// Implementations processing SIP messages over stream-oriented
 		// transports MUST ignore any CRLF appearing before the start-line.
-		for len(data) >= 2 && data[0] == '\r' && data[1] == '\n' {
-			data = data[2:]
-			total += 2
-			skipped = true
+		// Also strip bare LF for compatibility with stacks that emit \n.
+		for len(data) > 0 {
+			if len(data) >= 2 && data[0] == '\r' && data[1] == '\n' {
+				data = data[2:]
+				total += 2
+				skipped = true
+			} else if data[0] == '\n' {
+				data = data[1:]
+				total += 1
+				skipped = true
+			} else {
+				break
+			}
 		}
 	}
 
@@ -288,21 +297,36 @@ func nextLine(data []byte) ([]byte, int, error) {
 	// terminated by a carriage-return line-feed sequence (CRLF).  Note that
 	// the empty line MUST be present even if the message-body is not.
 
-	// Lines could be multiline as well so this is also acceptable
-	// TO :\n
-	// sip:vivekg@chair-dnrc.example.com ;   tag    = 1918181833n
-	i := bytes.IndexByte(data, '\r')
-	if i < 0 {
+	cr := bytes.IndexByte(data, '\r')
+	lf := bytes.IndexByte(data, '\n')
+
+	switch {
+	case cr >= 0 && (lf < 0 || cr < lf):
+		// CR found before any LF — standard CRLF path.
+		line := data[:cr]
+		if cr+1 >= len(data) {
+			return line, cr + 1, io.ErrUnexpectedEOF
+		}
+		if data[cr+1] != '\n' {
+			return line, cr + 1, ErrParseLineNoCRLF
+		}
+		return line, cr + 2, nil
+
+	case lf >= 0:
+		// Bare LF with no preceding CR — tolerate even though it is out of spec
+		// (RFC 3261 section 7 specifies "The start-line, each message-header line,
+		// and the empty line MUST be terminated by a carriage-return line-feed
+		// sequence (CRLF).")
+		// However, some PBX stacks emit \n instead of \r\n for custom headers.
+		// Since \n in headers is not allowed, we fall back to tolerating \n instead
+		// of \r\n to improve compatibility.
+		line := data[:lf]
+		return line, lf + 1, nil
+
+	default:
+		// No CR or LF found.
 		return data, len(data), io.ErrUnexpectedEOF
 	}
-	line := data[:i]
-	if i+1 >= len(data) {
-		return line, i + 1, io.ErrUnexpectedEOF
-	}
-	if data[i+1] != '\n' {
-		return line, i + 1, ErrParseLineNoCRLF
-	}
-	return line, i + 2, nil
 }
 
 // detect is request by spaces

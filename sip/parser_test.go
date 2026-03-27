@@ -14,6 +14,165 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNextLine(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantLine     string
+		wantConsumed int
+		wantErr      error
+	}{
+		{
+			name:         "standard CRLF",
+			input:        "Header: value\r\n",
+			wantLine:     "Header: value",
+			wantConsumed: 15,
+		},
+		{
+			name:         "bare LF",
+			input:        "Header: value\nNext: line\r\n",
+			wantLine:     "Header: value",
+			wantConsumed: 14,
+		},
+		{
+			name:         "bare LF empty line",
+			input:        "\nNext: line\r\n",
+			wantLine:     "",
+			wantConsumed: 1,
+		},
+		{
+			name:         "CRLF before bare LF",
+			input:        "Header: value\r\nNext\n",
+			wantLine:     "Header: value",
+			wantConsumed: 15,
+		},
+		{
+			name:         "truncated CR at end",
+			input:        "Header: value\r",
+			wantLine:     "Header: value",
+			wantConsumed: 14,
+			wantErr:      io.ErrUnexpectedEOF,
+		},
+		{
+			name:         "bare CR before bare LF errors",
+			input:        "Header\rvalue\nNext\r\n",
+			wantLine:     "Header",
+			wantConsumed: 7,
+			wantErr:      ErrParseLineNoCRLF,
+		},
+		{
+			name:         "empty input",
+			input:        "",
+			wantLine:     "",
+			wantConsumed: 0,
+			wantErr:      io.EOF,
+		},
+		{
+			name:         "no line ending",
+			input:        "Header: value",
+			wantLine:     "Header: value",
+			wantConsumed: 13,
+			wantErr:      io.ErrUnexpectedEOF,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			line, consumed, err := nextLine([]byte(tc.input))
+			assert.Equal(t, tc.wantLine, string(line))
+			assert.Equal(t, tc.wantConsumed, consumed)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestParseMixedLineEndings(t *testing.T) {
+	parser := NewParser()
+
+	t.Run("mixed CRLF and bare LF headers", func(t *testing.T) {
+		// Simulates a PBX that uses bare \n for custom headers
+		// while standard headers use \r\n.
+		body := "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 4000 RTP/AVP 0\r\n"
+		contentLength := fmt.Sprintf("%d", len(body))
+
+		rawMsg := "INVITE sip:bob@127.0.0.1 SIP/2.0\r\n" +
+			"Via: SIP/2.0/UDP 127.0.0.2:5060;branch=z9hG4bK-test\r\n" +
+			"From: <sip:alice@127.0.0.2>;tag=tag1\r\n" +
+			"To: <sip:bob@127.0.0.1>\r\n" +
+			"Call-ID: mixed-lf-test@127.0.0.2\r\n" +
+			"CSeq: 1 INVITE\r\n" +
+			"Content-Type: application/sdp\r\n" +
+			"Content-Length: " + contentLength + "\r\n" +
+			"X-Custom-One: first\n" +
+			"X-Custom-Two: second\n" +
+			"\r\n" +
+			body
+
+		msg, err := parser.ParseSIP([]byte(rawMsg))
+		require.NoError(t, err)
+
+		req, ok := msg.(*Request)
+		require.True(t, ok)
+		assert.Equal(t, INVITE, req.Method)
+
+		// Verify standard headers parsed correctly
+		assert.NotNil(t, req.Via())
+		assert.NotNil(t, req.From())
+		assert.NotNil(t, req.To())
+		assert.Equal(t, "mixed-lf-test@127.0.0.2", req.CallID().Value())
+
+		// Verify custom bare-LF headers are present
+		customOne := req.GetHeader("X-Custom-One")
+		require.NotNil(t, customOne)
+		assert.Equal(t, "first", customOne.Value())
+
+		customTwo := req.GetHeader("X-Custom-Two")
+		require.NotNil(t, customTwo)
+		assert.Equal(t, "second", customTwo.Value())
+
+		// Verify body is intact
+		assert.Equal(t, body, string(req.Body()))
+	})
+
+	t.Run("bare LF as header/body separator", func(t *testing.T) {
+		body := "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\n"
+		contentLength := fmt.Sprintf("%d", len(body))
+
+		rawMsg := "SIP/2.0 200 OK\r\n" +
+			"Via: SIP/2.0/UDP 127.0.0.2:5060;branch=z9hG4bK-test\r\n" +
+			"Content-Length: " + contentLength + "\r\n" +
+			"X-Custom: value\n" +
+			"\n" + // bare LF as header/body separator
+			body
+
+		msg, err := parser.ParseSIP([]byte(rawMsg))
+		require.NoError(t, err)
+
+		resp, ok := msg.(*Response)
+		require.True(t, ok)
+		assert.Equal(t, 200, resp.StatusCode)
+		assert.Equal(t, body, string(resp.Body()))
+	})
+
+	t.Run("stream mode with bare LF preamble", func(t *testing.T) {
+		rawMsg := "\n\r\n\n" + // mixed bare LF and CRLF preamble
+			"SIP/2.0 200 OK\r\n" +
+			"Content-Length: 0\r\n" +
+			"\r\n"
+
+		msg, _, err := parser.Parse([]byte(rawMsg), true)
+		require.NoError(t, err)
+
+		resp, ok := msg.(*Response)
+		require.True(t, ok)
+		assert.Equal(t, 200, resp.StatusCode)
+	})
+}
+
 func TestUnmarshalParams(t *testing.T) {
 	s := "transport=tls;lr"
 	params := HeaderParams{}
@@ -298,12 +457,26 @@ func TestParseRequest(t *testing.T) {
 		for _, msgstr := range []string{
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\nContent-Length: 0",
 			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\n",
-			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n",
-			"INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh",
 		} {
 			_, err := parser.ParseSIP([]byte(msgstr))
 			assert.ErrorIs(t, err, ErrParseEOF)
 		}
+	})
+
+	t.Run("BareLFAsEmptyLine", func(t *testing.T) {
+		// Bare \n acts as header/body separator when Content-Length is 0
+		msgstr := "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 0\r\n\n"
+		msg, err := parser.ParseSIP([]byte(msgstr))
+		require.NoError(t, err)
+		assert.IsType(t, &Request{}, msg)
+	})
+
+	t.Run("NoCRLFBodyMixedWithHeaders", func(t *testing.T) {
+		// Body data without empty line separator — bare LF causes body bytes
+		// to be parsed as a header line, which fails header parsing.
+		msgstr := "INVITE sip:10.5.0.10:5060;transport=udp SIP/2.0\r\nContent-Length: 10\r\nabcd\nefgh"
+		_, err := parser.ParseSIP([]byte(msgstr))
+		assert.Error(t, err)
 	})
 
 	// Full message
