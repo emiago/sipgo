@@ -49,7 +49,7 @@ be seperated from parsing or not built into library.
 
 - Stateful proxy [example/proxysip](example/proxysip)  
 - Register with authentication [example/register](example/register)  
-- RTP echo with sipgox [example/dialog](https://github.com/emiago/sipgox/tree/main/echome)
+- Call and media with diago examples [diago/examples](https://github.com/emiago/diago/tree/main/examples)
 
 Also thanks to [pion](https://github.com/pion/webrtc) project sharing this example of using SIPgo with webrtc:
 - https://github.com/pion/example-webrtc-applications/tree/master/sip-to-webrtc  original post [on X](https://twitter.com/_pion/status/1742955942314913958)
@@ -57,7 +57,7 @@ Also thanks to [pion](https://github.com/pion/webrtc) project sharing this examp
 
 
 
-## Performance :rocket
+## Performance
 
 SIPgo was proven that can excel in performance compared to some other configured base proxy solutions. 
 
