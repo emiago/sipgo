@@ -215,7 +215,6 @@ func (txl *TransactionLayer) rejectMalformedRequest(req *Request, reason error) 
 	// Build a minimal 400 response from whatever headers the request has.
 	// NewResponseFromRequest safely skips nil CSeq, From, To, Call-ID.
 	res := NewResponseFromRequest(req, StatusBadRequest, "Bad Request", nil)
-	res.SetDestination(req.Source())
 
 	if err := txl.tpl.WriteMsg(res); err != nil {
 		txl.log.Error("Failed to send stateless 400 for malformed request",
