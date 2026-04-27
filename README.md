@@ -13,6 +13,9 @@ It comes with [SIP stack](/sip/README.md) ([RFC 3261](https://datatracker.ietf.o
 **Libs on top of sipgo:**
 - ***diago*** [github.com/emiago/diago](https://github.com/emiago/diago): Full VOIP library/framework with media stack (Active development)
 
+**Tools developed on top:**
+- <img width="20" src="https://github.com/emiago/gophone/raw/main/images/g2.png"> [github.com/emiago/gophone](https://github.com/emiago/gophone) CLI softphone for easy testing 
+
 
 Fetch lib with:
 
