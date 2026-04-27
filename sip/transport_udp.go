@@ -207,6 +207,12 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 		}
 	}
 
+	// ignore non-SIP probes, such as PING, etc
+	if trimmed := bytes.TrimSpace(data); len(trimmed) <= 8 && !bytes.ContainsAny(trimmed, " \r\n") {
+		t.log.Debug("Non-SIP probe received", "data", string(trimmed))
+		return
+	}
+
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
 		t.log.Error("failed to parse", "data", string(data), "error", err)
