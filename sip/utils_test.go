@@ -28,7 +28,7 @@ func testCreateRequest(t testing.TB, method string, targetSipUri string, transpo
 		"From: \"Alice\" <sip:alice@" + fromAddr + ">;tag=" + ftag,
 		"To: \"Bob\" <" + targetSipUri + ">",
 		"Call-ID: " + callid,
-		"CSeq: 1 INVITE",
+		"CSeq: 1 " + method, // make sure method in CSeq matches method in Request Line
 		"Content-Length: 0",
 		"",
 		"",

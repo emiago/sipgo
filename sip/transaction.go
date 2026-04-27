@@ -313,6 +313,14 @@ func makeServerTxKey(msg Message, asMethod RequestMethod) (string, error) {
 	if cseq == nil {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", messageShortString(msg))
 	}
+
+	// RFC 3261 §8.1.1.5: CSeq method MUST match the request line method.
+	if req, ok := msg.(*Request); ok {
+		if req.Method != cseq.MethodName {
+			return "", fmt.Errorf("'CSeq' method %q does not match request method %q in message '%s'", cseq.MethodName, req.Method, messageShortString(msg))
+		}
+	}
+
 	method := cseq.MethodName
 	if method == ACK {
 		method = INVITE

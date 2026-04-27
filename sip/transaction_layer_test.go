@@ -147,6 +147,82 @@ func TestTransactionLayerMalformedRequestStateless400(t *testing.T) {
 	assert.Equal(t, "Bad Request", resp.Reason)
 }
 
+func TestTransactionLayerCSeqMethodMismatch(t *testing.T) {
+	if os.Getenv("TEST_INTEGRATION") == "" {
+		t.Skip("Use TEST_INTEGRATION env value to run this test")
+		return
+	}
+
+	// Listen on a UDP port to receive the stateless 400 response.
+	receiverAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	receiverConn, err := net.ListenUDP("udp", receiverAddr)
+	require.NoError(t, err)
+	defer receiverConn.Close()
+	receiverActualAddr := receiverConn.LocalAddr().String()
+
+	// Set up the transaction layer with a real transport.
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	txl := NewTransactionLayer(tp)
+
+	var handlerCalled int32
+	txl.OnRequest(func(req *Request, tx *ServerTx) {
+		atomic.AddInt32(&handlerCalled, 1)
+	})
+
+	// Create a UDP connection in the transport pool so WriteMsg can find it.
+	localAddr := "127.0.0.1:15072"
+	_, err = tp.udp.CreateConnection(
+		context.TODO(),
+		testCreateAddr(t, localAddr),
+		testCreateAddr(t, receiverActualAddr),
+		tp.handleMessage,
+	)
+	require.NoError(t, err)
+
+	// Build a malformed request: CSeq method mismatch method in Request Line.
+	raw := strings.Join([]string{
+		"REGISTER sip:192.168.100.30:5060 SIP/2.0",
+		"Via: SIP/2.0/UDP " + receiverActualAddr + ";branch=z9hG4bK-test123",
+		"From: <sip:alice@example.com>;tag=from1",
+		"To: <sip:alice@example.com>",
+		"Call-ID: malformed-test-call-id",
+		"Content-Length: 0",
+		"Cseq: 1 INVITE", // INVITE method for REGISTER request
+		"",
+		"",
+	}, "\r\n")
+
+	msg, err := ParseMessage([]byte(raw))
+	require.NoError(t, err)
+
+	req := msg.(*Request)
+	req.SetTransport("UDP")
+	req.SetSource(receiverActualAddr)
+
+	// handleRequest should return an error because CSeq method does not match Request Line method.
+	err = txl.handleRequest(req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CSeq")
+
+	// The request handler should NOT have been called.
+	assert.EqualValues(t, 0, atomic.LoadInt32(&handlerCalled))
+
+	// Read the stateless 400 response that should have been sent.
+	buf := make([]byte, 4096)
+	receiverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, _, readErr := receiverConn.ReadFromUDP(buf)
+	require.NoError(t, readErr, "expected to receive a stateless 400 response")
+
+	respMsg, err := ParseMessage(buf[:n])
+	require.NoError(t, err)
+
+	resp, ok := respMsg.(*Response)
+	require.True(t, ok, "expected a SIP response")
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, "Bad Request", resp.Reason)
+}
+
 func TestTransactionLayerClientTx(t *testing.T) {
 	if os.Getenv("TEST_INTEGRATION") == "" {
 		t.Skip("Use TEST_INTEGRATION env value to run this test")
