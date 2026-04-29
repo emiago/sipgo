@@ -199,7 +199,10 @@ func (tx *ClientTx) actInviteResend() fsmInput {
 	tx.mu.Lock()
 
 	tx.timer_a_time *= 2
-	tx.timer_a.Reset(tx.timer_a_time)
+
+	if tx.timer_a != nil {
+		tx.timer_a.Reset(tx.timer_a_time)
+	}
 
 	tx.mu.Unlock()
 
