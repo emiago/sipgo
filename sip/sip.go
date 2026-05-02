@@ -1,9 +1,8 @@
 package sip
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
+	"os"
 	"strings"
 )
 
@@ -31,9 +30,7 @@ func logSIPRead(transport string, laddr string, raddr string, sipmsg []byte) {
 		return
 	}
 
-	if DefaultLogger().Enabled(context.Background(), slog.LevelDebug) {
-		DefaultLogger().Debug(fmt.Sprintf("%s read from %s <- %s:\n%s", transport, laddr, raddr, sipmsg))
-	}
+	fmt.Fprintf(os.Stderr, "=== %s read from %s <- %s ===\n%s\n", transport, laddr, raddr, sipmsg)
 }
 
 func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
@@ -41,9 +38,8 @@ func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
 		siptracer.SIPTraceWrite(transport, laddr, raddr, sipmsg)
 		return
 	}
-	if DefaultLogger().Enabled(context.Background(), slog.LevelDebug) {
-		DefaultLogger().Debug(fmt.Sprintf("%s write to %s -> %s:\n%s", transport, laddr, raddr, sipmsg))
-	}
+
+	fmt.Fprintf(os.Stderr, "=== %s write to %s -> %s ===\n%s\n", transport, laddr, raddr, sipmsg)
 }
 
 // GenerateBranch returns random unique branch ID.
