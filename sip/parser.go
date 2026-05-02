@@ -148,6 +148,37 @@ func (p *Parser) parseNextHeader(out []Header, data []byte) ([]Header, int, erro
 		// We've hit the end of the header section.
 		return out, n, errParseNoMoreHeaders
 	}
+
+	// RFC 3261 §7.3.1: a header field may be continued onto the next line if
+	// that line begins with at least one SP or HT. The CRLF and surrounding
+	// whitespace must be replaced by a single SP. Sweep up any continuation
+	// lines now so the downstream header parser sees a single logical line.
+	for n < len(data) && (data[n] == ' ' || data[n] == '\t') {
+		cont, contN, contErr := nextLine(data[n:])
+		if contErr != nil {
+			// Need more bytes / malformed CRLF on the continuation. Surface
+			// the same way an incomplete first line would surface so the
+			// stream parser can retry with more data.
+			if contErr == io.EOF {
+				return out, 0, io.ErrUnexpectedEOF
+			}
+			return out, 0, contErr
+		}
+		// `line` may alias the original buffer; allocate a fresh slice the
+		// first time we fold so we don't write into the caller's data.
+		folded := make([]byte, 0, len(line)+1+len(cont))
+		folded = append(folded, line...)
+		folded = append(folded, ' ')
+		// Trim leading SP/HT runs from the continuation per RFC 3261 §7.3.1.
+		i := 0
+		for i < len(cont) && (cont[i] == ' ' || cont[i] == '\t') {
+			i++
+		}
+		folded = append(folded, cont[i:]...)
+		line = folded
+		n += contN
+	}
+
 	out, err = p.headersParsers.ParseHeader(out, line)
 	if err != nil {
 		// We might not need to return n here?
