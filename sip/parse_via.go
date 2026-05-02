@@ -71,6 +71,52 @@ func viaStateProtocolTransport(h *ViaHeader, s string) (viaFSM, int, error) {
 }
 
 func viaStateHost(h *ViaHeader, s string) (viaFSM, int, error) {
+	// IPv6 host literal: "[addr]" with optional ":port" and ";params".
+	// The colons inside the IPv6 literal must not be confused with the
+	// host:port separator, so this case is handled before the generic
+	// colon-walking path below.
+	if len(s) > 0 && s[0] == '[' {
+		closeIdx := strings.Index(s, "]")
+		if closeIdx < 0 {
+			return nil, 0, errors.New("Malformed IPv6 host in Via header: no closing bracket")
+		}
+		// Store the bare IPv6 address without brackets to match the
+		// convention expected by uriIP() at serialization time.
+		h.Host = strings.TrimSpace(s[1:closeIdx])
+
+		rest := s[closeIdx+1:]
+		baseOff := closeIdx + 1
+		if len(rest) == 0 {
+			return nil, 0, nil
+		}
+		if rest[0] == ':' {
+			// Optional port follows the IPv6 literal.
+			endIdx := strings.IndexByte(rest, ';')
+			var portStr string
+			if endIdx < 0 {
+				portStr = rest[1:]
+			} else {
+				portStr = rest[1:endIdx]
+			}
+			port, err := strconv.Atoi(strings.TrimSpace(portStr))
+			if err != nil {
+				return nil, 0, nil
+			}
+			h.Port = port
+			if endIdx < 0 {
+				return nil, 0, nil
+			}
+			return viaStateParams, baseOff + endIdx + 1, nil
+		}
+		if rest[0] == ';' {
+			return viaStateParams, baseOff + 1, nil
+		}
+		// Unexpected character right after the IPv6 literal; bail
+		// without producing an error to keep behavior consistent with
+		// the legacy path which also returns nil on parse trouble.
+		return nil, 0, nil
+	}
+
 	var colonInd int
 	var endIndex int = len(s)
 	var err error
