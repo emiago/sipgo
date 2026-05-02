@@ -65,6 +65,53 @@ func TestParseHeaders(t *testing.T) {
 			via := h.(*ViaHeader)
 			assert.Equal(t, "UDP", via.Transport)
 		})
+
+		t.Run("IPv6", func(t *testing.T) {
+			// Issue surfaced as livekit/sip#640: viaStateHost previously
+			// walked colons greedily and confused IPv6 separators with the
+			// host:port boundary, producing strconv.Atoi parse errors on
+			// IPv6 Via headers.
+			cases := []struct {
+				name      string
+				header    string
+				wantHost  string
+				wantPort  int
+				wantTrans string
+			}{
+				{
+					name:      "with_port",
+					header:    "Via: SIP/2.0/TCP [2001:67c:b0c:5::192]:5060;branch=z9hG4bKB5mrcD1BXK68a",
+					wantHost:  "2001:67c:b0c:5::192",
+					wantPort:  5060,
+					wantTrans: "TCP",
+				},
+				{
+					name:      "no_port",
+					header:    "Via: SIP/2.0/TCP [2001:67c:b0c:5::192];branch=z9hG4bKB5mrcD1BXK68a",
+					wantHost:  "2001:67c:b0c:5::192",
+					wantPort:  0,
+					wantTrans: "TCP",
+				},
+				{
+					name:      "loopback",
+					header:    "Via: SIP/2.0/UDP [::1]:5060;branch=z9hG4bK1234",
+					wantHost:  "::1",
+					wantPort:  5060,
+					wantTrans: "UDP",
+				},
+			}
+
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					h := testParseHeader(t, parser, tc.header)
+					via, ok := h.(*ViaHeader)
+					require.True(t, ok, "expected ViaHeader, got %T", h)
+					assert.Equal(t, tc.wantHost, via.Host, "host mismatch")
+					assert.Equal(t, tc.wantPort, via.Port, "port mismatch")
+					assert.Equal(t, tc.wantTrans, via.Transport, "transport mismatch")
+				})
+			}
+		})
 	})
 
 	t.Run("ToHeader", func(t *testing.T) {
