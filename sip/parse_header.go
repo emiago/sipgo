@@ -88,6 +88,7 @@ func (headersParser HeadersParser) ParseHeader(out []Header, line []byte) ([]Hea
 		return out, nil
 	}
 
+	// NOTE: This line is a must and this conversion must here to stay
 	fieldText := string(fieldValue)
 	// Support comma separated values
 	for {

@@ -149,6 +149,7 @@ func NewTransportLayer(
 			TransportWS: &TransportWS{
 				log:             l.log.With("caller", "Transport<WSS>"),
 				connectionReuse: l.connectionReuse,
+				DialURI:         func(host string) string { return "wss://" + host },
 			},
 		},
 	}
