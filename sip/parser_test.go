@@ -413,6 +413,41 @@ func TestParseRequest(t *testing.T) {
 	assert.Equal(t, msg.String(), msgstr)
 }
 
+func TestParseRequestFoldedHeaders(t *testing.T) {
+	rawMsg := []string{
+		"INVITE sip:bob@127.0.0.1:5060 SIP/2.0",
+		"Via: SIP/2.0/UDP 127.0.0.2:5060;",
+		"\tbranch=z9hG4bK-folded",
+		"From: \"Alice\" <sip:alice@127.0.0.2:5060>;tag=1928301774",
+		"To: \"Bob\" <sip:bob@127.0.0.1:5060>",
+		"Call-ID: gotest-folded",
+		"CSeq: 1",
+		" INVITE",
+		"X-Long: alpha  ",
+		"\t beta",
+		" gamma  ",
+		"Content-Length: 0",
+		"",
+		"",
+	}
+
+	parser := NewParser()
+	msg, err := parser.ParseSIP([]byte(strings.Join(rawMsg, "\r\n")))
+	require.NoError(t, err)
+
+	via := msg.Via()
+	require.NotNil(t, via)
+	assert.Equal(t, "z9hG4bK-folded", via.Params.GetOr("branch", ""))
+
+	cseq := msg.CSeq()
+	require.NotNil(t, cseq)
+	assert.Equal(t, INVITE, cseq.MethodName)
+
+	headers := msg.GetHeaders("X-Long")
+	require.Len(t, headers, 1)
+	assert.Equal(t, "alpha beta gamma", headers[0].Value())
+}
+
 func TestParseResponse(t *testing.T) {
 	rawMsg := []string{
 		"SIP/2.0 180 Ringing",

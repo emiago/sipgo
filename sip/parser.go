@@ -148,12 +148,71 @@ func (p *Parser) parseNextHeader(out []Header, data []byte) ([]Header, int, erro
 		// We've hit the end of the header section.
 		return out, n, errParseNoMoreHeaders
 	}
+
+	if n < len(data) && isHeaderContinuation(data[n]) {
+		line, n, err = foldHeaderLine(line, n, data)
+		if err != nil {
+			return out, 0, err
+		}
+	}
+
 	out, err = p.headersParsers.ParseHeader(out, line)
 	if err != nil {
 		// We might not need to return n here?
 		return out, n, err
 	}
 	return out, n, nil
+}
+
+func foldHeaderLine(line []byte, n int, data []byte) ([]byte, int, error) {
+	total := n
+	baseLen := trimRightHeaderWhitespaceLen(line)
+	foldedLen := baseLen
+	for total < len(data) && isHeaderContinuation(data[total]) {
+		cont, contN, err := nextLine(data[total:])
+		if err != nil {
+			if err == io.EOF {
+				return nil, 0, io.ErrUnexpectedEOF
+			}
+			return nil, 0, err
+		}
+		cont = trimHeaderContinuationLine(cont)
+		foldedLen += 1 + len(cont)
+		total += contN
+	}
+
+	folded := make([]byte, 0, foldedLen)
+	folded = append(folded, line[:baseLen]...)
+
+	offset := n
+	for offset < total {
+		cont, contN, _ := nextLine(data[offset:])
+		cont = trimHeaderContinuationLine(cont)
+		folded = append(folded, ' ')
+		folded = append(folded, cont...)
+		offset += contN
+	}
+
+	return folded, total, nil
+}
+
+func isHeaderContinuation(c byte) bool {
+	return c == ' ' || c == '\t'
+}
+
+func trimHeaderContinuationLine(line []byte) []byte {
+	for len(line) > 0 && isHeaderContinuation(line[0]) {
+		line = line[1:]
+	}
+	return line[:trimRightHeaderWhitespaceLen(line)]
+}
+
+func trimRightHeaderWhitespaceLen(line []byte) int {
+	n := len(line)
+	for n > 0 && isHeaderContinuation(line[n-1]) {
+		n--
+	}
+	return n
 }
 
 func (p *Parser) parseHeadersOnly(msg Message, data []byte) (*ContentLengthHeader, int, error) {

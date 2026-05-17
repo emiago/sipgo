@@ -2,6 +2,7 @@ package sip
 
 import (
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"runtime"
 	"strings"
@@ -41,6 +42,41 @@ func TestParserStreamBadMessage(t *testing.T) {
 		_, err := parser.parseSIPStreamFull([]byte(msgstr))
 		require.Error(t, err, ErrParseSipPartial)
 	})
+}
+
+func TestParserStreamFoldedHeaderSplitAcrossWrites(t *testing.T) {
+	parser := NewParser().NewSIPStream()
+	msgstr := strings.Join([]string{
+		"SIP/2.0 200 OK",
+		"Call-ID: gotest-stream-folded",
+		"CSeq: 1",
+		"\tINVITE",
+		"X-Long: alpha",
+		" beta",
+		"Content-Length: 0",
+		"",
+		"",
+	}, "\r\n")
+
+	split := strings.Index(msgstr, "\tINVITE") + len("\tINV")
+	require.Greater(t, split, len("\tINV"))
+
+	_, err := parser.Write([]byte(msgstr[:split]))
+	require.NoError(t, err)
+	_, _, err = parser.ParseNext()
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+
+	_, err = parser.Write([]byte(msgstr[split:]))
+	require.NoError(t, err)
+	msg, _, err := parser.ParseNext()
+	require.NoError(t, err)
+
+	cseq := msg.CSeq()
+	require.NotNil(t, cseq)
+	require.Equal(t, INVITE, cseq.MethodName)
+	headers := msg.GetHeaders("X-Long")
+	require.Len(t, headers, 1)
+	require.Equal(t, "alpha beta", headers[0].Value())
 }
 
 func TestParserStreamMessage(t *testing.T) {
