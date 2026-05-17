@@ -24,9 +24,10 @@ var (
 
 // WS transport implementation
 type TransportWS struct {
-	parser    *Parser
-	log       *slog.Logger
-	transport string
+	parser     *Parser
+	log        *slog.Logger
+	transport  string
+	readFilter TransportReadFilter
 
 	connectionReuse bool
 
@@ -212,6 +213,22 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 
 		if len(bytes.Trim(data, "\x00")) == 0 {
 			continue
+		}
+
+		if t.readFilter != nil {
+			filtered, err := t.readFilter(TransportReadProps{
+				Transport:  t.Network(),
+				LocalAddr:  conn.LocalAddr(),
+				RemoteAddr: conn.RemoteAddr(),
+			}, data)
+			if err != nil {
+				t.log.Error("Read filter error", "laddr", laddr, "raddr", raddr, "error", err)
+				return
+			}
+			if len(filtered) == 0 {
+				continue
+			}
+			data = filtered
 		}
 
 		// Check is keep alive

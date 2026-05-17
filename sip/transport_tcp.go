@@ -18,6 +18,7 @@ type TransportTCP struct {
 	parser          *Parser
 	log             *slog.Logger
 	connectionReuse bool
+	readFilter      TransportReadFilter
 
 	pool *connectionPool
 
@@ -179,6 +180,22 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 		data := buf[:num]
 		if len(bytes.Trim(data, "\x00")) == 0 {
 			continue
+		}
+
+		if t.readFilter != nil {
+			filtered, err := t.readFilter(TransportReadProps{
+				Transport:  t.Network(),
+				LocalAddr:  conn.LocalAddr(),
+				RemoteAddr: conn.RemoteAddr(),
+			}, data)
+			if err != nil {
+				t.log.Error("Read filter error", "laddr", laddr, "raddr", raddr, "error", err)
+				return
+			}
+			if len(filtered) == 0 {
+				continue
+			}
+			data = filtered
 		}
 
 		// Check is keep alive

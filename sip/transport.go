@@ -37,6 +37,16 @@ type transport interface {
 	Close() error
 }
 
+// TransportReadProps describes the transport read connection properties
+type TransportReadProps struct {
+	Transport  string
+	LocalAddr  net.Addr
+	RemoteAddr net.Addr
+}
+
+// TransportReadFilter can inspect or replace raw bytes before SIP parsing.
+type TransportReadFilter func(info TransportReadProps, data []byte) ([]byte, error)
+
 // DefaultPort returns transport default port by network.
 func DefaultPort(transport string) int {
 	switch ASCIIToLower(transport) {

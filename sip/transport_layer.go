@@ -40,6 +40,7 @@ type TransportLayer struct {
 
 	// connectionReuse will force connection reuse when passing request
 	connectionReuse bool
+	readFilter      TransportReadFilter
 
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
@@ -65,6 +66,12 @@ func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.dnsPreferSRV = preferSRV
+	}
+}
+
+func WithTransportLayerReadFilter(f TransportReadFilter) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.readFilter = f
 	}
 }
 
@@ -130,19 +137,23 @@ func NewTransportLayer(
 		UDP: &TransportUDP{
 			log:             l.log.With("caller", "Transport<UDP>"),
 			connectionReuse: l.connectionReuse,
+			readFilter:      l.readFilter,
 		},
 		TCP: &TransportTCP{
 			log:             l.log.With("caller", "Transport<TCP>"),
 			connectionReuse: l.connectionReuse,
+			readFilter:      l.readFilter,
 		},
 		TLS: &TransportTLS{
 			TransportTCP: &TransportTCP{
 				log:             l.log.With("caller", "Transport<TLS>"),
 				connectionReuse: l.connectionReuse,
+				readFilter:      l.readFilter,
 			},
 		},
 		WS: &TransportWS{
-			log: l.log.With("caller", "Transport<WS>"),
+			log:        l.log.With("caller", "Transport<WS>"),
+			readFilter: l.readFilter,
 		},
 		// TODO. Using default dial tls, but it needs to configurable via client
 		WSS: &TransportWSS{
@@ -150,6 +161,7 @@ func NewTransportLayer(
 				log:             l.log.With("caller", "Transport<WSS>"),
 				connectionReuse: l.connectionReuse,
 				DialURI:         func(host string) string { return "wss://" + host },
+				readFilter:      l.readFilter,
 			},
 		},
 	}
@@ -168,18 +180,28 @@ func NewTransportLayer(
 func (l *TransportLayer) withTransports(conf TransportsConfig) {
 	if conf.UDP != nil && l.udp == nil {
 		l.udp = conf.UDP
+		l.udp.connectionReuse = l.connectionReuse
+		l.udp.readFilter = l.readFilter
 	}
 	if conf.TCP != nil && l.tcp == nil {
 		l.tcp = conf.TCP
+		l.tcp.connectionReuse = l.connectionReuse
+		l.tcp.readFilter = l.readFilter
 	}
 	if conf.TLS != nil && l.tls == nil {
 		l.tls = conf.TLS
+		l.tls.connectionReuse = l.connectionReuse
+		l.tls.readFilter = l.readFilter
 	}
 	if conf.WS != nil && l.ws == nil {
 		l.ws = conf.WS
+		l.ws.connectionReuse = l.connectionReuse
+		l.ws.readFilter = l.readFilter
 	}
 	if conf.WSS != nil && l.wss == nil {
 		l.wss = conf.WSS
+		l.wss.connectionReuse = l.connectionReuse
+		l.wss.readFilter = l.readFilter
 	}
 }
 
