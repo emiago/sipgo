@@ -264,6 +264,7 @@ func parseContactHeader(headerText string, h *ContactHeader) error {
 		} else if !inQuotes && !inBrackets {
 			switch {
 			case char == ',':
+				endInd = idx
 				err = errComaDetected(idx)
 			case idx == end:
 				endInd = idx + 1

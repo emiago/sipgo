@@ -188,6 +188,23 @@ func TestParseHeaders(t *testing.T) {
 		}
 	})
 
+	t.Run("ContactHeaderMultiValue", func(t *testing.T) {
+		header := "Contact: <sip:alice@example.com>;expires=300, <sip:bob@example.com>"
+		out, err := parser.headersParsers.ParseHeader(nil, []byte(header))
+		require.NoError(t, err)
+		require.Len(t, out, 2, "expected two ContactHeader objects")
+
+		first, ok := out[0].(*ContactHeader)
+		require.True(t, ok)
+		assert.Equal(t, "sip:alice@example.com", first.Address.String())
+		assert.Equal(t, HeaderParams{{"expires", "300"}}, first.Params)
+
+		second, ok := out[1].(*ContactHeader)
+		require.True(t, ok)
+		assert.Equal(t, "sip:bob@example.com", second.Address.String())
+		assert.Empty(t, second.Params)
+	})
+
 	t.Run("RouteHeader", func(t *testing.T) {
 		header := "Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
 		h := testParseHeader(t, parser, header)
