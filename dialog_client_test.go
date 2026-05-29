@@ -118,6 +118,47 @@ func TestDialogClientRequestRecordRouteHeaders(t *testing.T) {
 		assert.Equal(t, "<sip:p2.com;lr>", bye.GetHeaders("Route")[1].Value())
 	})
 
+	t.Run("RecordRouteReplacesPreloadedRoute", func(t *testing.T) {
+		preloadedInvite := invite.Clone()
+		preloadedInvite.PrependHeader(sip.NewHeader("Route", "<sip:outbound.example.com;lr>"))
+		resp := sip.NewResponseFromRequest(preloadedInvite, 200, "OK", nil)
+		resp.AppendHeader(sip.NewHeader("Contact", "<sip:uas@uas.p2.com>"))
+		resp.AppendHeader(sip.NewHeader("Record-Route", "<sip:p2.com;lr>"))
+		resp.AppendHeader(sip.NewHeader("Record-Route", "<sip:p1.com;lr>"))
+
+		s := DialogClientSession{
+			UA: &DialogUA{
+				Client: client,
+			},
+			Dialog: Dialog{
+				InviteRequest:  preloadedInvite,
+				InviteResponse: resp,
+			},
+			inviteTx: sip.NewClientTx("test", preloadedInvite, nil, slog.Default()),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		ack := newAckRequestUAC(s.InviteRequest, s.InviteResponse, nil)
+		assert.Empty(t, ack.GetHeaders("Route"))
+		s.WriteAck(ctx, ack)
+		assert.Equal(t, []sip.Header{
+			sip.NewHeader("Route", "<sip:p1.com;lr>"),
+			sip.NewHeader("Route", "<sip:p2.com;lr>"),
+		}, ack.GetHeaders("Route"))
+
+		s.buildReq(ack)
+		assert.Len(t, ack.GetHeaders("Route"), 2)
+
+		bye := newByeRequestUAC(s.InviteRequest, s.InviteResponse, nil)
+		assert.Empty(t, bye.GetHeaders("Route"))
+		s.Do(ctx, bye)
+		assert.Equal(t, []sip.Header{
+			sip.NewHeader("Route", "<sip:p1.com;lr>"),
+			sip.NewHeader("Route", "<sip:p2.com;lr>"),
+		}, bye.GetHeaders("Route"))
+	})
+
 }
 
 func TestDialogClientMultiRequest(t *testing.T) {
