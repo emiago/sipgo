@@ -1,7 +1,10 @@
 package sip
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -10,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emiago/sipgo/fakes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -178,4 +182,33 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	require.EqualValues(t, 1, atomic.LoadInt32(&count))
 	require.Equal(t, 2, tp.udp.pool.Size())
 	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
+}
+
+func TestTransactionLayerClientResponsesPreserveReceiveOrder(t *testing.T) {
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	txl := NewTransactionLayer(tp)
+
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "tcp", "127.0.0.2:5060")
+	req.raddr = Addr{IP: net.ParseIP("127.0.0.99"), Port: 5060}
+	key, err := ClientTxKeyMake(req)
+	require.NoError(t, err)
+
+	conn := &TCPConnection{
+		Conn: &fakes.TCPConn{
+			Reader: bytes.NewBuffer(nil),
+			Writer: io.Discard,
+		},
+	}
+	tx := NewClientTx(key, req, conn, slog.Default())
+	require.NoError(t, tx.Init())
+	txl.clientTransactions.put(key, tx)
+
+	res183 := NewResponseFromRequest(req, StatusSessionInProgress, "Session Progress", []byte("sdp"))
+	res200 := NewResponseFromRequest(req, StatusOK, "OK", nil)
+
+	txl.handleMessage(res183)
+	txl.handleMessage(res200)
+
+	require.Equal(t, res183.StartLine(), (<-tx.Responses()).StartLine())
+	require.Equal(t, res200.StartLine(), (<-tx.Responses()).StartLine())
 }
