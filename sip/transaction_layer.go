@@ -23,6 +23,7 @@ type TransactionLayer struct {
 	tpl           *TransportLayer
 	reqHandler    TransactionRequestHandler
 	unRespHandler UnhandledResponseHandler
+	responseQueue chan *Response
 
 	clientTransactions *transactionStore[*ClientTx]
 	serverTransactions *transactionStore[*ServerTx]
@@ -64,6 +65,7 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 		tpl:                tpl,
 		clientTransactions: newTransactionStore[*ClientTx](),
 		serverTransactions: newTransactionStore[*ServerTx](),
+		responseQueue:      make(chan *Response, 64),
 
 		reqHandler:    defaultRequestHandler,
 		unRespHandler: defaultUnhandledRespHandler,
@@ -76,6 +78,7 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 
 	//Send all transport messages to our transaction layer
 	tpl.OnMessage(txl.handleMessage)
+	go txl.handleResponses()
 
 	notify := func(conn Connection) { txl.OnConnectionClose(conn) }
 	if tpl.tcp != nil {
@@ -139,9 +142,15 @@ func (txl *TransactionLayer) handleMessage(msg Message) {
 	case *Request:
 		go txl.handleRequestBackground(msg)
 	case *Response:
-		go txl.handleResponseBackground(msg)
+		txl.responseQueue <- msg
 	default:
 		txl.log.Error("unsupported message, skip it")
+	}
+}
+
+func (txl *TransactionLayer) handleResponses() {
+	for res := range txl.responseQueue {
+		txl.handleResponseBackground(res)
 	}
 }
 
