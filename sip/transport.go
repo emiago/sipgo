@@ -47,14 +47,10 @@ type TransportReadProps struct {
 // TransportReadFilter can inspect or replace raw bytes before SIP parsing.
 type TransportReadFilter func(info TransportReadProps, data []byte) ([]byte, error)
 
-// KeepaliveHandler is called when a connection-oriented transport (TCP/TLS/WS)
-// receives an RFC 5626 §3.5.1 CRLF keepalive. isPing is true for a double-CRLF
-// ping ("\r\n\r\n", which the transport also auto-pongs) and false for a single
-// CRLF pong. It fires at the transport's own keepalive-detection point — the
-// authoritative place to observe keepalives — so callers can track round-trip
-// liveness (e.g. a client confirming its keepalive ping was answered) without
-// re-implementing CRLF framing in a read filter. Keep it fast and non-blocking;
-// it runs on the connection read goroutine.
+// KeepaliveHandler is called when a connection-oriented transport receives an
+// RFC 5626 CRLF keepalive: isPing is true for a double-CRLF ping (auto-ponged)
+// and false for a single-CRLF pong. It runs on the connection read goroutine,
+// so keep it fast and non-blocking.
 type KeepaliveHandler func(info TransportReadProps, isPing bool)
 
 // DefaultPort returns transport default port by network.
