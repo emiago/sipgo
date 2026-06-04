@@ -263,7 +263,16 @@ func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx
 	}
 
 	tx := NewServerTx(key, req, conn, txl.log)
-	return tx, tx.Init()
+	if err := tx.Init(); err != nil {
+		// Init failed: this tx never reaches delete(), so release the connection
+		// reference serverRequestConnection took here (mirrors the conn.TryClose
+		// the client path does when it discards a transaction).
+		if conn != nil {
+			conn.TryClose()
+		}
+		return tx, err
+	}
+	return tx, nil
 }
 
 func (txl *TransactionLayer) handleResponseBackground(res *Response) {
