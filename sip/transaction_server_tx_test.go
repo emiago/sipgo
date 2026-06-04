@@ -171,3 +171,22 @@ func TestServerTransactionContext(t *testing.T) {
 	require.Equal(t, context.Canceled, ctx.Err())
 	require.Equal(t, ErrTransactionTerminated, tx.Err())
 }
+
+func TestServerTransactionReleasesConnRef(t *testing.T) {
+	req := testCreateRequest(t, "OPTIONS", "sip:example.com", "UDP", "127.0.0.1:5060")
+	conn := &UDPConnection{
+		PacketConn: &fakes.UDPConn{
+			Reader:  bytes.NewBuffer([]byte{}),
+			Writers: map[string]io.Writer{},
+		},
+	}
+	conn.Ref(2) // serverRequestConnection holds a reference before NewServerTx
+
+	tx := NewServerTx("123", req, conn, slog.Default())
+	require.NoError(t, tx.Init())
+
+	tx.Terminate()
+	<-tx.Done()
+
+	require.Equal(t, 1, conn.Ref(0), "Terminate must release exactly one connection reference")
+}

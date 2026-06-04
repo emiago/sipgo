@@ -263,11 +263,8 @@ func (tx *ServerTx) delete(err error) bool {
 		onterm(key, err)
 	}
 
-	// Release the connection reference taken at creation (serverRequestConnection
-	// -> GetConnection increments it). ClientTx.delete does the same; without it
-	// every received request leaks one connection ref and the pool can never reap
-	// the connection. Guarded once by tx.closed above; nil-checked because some
-	// tests construct a tx with a nil conn (TestServerTransactionContext).
+	// Release the connection reference taken at creation, same as ClientTx.delete.
+	// nil-checked because some tests construct a tx with a nil conn.
 	if tx.conn != nil {
 		if _, err := tx.conn.TryClose(); err != nil {
 			tx.log.Info("Closing connection returned error", "error", err, "tx", key)
