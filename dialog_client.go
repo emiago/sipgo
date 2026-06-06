@@ -139,7 +139,7 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		hdrs := s.InviteResponse.GetHeaders("record-route")
 		// More on
 		// https://datatracker.ietf.org/doc/html/rfc3261#section-16.12.1.1
-		if len(hdrs) > 0 {
+		if len(hdrs) > 0 && len(req.GetHeaders("Route")) == 0 {
 			for i := len(hdrs) - 1; i >= 0; i-- {
 				// We need to put record-route as recipient in case of strict routing
 				recordRoute := hdrs[i]
@@ -499,7 +499,7 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	)
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
-	if len(inviteRequest.GetHeaders("Route")) > 0 {
+	if !responseHasRecordRoute(inviteResponse) && len(inviteRequest.GetHeaders("Route")) > 0 {
 		sip.CopyHeaders("Route", inviteRequest, ackRequest)
 	}
 
@@ -563,7 +563,7 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
 
-	if len(inviteRequest.GetHeaders("Route")) > 0 {
+	if !responseHasRecordRoute(inviteResponse) && len(inviteRequest.GetHeaders("Route")) > 0 {
 		sip.CopyHeaders("Route", inviteRequest, byeRequest)
 	}
 
@@ -592,6 +592,10 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	byeRequest.SetTransport(inviteRequest.Transport())
 	byeRequest.SetSource(inviteRequest.Source())
 	return byeRequest
+}
+
+func responseHasRecordRoute(res *sip.Response) bool {
+	return res != nil && len(res.GetHeaders("record-route")) > 0
 }
 
 func newCancelRequest(inviteRequest *sip.Request) *sip.Request {

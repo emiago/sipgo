@@ -25,7 +25,7 @@ func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	// tx.conn = tpl
 	tx.conn = conn
 	// buffer chan - about ~10 retransmit responses
-	tx.responses = make(chan *Response)
+	tx.responses = make(chan *Response, 10)
 	tx.done = make(chan struct{})
 	tx.log = logger
 
