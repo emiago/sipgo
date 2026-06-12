@@ -499,10 +499,12 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	)
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
-	if len(inviteRequest.GetHeaders("Route")) > 0 {
-		sip.CopyHeaders("Route", inviteRequest, ackRequest)
-	}
-
+	// ACK to 2xx response should not copy over Route header(s) from original INVITE request.
+	// Instead the ACK should include Route header(s) derived from reversing the order of 
+	// Record-Route header(s) in the 2xx response. 
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.2
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.2.1.1
+	
 	if h := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(sip.HeaderClone(h))
 	}
