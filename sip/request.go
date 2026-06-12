@@ -246,16 +246,11 @@ func newAckRequestNon2xx(inviteRequest *Request, inviteResponse *Response, body 
 	//  request.
 	CopyHeaders("Via", inviteRequest, ackRequest)
 
+	// If the INVITE request whose response is being acknowledged had Route
+	// header fields, those header fields MUST appear in the ACK to non-2xx response.
 	if len(inviteRequest.GetHeaders("Route")) > 0 {
 		CopyHeaders("Route", inviteRequest, ackRequest)
-	} else {
-		// https://datatracker.ietf.org/doc/html/rfc2543#section-6.29
-		hdrs := inviteResponse.GetHeaders("Record-Route")
-		for i := len(hdrs) - 1; i >= 0; i-- {
-			recordRoute := hdrs[i]
-			ackRequest.AppendHeader(NewHeader("Route", recordRoute.Value()))
-		}
-	}
+	} 
 
 	maxForwardsHeader := MaxForwardsHeader(70)
 	ackRequest.AppendHeader(&maxForwardsHeader)
