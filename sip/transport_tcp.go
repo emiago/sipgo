@@ -14,11 +14,12 @@ import (
 
 // TCP transport implementation
 type TransportTCP struct {
-	transport       string
-	parser          *Parser
-	log             *slog.Logger
-	connectionReuse bool
-	readFilter      TransportReadFilter
+	transport        string
+	parser           *Parser
+	log              *slog.Logger
+	connectionReuse  bool
+	readFilter       TransportReadFilter
+	keepaliveHandler KeepaliveHandler
 
 	pool *connectionPool
 
@@ -205,6 +206,13 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 			// https://datatracker.ietf.org/doc/html/rfc5626#section-3.5.1
 			if len(bytes.Trim(data, "\r\n")) == 0 {
 				t.log.Debug("Keep alive CRLF received")
+				if t.keepaliveHandler != nil {
+					t.keepaliveHandler(TransportReadProps{
+						Transport:  t.Network(),
+						LocalAddr:  conn.LocalAddr(),
+						RemoteAddr: conn.RemoteAddr(),
+					}, datalen == 4)
+				}
 				if datalen == 4 {
 					// 2 CRLF is ping
 					if _, err := conn.Write(data[:2]); err != nil {
