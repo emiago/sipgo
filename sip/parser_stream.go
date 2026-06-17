@@ -192,6 +192,10 @@ func (p *ParserStream) parseSingle() error {
 			p.state = -1
 			return nil
 		}
+		// avoid huge allocation if it will exceed message size
+		if (p.totalRead + contentLength) > p.p.MaxMessageLength {
+			return ErrMessageTooLarge
+		}
 		body := make([]byte, contentLength)
 		p.msg.SetBody(body)
 		p.state = stateContent
