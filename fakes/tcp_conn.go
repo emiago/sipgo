@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 type TCPConn struct {
@@ -48,6 +49,14 @@ func (c *TCPConn) Write(p []byte) (n int, err error) {
 }
 
 func (c *TCPConn) Close() error {
+	return nil
+}
+
+func (c *TCPConn) SetReadDeadline(time.Time) error {
+	return nil
+}
+
+func (c *TCPConn) SetWriteDeadline(time.Time) error {
 	return nil
 }
 
