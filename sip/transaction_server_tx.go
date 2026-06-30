@@ -102,6 +102,10 @@ func (tx *ServerTx) Receive(req *Request) error {
 }
 
 func (tx *ServerTx) Respond(res *Response) error {
+	if err := ValidateMessage(res); err != nil {
+		return err
+	}
+
 	if res.IsCancel() {
 		return tx.conn.WriteMsg(res)
 	}
