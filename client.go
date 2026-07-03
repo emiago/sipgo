@@ -159,10 +159,6 @@ func (c *Client) TransactionRequest(ctx context.Context, req *sip.Request, optio
 		}
 	}
 
-	if err := sip.ValidateMessage(req); err != nil {
-		return nil, err
-	}
-
 	if c.TxRequester != nil {
 		return c.TxRequester.Request(ctx, req)
 	}
@@ -187,10 +183,6 @@ func (c *Client) newTransaction(ctx context.Context, req *sip.Request, onConnect
 				return nil, err
 			}
 		}
-	}
-
-	if err := sip.ValidateMessage(req); err != nil {
-		return nil, err
 	}
 
 	if c.TxRequester != nil {
@@ -324,9 +316,6 @@ func (c *Client) WriteRequest(req *sip.Request, options ...ClientRequestOption) 
 }
 
 func (c *Client) writeReq(req *sip.Request) error {
-	if err := sip.ValidateMessage(req); err != nil {
-		return err
-	}
 	if c.TxRequester != nil {
 		_, err := c.TxRequester.Request(context.TODO(), req)
 		return err
