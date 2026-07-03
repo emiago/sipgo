@@ -227,10 +227,7 @@ select {
 
 ```
 
-## SECURITY
 
-**CRLF injection**:
-For user input building request or response, use `sip.ValidateRequest` and `sip.ValidateResponse` before passing to transaction or transport.
 
 
 
@@ -238,6 +235,11 @@ For user input building request or response, use `sip.ValidateRequest` and `sip.
 1. Every new transaction will have **implicitely** CSEQ increase if present -> [Issue 160](https://github.com/emiago/sipgo/issues/160). This fixes problem when you are passing same request like ex. REGISTER
 2. Above rule does not apply for In Dialog cases
 2. To avoid 1. pass option `client.TransactionRequest(ctx, req, sipgo.ClientRequestBuild)` or more better used `DialogClient`
+
+## SECURITY
+
+**CRLF injection**:
+For user input building request or response, use `sip.ValidateRequest` and `sip.ValidateResponse` before passing to transaction or transport.
 
 ## Client stateless request
 
