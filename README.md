@@ -227,7 +227,7 @@ select {
 
 ```
 
-## SECUIRITY
+## SECURITY
 
 **CRLF injection**:
 For user input building request or response, use `sip.ValidateRequest` and `sip.ValidateResponse` before passing to transaction or transport.
