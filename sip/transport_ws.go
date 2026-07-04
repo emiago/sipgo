@@ -362,6 +362,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		state = ws.StateClientSide
 	}
 	reader := wsutil.NewReader(c.Conn, state)
+	reader.MaxFrameSize = int64(ParseMaxMessageLength)
 	for {
 		header, err := reader.NextFrame()
 		if err != nil {
