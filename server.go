@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/emiago/sipgo/sip"
 )
@@ -96,16 +97,27 @@ func newBaseServer(ua *UserAgent, options ...ServerOption) (*Server, error) {
 // Network supported: udp, tcp, ws
 func (srv *Server) ListenAndServe(ctx context.Context, network string, addr string) error {
 	network = strings.ToLower(network)
-	var connCloser io.Closer
+	var (
+		connMu     sync.Mutex
+		connCloser io.Closer
+	)
+	setConnCloser := func(c io.Closer) {
+		connMu.Lock()
+		connCloser = c
+		connMu.Unlock()
+	}
 
 	// TODO consider different design to avoid this additional go routines
 	go func() {
 		select {
 		case <-ctx.Done():
-			if connCloser == nil {
+			connMu.Lock()
+			c := connCloser
+			connMu.Unlock()
+			if c == nil {
 				return
 			}
-			if err := connCloser.Close(); err != nil {
+			if err := c.Close(); err != nil {
 				srv.log.Error("Failed to close listener", "error", err)
 			}
 
@@ -125,7 +137,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 			return fmt.Errorf("listen udp error. err=%w", err)
 		}
 
-		connCloser = udpConn
+		setConnCloser(udpConn)
 		listenReadyCtx(ctx, network, udpConn.LocalAddr().String())
 		return srv.tp.ServeUDP(udpConn)
 
@@ -140,7 +152,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 			return fmt.Errorf("listen tcp error. err=%w", err)
 		}
 
-		connCloser = conn
+		setConnCloser(conn)
 		listenReadyCtx(ctx, network, conn.Addr().String())
 
 		return srv.tp.ServeTCP(conn)
@@ -157,7 +169,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 			return fmt.Errorf("listen tcp error. err=%w", err)
 		}
 
-		connCloser = conn
+		setConnCloser(conn)
 		listenReadyCtx(ctx, network, conn.Addr().String())
 		// and uses listener to buffer
 		return srv.tp.ServeWS(conn)
@@ -170,7 +182,15 @@ func (srv *Server) ListenAndServe(ctx context.Context, network string, addr stri
 func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr string, conf *tls.Config) error {
 	network = strings.ToLower(network)
 
-	var connCloser io.Closer
+	var (
+		connMu     sync.Mutex
+		connCloser io.Closer
+	)
+	setConnCloser := func(c io.Closer) {
+		connMu.Lock()
+		connCloser = c
+		connMu.Unlock()
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -178,10 +198,13 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 	go func() {
 		select {
 		case <-ctx.Done():
-			if connCloser == nil {
+			connMu.Lock()
+			c := connCloser
+			connMu.Unlock()
+			if c == nil {
 				return
 			}
-			if err := connCloser.Close(); err != nil {
+			if err := c.Close(); err != nil {
 				srv.log.Error("Failed to close listener", "error", err)
 			}
 
@@ -216,7 +239,7 @@ func (srv *Server) ListenAndServeTLS(ctx context.Context, network string, addr s
 			return fmt.Errorf("listen tls error. err=%w", err)
 		}
 
-		connCloser = listener
+		setConnCloser(listener)
 		listenReadyCtx(ctx, network, listener.Addr().String())
 
 		if network == "wss" {
