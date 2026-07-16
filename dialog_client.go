@@ -226,6 +226,17 @@ type AnswerOptions struct {
 
 var (
 	WaitAnswerForceCancelErr = errors.New("Context cancel forced")
+
+	// ErrAuthMissingCreds is returned when a peer sends a real digest challenge
+	// but no password is configured. This is a local misconfiguration rather than
+	// the peer rejecting the request, so it is reported apart from the final
+	// response instead of as an indistinguishable 401/407 ErrDialogResponse.
+	ErrAuthMissingCreds = errors.New("auth missing credentials")
+
+	// ErrAuthMaxRetry is returned when a peer keeps challenging past
+	// maxAuthAttempts. The credentials were presented and refused repeatedly, so
+	// no further retry can succeed.
+	ErrAuthMaxRetry = errors.New("auth max retries reached")
 )
 
 // maxAuthAttempts caps how many digest challenges are answered on one INVITE.
@@ -239,6 +250,8 @@ const maxAuthAttempts = 2
 // If Canceling succesfull context.Canceled error is returned
 // Returns errors:
 // - ErrDialogResponse in case non 2xx response
+// - ErrAuthMissingCreds when a real challenge arrives with no password configured
+// - ErrAuthMaxRetry when the peer keeps challenging past maxAuthAttempts
 // - any internal in case waiting answer failed for different reasons
 func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions) error {
 	tx, inviteRequest := s.inviteTx, s.InviteRequest
@@ -296,8 +309,16 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		// Replacing is safe because digest*AuthApply removes the existing
 		// authorization header before appending, so the aged credential is
 		// replaced rather than stacked.
-		if r.StatusCode == sip.StatusProxyAuthRequired && opts.Password != "" &&
-			r.GetHeader("Proxy-Authenticate") != nil && authAttempts < maxAuthAttempts {
+		if r.StatusCode == sip.StatusProxyAuthRequired && r.GetHeader("Proxy-Authenticate") != nil {
+			// A real challenge we cannot answer is our own misconfiguration, not
+			// the proxy rejecting the route. Say so, rather than laundering it
+			// into the final-response arm as an indistinguishable 407.
+			if opts.Password == "" {
+				return ErrAuthMissingCreds
+			}
+			if authAttempts >= maxAuthAttempts {
+				return ErrAuthMaxRetry
+			}
 			authAttempts++
 			tx.Terminate()
 
@@ -324,8 +345,15 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			continue
 		}
 
-		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" &&
-			r.GetHeader("WWW-Authenticate") != nil && authAttempts < maxAuthAttempts {
+		if r.StatusCode == sip.StatusUnauthorized && r.GetHeader("WWW-Authenticate") != nil {
+			// See the 407 arm above: a real challenge with no password is our own
+			// blank credential, and must not read as a peer rejection.
+			if opts.Password == "" {
+				return ErrAuthMissingCreds
+			}
+			if authAttempts >= maxAuthAttempts {
+				return ErrAuthMaxRetry
+			}
 			authAttempts++
 			tx.Terminate()
 

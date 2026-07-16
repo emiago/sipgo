@@ -250,10 +250,13 @@ func TestDialogClientMultiResponses(t *testing.T) {
 		assert.Contains(t, auth[0].Value(), "9f3c1e7b2d4a5068cb1e0d7a3f6b2c84")
 	})
 
-	// An endless challenge stream must still terminate, and must terminate as a
-	// plain non-2xx final response carrying the real status.
-	t.Run("AuthLoopTerminatesAsDialogResponse", func(t *testing.T) {
+	// An endless challenge stream must still terminate. The credentials were
+	// presented and refused past the cap, so no further retry can succeed: that
+	// is reported as ErrAuthMaxRetry rather than as an indistinguishable 401.
+	t.Run("AuthLoopMaxRetry", func(t *testing.T) {
+		challenges := 0
 		client := testClient(t, func(req *sip.Request) *sip.Response {
+			challenges++
 			res := sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
 			challenge := `Digest realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", algorithm=MD5, stale=true`
 			res.AppendHeader(sip.NewHeader("WWW-Authenticate", challenge))
@@ -267,9 +270,68 @@ func TestDialogClientMultiResponses(t *testing.T) {
 		require.NoError(t, err)
 
 		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user", Password: "secret"})
-		var resErr *ErrDialogResponse
-		require.ErrorAs(t, err, &resErr)
-		assert.Equal(t, 401, resErr.Res.StatusCode)
+		require.ErrorIs(t, err, ErrAuthMaxRetry)
+		// The cap is what stops the stream: the initial INVITE plus exactly
+		// maxAuthAttempts answered challenges.
+		assert.Equal(t, maxAuthAttempts+1, challenges)
+	})
+
+	// Same cap on the proxy arm.
+	t.Run("ProxyAuthLoopMaxRetry", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			res := sip.NewResponseFromRequest(req, 407, "Proxy Authentication Required", nil)
+			challenge := `Digest realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", algorithm=MD5, stale=true`
+			res.AppendHeader(sip.NewHeader("Proxy-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user", Password: "secret"})
+		require.ErrorIs(t, err, ErrAuthMaxRetry)
+	})
+
+	// A real challenge with no password configured is our own blank credential,
+	// not the peer rejecting the route, and must be typed apart from a 401/407
+	// ErrDialogResponse so the caller can tell the two cases apart.
+	t.Run("AuthMissingCreds", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			res := sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
+			challenge := `Digest realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", algorithm=MD5`
+			res.AppendHeader(sip.NewHeader("WWW-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user"})
+		require.ErrorIs(t, err, ErrAuthMissingCreds)
+	})
+
+	t.Run("ProxyAuthMissingCreds", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			res := sip.NewResponseFromRequest(req, 407, "Proxy Authentication Required", nil)
+			challenge := `Digest realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", algorithm=MD5`
+			res.AppendHeader(sip.NewHeader("Proxy-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user"})
+		require.ErrorIs(t, err, ErrAuthMissingCreds)
 	})
 
 	// A 401 with no WWW-Authenticate is a plain rejection, not a challenge. It
