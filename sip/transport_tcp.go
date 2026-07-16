@@ -252,7 +252,7 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 		if err == ErrParseSipPartial {
 			return nil
 		}
-		t.log.Error("failed to parse", "error", err, "data", string(data))
+		t.log.Debug("failed to parse", "src", src, "bytes", len(data), "error", err)
 		return err
 	}
 	return nil
