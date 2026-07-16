@@ -122,6 +122,12 @@ func (p *ParserStream) Write(data []byte) (int, error) {
 
 // ParseNext parses the next SIP message from an internal buffer.
 // It may return io.ErrUnexpectedEOF, indicating that more data needs to be written with Write.
+//
+// ErrMessageTooLarge is returned in two shapes. If the oversized message was
+// parsed in full, it is fully consumed from the buffer and the stream can be
+// recovered by simply calling ParseNext again. If it is still incomplete, the
+// stream cannot be recovered: there is no message boundary to skip to, so the
+// buffer is drained and the caller should close the connection.
 func (p *ParserStream) ParseNext() (Message, int, error) {
 	if p.buf == nil {
 		return nil, 0, io.ErrUnexpectedEOF
@@ -129,8 +135,24 @@ func (p *ParserStream) ParseNext() (Message, int, error) {
 	err := p.parseSingle()
 	reset := err == nil
 	msg, n := p.msg, p.totalRead
-	if err == nil && p.totalRead > p.p.MaxMessageLength {
-		err = ErrMessageTooLarge
+	if err == nil {
+		if p.totalRead > p.p.MaxMessageLength {
+			err = ErrMessageTooLarge
+		}
+	} else if errors.Is(err, io.ErrUnexpectedEOF) {
+		// The message is incomplete, so everything still buffered belongs to it:
+		// totalRead counts what has already been drained into the message, and
+		// buf holds a line that has not terminated yet. Neither pool is bounded
+		// on its own. Headers streamed in complete lines drain as they arrive and
+		// keep buf near empty while the message grows without limit; a line that
+		// never terminates does the reverse. Only their sum bounds the peer.
+		if p.totalRead+p.buf.Len() > p.p.MaxMessageLength {
+			// Unrecoverable, so do not keep the bytes we just refused to assemble.
+			// Reporting the error while still holding them would leave the peer's
+			// memory in place for any caller that logs and reads on.
+			p.Discard(p.buf.Len())
+			return nil, n, ErrMessageTooLarge
+		}
 	}
 	if reset {
 		p.reset()
