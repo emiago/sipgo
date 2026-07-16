@@ -32,6 +32,19 @@ type TransportTCP struct {
 	// treat as a transport failure rather than a fatal one.
 	WriteTimeout time.Duration
 
+	// ReadTimeout bounds how long a connection of this transport may sit
+	// without a readable byte. Zero, the default, applies no deadline and lets
+	// a connection idle forever. When positive, every read arms
+	// SetReadDeadline(now + ReadTimeout) and exceeding it closes the
+	// connection, leaving the peer free to reconnect.
+	//
+	// The message size caps bound how much memory one message may cost; this
+	// bounds the peer in time instead. A peer that opens a connection and then
+	// sends nothing, or stalls midway through a message, otherwise holds a
+	// goroutine, a socket and a read buffer indefinitely. RFC 5626 keep-alives
+	// reset the deadline, so a healthy long lived connection never reaches it.
+	ReadTimeout time.Duration
+
 	onConnClose func(conn Connection)
 }
 
@@ -176,10 +189,25 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 	par := t.parser.NewSIPStream()
 
 	for {
+		if d := t.ReadTimeout; d > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(d)); err != nil {
+				t.log.Debug("failed to arm read deadline", "error", err)
+			}
+		}
+
 		num, err := conn.Read(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug("connection was closed", "error", err)
+				return
+			}
+
+			// The deferred CloseAndDelete tears the connection down and the peer
+			// is free to reconnect.
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				t.log.Info("connection idle past read deadline, closing",
+					"raddr", raddr, "timeout", t.ReadTimeout)
 				return
 			}
 

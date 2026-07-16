@@ -76,6 +76,63 @@ func TestTransportTCPWriteTimeoutPropagates(t *testing.T) {
 	}
 }
 
+// TestTransportTCPReadTimeout checks that the read loop only arms a read
+// deadline when the transport was configured with a positive ReadTimeout. The
+// zero value must stay a strict no-op so existing users see no change.
+func TestTransportTCPReadTimeout(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		tp := &TransportTCP{}
+		tp.init(NewParser())
+		defer tp.Close()
+
+		fc := newFakeTCPConn()
+		tp.readConnection(&TCPConnection{Conn: fc}, fc.LocalAddr().String(), fc.RemoteAddr().String(), func(msg Message) {})
+
+		if got := fc.ReadDeadlines(); len(got) != 0 {
+			t.Fatalf("expected no read deadline armed, got %v", got)
+		}
+	})
+
+	t.Run("armed when set", func(t *testing.T) {
+		tp := &TransportTCP{ReadTimeout: 30 * time.Second}
+		tp.init(NewParser())
+		defer tp.Close()
+
+		fc := newFakeTCPConn()
+		tp.readConnection(&TCPConnection{Conn: fc}, fc.LocalAddr().String(), fc.RemoteAddr().String(), func(msg Message) {})
+
+		if got := fc.ReadDeadlines(); len(got) == 0 {
+			t.Fatal("expected a read deadline to be armed")
+		}
+	})
+}
+
+// TestTransportTCPReadTimeoutIdlePeer drives a real net.Pipe, which honors
+// deadlines, to show that a peer which connects and then sends nothing is
+// dropped rather than holding the read goroutine forever.
+func TestTransportTCPReadTimeoutIdlePeer(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	tp := &TransportTCP{ReadTimeout: 50 * time.Millisecond}
+	tp.init(NewParser())
+	defer tp.Close()
+
+	done := make(chan struct{})
+	go func() {
+		// client never writes, so the read blocks until the deadline fires
+		tp.readConnection(&TCPConnection{Conn: server}, "127.0.0.1:5060", "127.0.0.2:5060", func(msg Message) {})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("read loop did not return: an idle peer held the goroutine open")
+	}
+}
+
 // TestTCPConnectionWriteTimeoutStalledPeer drives a real net.Pipe, which
 // honors deadlines, to show that a write to a peer that never reads fails with
 // a timeout instead of blocking the writer forever.
