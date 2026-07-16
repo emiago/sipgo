@@ -249,7 +249,10 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operationParseSIP
 	if err != nil {
-		t.log.Error("failed to parse", "error", err, "data", string(data))
+		// Any peer can reach this before it has authenticated, so it is not an
+		// application error and the payload is not ours to log. WSS reaches
+		// this through the TransportWS embed.
+		t.log.Debug("failed to parse", "src", src, "bytes", len(data), "error", err)
 		return
 	}
 
