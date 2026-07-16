@@ -138,6 +138,45 @@ func parseMaxForwardsHeader(headerText string, maxfwd *MaxForwardsHeader) error 
 	return err
 }
 
+// parseSessionExpiresHeader parses SessionExpires header. Value is a delta
+// seconds integer followed by optional ';' separated params, notably
+// refresher=uac|uas. Params are kept as sent. The Min-SE floor and electing a
+// refresher are negotiation policy for the caller, not parsing.
+func parseSessionExpiresHeader(headerText string, h *SessionExpiresHeader) error {
+	deltaText := headerText
+	paramsText := ""
+	if ind := strings.IndexByte(headerText, ';'); ind >= 0 {
+		deltaText = headerText[:ind]
+		paramsText = headerText[ind+1:]
+	}
+
+	delta, err := strconv.ParseUint(strings.TrimSpace(deltaText), 10, 32)
+	if err != nil {
+		return fmt.Errorf("session-expires delta: %w", err)
+	}
+	h.Delta = uint32(delta)
+
+	if strings.TrimSpace(paramsText) == "" {
+		return nil
+	}
+
+	h.Params = NewParams()
+	if _, err := UnmarshalHeaderParams(paramsText, ';', 0, &h.Params); err != nil {
+		return fmt.Errorf("session-expires params: %w", err)
+	}
+	return nil
+}
+
+// parseMinSEHeader parses MinSE header. Value is a bare delta seconds integer.
+func parseMinSEHeader(headerText string, h *MinSEHeader) error {
+	delta, err := strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
+	if err != nil {
+		return fmt.Errorf("min-se delta: %w", err)
+	}
+	*h = MinSEHeader(delta)
+	return nil
+}
+
 func headerParserCSeq(headerName []byte, headerText string) (headers Header, err error) {
 	var cseq CSeqHeader
 	return &cseq, parseCSeqHeader(headerText, &cseq)
