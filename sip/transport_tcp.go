@@ -24,6 +24,14 @@ type TransportTCP struct {
 
 	DialerCreate func(laddr net.Addr) net.Dialer
 
+	// WriteTimeout bounds how long a single write on a connection of this
+	// transport may block on a peer that is not draining its receive window.
+	// Zero, the default, applies no deadline and keeps writes unbounded.
+	// When positive, every write arms SetWriteDeadline(now + WriteTimeout) and
+	// exceeding it fails the write with a timeout error, which callers already
+	// treat as a transport failure rather than a fatal one.
+	WriteTimeout time.Duration
+
 	onConnClose func(conn Connection)
 }
 
@@ -117,8 +125,9 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
-			Conn:     conn,
-			refcount: 2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
+			Conn:         conn,
+			writeTimeout: t.WriteTimeout,
+			refcount:     2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
 		}
 
 		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
@@ -138,8 +147,9 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	laddr := conn.LocalAddr().String()
 	t.log.Debug("New connection", "raddr", raddr)
 	c := &TCPConnection{
-		Conn:     conn,
-		refcount: 1 + TransportIdleConnection,
+		Conn:         conn,
+		writeTimeout: t.WriteTimeout,
+		refcount:     1 + TransportIdleConnection,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
@@ -242,6 +252,10 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 type TCPConnection struct {
 	net.Conn
 
+	// writeTimeout is copied from the transport at construction and never
+	// changes for the life of the connection. Zero means no write deadline.
+	writeTimeout time.Duration
+
 	mu       sync.RWMutex
 	refcount int
 }
@@ -292,6 +306,12 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *TCPConnection) Write(b []byte) (n int, err error) {
+	if c.writeTimeout > 0 {
+		// Bound a peer that stopped draining. TLS shares this Conn.
+		if err := c.Conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+			return 0, err
+		}
+	}
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Write(b)
 	if SIPDebug {
