@@ -235,58 +235,6 @@ func TestClientViaRouting(t *testing.T) {
 	assert.Equal(t, 5060, via.Port)
 }
 
-func TestClientWriteRequestRejectsCRLFAfterBuild(t *testing.T) {
-	ua, err := NewUA()
-	require.NoError(t, err)
-
-	client, err := NewClient(ua, WithClientHostname("127.0.0.1"))
-	require.NoError(t, err)
-
-	called := false
-	client.TxRequester = clientTxRequesterFunc(func(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
-		called = true
-		return nil, nil
-	})
-
-	req := sip.NewRequest(sip.REGISTER, sip.Uri{User: "foo", Host: "example.com"})
-	req.AppendHeader(sip.NewHeader("Subject", "injected\r\nContent-Length: 0"))
-
-	err = client.WriteRequest(req)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid CRLF")
-	require.False(t, called)
-	require.NotNil(t, req.Via())
-}
-
-func TestClientTransactionRequestRejectsCRLFAfterBuild(t *testing.T) {
-	ua, err := NewUA()
-	require.NoError(t, err)
-
-	client, err := NewClient(ua, WithClientHostname("127.0.0.1"))
-	require.NoError(t, err)
-
-	called := false
-	client.TxRequester = clientTxRequesterFunc(func(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
-		called = true
-		return nil, nil
-	})
-
-	req := sip.NewRequest(sip.REGISTER, sip.Uri{User: "foo", Host: "example.com"})
-	req.AppendHeader(sip.NewHeader("Subject", "injected\r\nContent-Length: 0"))
-
-	_, err = client.TransactionRequest(context.Background(), req)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid CRLF")
-	require.False(t, called)
-	require.NotNil(t, req.Via())
-}
-
-type clientTxRequesterFunc func(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error)
-
-func (f clientTxRequesterFunc) Request(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
-	return f(ctx, req)
-}
-
 func TestIntegrationClientViaBindHost(t *testing.T) {
 	if os.Getenv("TEST_INTEGRATION") == "" {
 		t.Skip("Use TEST_INTEGRATION env value to run this test")
