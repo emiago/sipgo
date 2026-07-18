@@ -17,9 +17,6 @@ type DialogServerSession struct {
 	// s        *DialogServer
 	ua *DialogUA
 
-	// onClose is temporarly fix to handle dialog Closing.
-	// Normally you want to have cleanup after dialog terminating or caller calling Close()
-	// In future this could be only subscribing to dialog state
 	onClose func()
 }
 
