@@ -228,6 +228,12 @@ var (
 	WaitAnswerForceCancelErr = errors.New("Context cancel forced")
 )
 
+// maxAuthAttempts caps how many digest challenges are answered on one INVITE.
+// Two allows a stale=true re-challenge (RFC 2617 3.2.1, adopted for SIP by RFC
+// 3261 22.4) to be answered with the
+// fresh nonce, while still terminating an endless challenge stream.
+const maxAuthAttempts = 2
+
 // WaitAnswer waits for success response or returns ErrDialogResponse in case non 2xx
 // Canceling context while waiting 2xx will send Cancel request. It will block until 1xx provisional is not received
 // If Canceling succesfull context.Canceled error is returned
@@ -238,6 +244,9 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	tx, inviteRequest := s.inviteTx, s.InviteRequest
 	var r *sip.Response
 	var err error
+	// Counts challenges answered on this INVITE, shared by both arms so that a
+	// 407 followed by a 401 consumes both attempts.
+	authAttempts := 0
 	for i := 0; ; i++ {
 		if i > 10 {
 			// Preventing some long loops
@@ -274,62 +283,73 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			continue
 		}
 
-		if (r.StatusCode == sip.StatusProxyAuthRequired) && opts.Password != "" {
-			h := inviteRequest.GetHeader("Proxy-Authorization")
-			if h == nil {
-				tx.Terminate()
+		// A 401/407 is a challenge only when it actually carries the authenticate
+		// header. A peer is free to answer either with no challenge at all as a
+		// plain rejection, and a challenge that is not there cannot be answered:
+		// such a response falls through to the final response below and reaches
+		// the caller with its real status, instead of a digest parse error that
+		// replaces it.
+		//
+		// Retrying is bounded by maxAuthAttempts rather than by the absence of an
+		// authorization header on the request. The latter permits exactly one
+		// attempt, so a stale=true re-challenge was rejected as a hard failure.
+		// Replacing is safe because digest*AuthApply removes the existing
+		// authorization header before appending, so the aged credential is
+		// replaced rather than stacked.
+		if r.StatusCode == sip.StatusProxyAuthRequired && opts.Password != "" &&
+			r.GetHeader("Proxy-Authenticate") != nil && authAttempts < maxAuthAttempts {
+			authAttempts++
+			tx.Terminate()
 
-				digopts := digest.Options{
-					Method:   sip.INVITE.String(),
-					URI:      inviteRequest.Recipient.Addr(),
-					Username: opts.Username,
-					Password: opts.Password,
-				}
-
-				// First build this request
-				if err := digestProxyAuthApply(inviteRequest, r, digopts); err != nil {
-					return err
-				}
-
-				// Remove Via from original request and send it through dialog transaction
-				// This keeps transaction within dialog
-				inviteRequest.RemoveHeader("Via")
-				tx, err = s.TransactionRequest(ctx, inviteRequest)
-				if err != nil {
-					return err
-				}
-				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
-				continue
+			digopts := digest.Options{
+				Method:   sip.INVITE.String(),
+				URI:      inviteRequest.Recipient.Addr(),
+				Username: opts.Username,
+				Password: opts.Password,
 			}
+
+			// First build this request
+			if err := digestProxyAuthApply(inviteRequest, r, digopts); err != nil {
+				return err
+			}
+
+			// Remove Via from original request and send it through dialog transaction
+			// This keeps transaction within dialog
+			inviteRequest.RemoveHeader("Via")
+			tx, err = s.TransactionRequest(ctx, inviteRequest)
+			if err != nil {
+				return err
+			}
+			s.inviteTx = tx // We need to update this here as we can exit early like on provisional
+			continue
 		}
 
-		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" {
-			h := inviteRequest.GetHeader("Authorization")
-			if h == nil {
-				tx.Terminate()
+		if r.StatusCode == sip.StatusUnauthorized && opts.Password != "" &&
+			r.GetHeader("WWW-Authenticate") != nil && authAttempts < maxAuthAttempts {
+			authAttempts++
+			tx.Terminate()
 
-				digopts := digest.Options{
-					Method:   sip.INVITE.String(),
-					URI:      inviteRequest.Recipient.Addr(),
-					Username: opts.Username,
-					Password: opts.Password,
-				}
-
-				// First build this request
-				if err := digestAuthApply(inviteRequest, r, digopts); err != nil {
-					return err
-				}
-
-				// Remove Via from original request and send it through dialog transaction
-				// This keeps transaction within dialog
-				inviteRequest.RemoveHeader("Via")
-				tx, err = s.TransactionRequest(ctx, inviteRequest)
-				if err != nil {
-					return err
-				}
-				s.inviteTx = tx // We need to update this here as we can exit early like on provisional
-				continue
+			digopts := digest.Options{
+				Method:   sip.INVITE.String(),
+				URI:      inviteRequest.Recipient.Addr(),
+				Username: opts.Username,
+				Password: opts.Password,
 			}
+
+			// First build this request
+			if err := digestAuthApply(inviteRequest, r, digopts); err != nil {
+				return err
+			}
+
+			// Remove Via from original request and send it through dialog transaction
+			// This keeps transaction within dialog
+			inviteRequest.RemoveHeader("Via")
+			tx, err = s.TransactionRequest(ctx, inviteRequest)
+			if err != nil {
+				return err
+			}
+			s.inviteTx = tx // We need to update this here as we can exit early like on provisional
+			continue
 		}
 
 		return &ErrDialogResponse{Res: r}
@@ -500,11 +520,11 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
 	// ACK to 2xx response should not copy over Route header(s) from original INVITE request.
-	// Instead the ACK should include Route header(s) derived from reversing the order of 
-	// Record-Route header(s) in the 2xx response. 
+	// Instead the ACK should include Route header(s) derived from reversing the order of
+	// Record-Route header(s) in the 2xx response.
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.2
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.2.1.1
-	
+
 	if h := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(sip.HeaderClone(h))
 	}
