@@ -275,6 +275,15 @@ func (p *Parser) Parse(data []byte, stream bool) (Message, int, error) {
 	if bodySize == 0 {
 		return msg, total, nil
 	}
+	// Content-Length is attacker-controlled and independent of how many bytes
+	// actually arrived: a small datagram can declare a body of up to 4 GB and
+	// drive the make below to allocate it before the copy can reject it. The
+	// stream parser already bounds this against MaxMessageLength; the datagram
+	// path must too. Subtracting keeps the check from overflowing int, and total
+	// never exceeds MaxMessageLength because the whole datagram was bounded above.
+	if bodySize > p.MaxMessageLength-total {
+		return msg, total, ErrMessageTooLarge
+	}
 	body := make([]byte, bodySize)
 	n := copy(body, data)
 	total += n
