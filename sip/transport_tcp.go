@@ -24,6 +24,27 @@ type TransportTCP struct {
 
 	DialerCreate func(laddr net.Addr) net.Dialer
 
+	// WriteTimeout bounds how long a single write on a connection of this
+	// transport may block on a peer that is not draining its receive window.
+	// Zero, the default, applies no deadline and keeps writes unbounded.
+	// When positive, every write arms SetWriteDeadline(now + WriteTimeout) and
+	// exceeding it fails the write with a timeout error, which callers already
+	// treat as a transport failure rather than a fatal one.
+	WriteTimeout time.Duration
+
+	// ReadTimeout bounds how long a connection of this transport may sit
+	// without a readable byte. Zero, the default, applies no deadline and lets
+	// a connection idle forever. When positive, every read arms
+	// SetReadDeadline(now + ReadTimeout) and exceeding it closes the
+	// connection, leaving the peer free to reconnect.
+	//
+	// The message size caps bound how much memory one message may cost; this
+	// bounds the peer in time instead. A peer that opens a connection and then
+	// sends nothing, or stalls midway through a message, otherwise holds a
+	// goroutine, a socket and a read buffer indefinitely. RFC 5626 keep-alives
+	// reset the deadline, so a healthy long lived connection never reaches it.
+	ReadTimeout time.Duration
+
 	onConnClose func(conn Connection)
 }
 
@@ -117,8 +138,9 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
-			Conn:     conn,
-			refcount: 2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
+			Conn:         conn,
+			writeTimeout: t.WriteTimeout,
+			refcount:     2 + TransportIdleConnection, // 1 returning + 1 reading + Idle
 		}
 
 		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
@@ -138,8 +160,9 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	laddr := conn.LocalAddr().String()
 	t.log.Debug("New connection", "raddr", raddr)
 	c := &TCPConnection{
-		Conn:     conn,
-		refcount: 1 + TransportIdleConnection,
+		Conn:         conn,
+		writeTimeout: t.WriteTimeout,
+		refcount:     1 + TransportIdleConnection,
 	}
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
@@ -166,10 +189,25 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 	par := t.parser.NewSIPStream()
 
 	for {
+		if d := t.ReadTimeout; d > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(d)); err != nil {
+				t.log.Debug("failed to arm read deadline", "error", err)
+			}
+		}
+
 		num, err := conn.Read(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				t.log.Debug("connection was closed", "error", err)
+				return
+			}
+
+			// The deferred CloseAndDelete tears the connection down and the peer
+			// is free to reconnect.
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				t.log.Info("connection idle past read deadline, closing",
+					"raddr", raddr, "timeout", t.ReadTimeout)
 				return
 			}
 
@@ -242,6 +280,10 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 type TCPConnection struct {
 	net.Conn
 
+	// writeTimeout is copied from the transport at construction and never
+	// changes for the life of the connection. Zero means no write deadline.
+	writeTimeout time.Duration
+
 	mu       sync.RWMutex
 	refcount int
 }
@@ -292,6 +334,12 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *TCPConnection) Write(b []byte) (n int, err error) {
+	if c.writeTimeout > 0 {
+		// Bound a peer that stopped draining. TLS shares this Conn.
+		if err := c.Conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+			return 0, err
+		}
+	}
 	// Some debug hook. TODO move to proper way
 	n, err = c.Conn.Write(b)
 	if SIPDebug {

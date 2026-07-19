@@ -76,8 +76,9 @@ func (t *TransportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 
 		t.log.Debug("New connection", "raddr", raddr)
 		c := &TCPConnection{
-			Conn:     tlsConn,
-			refcount: 2 + TransportIdleConnection,
+			Conn:         tlsConn,
+			writeTimeout: t.WriteTimeout,
+			refcount:     2 + TransportIdleConnection,
 		}
 		isNew = true
 		return c, nil

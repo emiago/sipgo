@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 type TCPConn struct {
@@ -16,6 +17,41 @@ type TCPConn struct {
 	Writer io.Writer
 
 	mu sync.Mutex
+
+	writeDeadlines []time.Time
+	readDeadlines  []time.Time
+}
+
+// SetWriteDeadline records the deadline instead of enforcing it. The embedded
+// net.Conn is nil on this fake, so the call must not be forwarded.
+func (c *TCPConn) SetWriteDeadline(t time.Time) error {
+	c.mu.Lock()
+	c.writeDeadlines = append(c.writeDeadlines, t)
+	c.mu.Unlock()
+	return nil
+}
+
+// WriteDeadlines returns the deadlines passed to SetWriteDeadline so far.
+func (c *TCPConn) WriteDeadlines() []time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Time(nil), c.writeDeadlines...)
+}
+
+// SetReadDeadline records the deadline instead of enforcing it. The embedded
+// net.Conn is nil on this fake, so the call must not be forwarded.
+func (c *TCPConn) SetReadDeadline(t time.Time) error {
+	c.mu.Lock()
+	c.readDeadlines = append(c.readDeadlines, t)
+	c.mu.Unlock()
+	return nil
+}
+
+// ReadDeadlines returns the deadlines passed to SetReadDeadline so far.
+func (c *TCPConn) ReadDeadlines() []time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Time(nil), c.readDeadlines...)
 }
 
 // func (c *TCPConn) ExpectAddr(addr net.TCPAddr) {
