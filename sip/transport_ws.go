@@ -20,6 +20,13 @@ var (
 	// WebSocketProtocols is used in setting websocket header
 	// By default clients must accept protocol sip
 	WebSocketProtocols = []string{"sip"}
+
+	// TransportWSKeepAlivePeriod sets how often a Ping frame is sent on an
+	// established WS or WSS connection. Proxies and load balancers commonly drop
+	// idle SIP over WebSocket connections after 30 to 60 seconds, and without
+	// traffic the connection goes stale without either side noticing. Set to 0
+	// to disable sending pings.
+	TransportWSKeepAlivePeriod = 20 * time.Second
 )
 
 // WS transport implementation
@@ -157,14 +164,11 @@ func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	laddr := conn.LocalAddr().String()
 	t.log.Debug("New WS connection", "raddr", raddr)
-	c := &WSConnection{
-		Conn:       conn,
-		refcount:   1 + TransportIdleConnection,
-		clientSide: clientSide,
-	}
+	c := newWSConnection(conn, clientSide, 1+TransportIdleConnection)
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
 	go t.readConnection(c, laddr, raddr, handler)
+	go c.keepalive(t.log)
 	return c
 }
 
@@ -297,12 +301,9 @@ func (t *TransportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Ad
 		}
 
 		t.log.Debug("New WS connection", "raddr", raddr)
-		c := &WSConnection{
-			Conn:       conn,
-			refcount:   2 + TransportIdleConnection,
-			clientSide: true,
-		}
+		c := newWSConnection(conn, true, 2+TransportIdleConnection)
 		go t.readConnection(c, c.LocalAddr().String(), c.RemoteAddr().String(), handler)
+		go c.keepalive(t.log)
 		return c, nil
 	})
 	if err != nil {
@@ -320,10 +321,29 @@ type WSConnection struct {
 	refcount   int
 
 	// writeMu serializes frame writes on Conn. ws frame writing is not safe for
-	// concurrent use on a single net.Conn, and a Pong written from the read
-	// goroutine may race WriteMsg. Without this two frames can interleave on the
-	// wire and neither one decodes.
+	// concurrent use on a single net.Conn, and pings from the keepalive
+	// goroutine and pongs from the read goroutine may now race WriteMsg. Without
+	// this two frames can interleave on the wire and neither one decodes.
 	writeMu sync.Mutex
+
+	// closeCh is closed once the connection is hard closed, so that the
+	// keepalive goroutine stops.
+	closeCh   chan struct{}
+	closeOnce sync.Once
+}
+
+func newWSConnection(conn net.Conn, clientSide bool, refcount int) *WSConnection {
+	return &WSConnection{
+		Conn:       conn,
+		clientSide: clientSide,
+		refcount:   refcount,
+		closeCh:    make(chan struct{}),
+	}
+}
+
+// signalClose stops the keepalive goroutine. It is safe to call more than once.
+func (c *WSConnection) signalClose() {
+	c.closeOnce.Do(func() { close(c.closeCh) })
 }
 
 func (c *WSConnection) state() ws.State {
@@ -341,6 +361,40 @@ func (c *WSConnection) writeFrame(f ws.Frame) error {
 	return ws.WriteFrame(c.Conn, f)
 }
 
+// keepalive sends a Ping frame every TransportWSKeepAlivePeriod until the
+// connection is closed. A failed write means the connection is gone, so it is
+// closed to wake up the read goroutine and let the pool clean up.
+func (c *WSConnection) keepalive(log *slog.Logger) {
+	period := TransportWSKeepAlivePeriod
+	if period <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.closeCh:
+			return
+		case <-ticker.C:
+			f := ws.NewPingFrame(nil)
+			if c.clientSide {
+				f = ws.MaskFrameInPlace(f)
+			}
+			if err := c.writeFrame(f); err != nil {
+				log.Debug("WS keepalive ping failed, closing connection", "ip", c.RemoteAddr().String(), "error", err)
+				// Close only the underlying conn and leave the refcount alone, so
+				// the read goroutine wakes up and the pool runs its normal
+				// teardown for this connection.
+				if err := c.Conn.Close(); err != nil {
+					log.Debug("WS keepalive close failed", "ip", c.RemoteAddr().String(), "error", err)
+				}
+				return
+			}
+		}
+	}
+}
+
 func (c *WSConnection) Ref(i int) int {
 	c.mu.Lock()
 	c.refcount += i
@@ -356,6 +410,7 @@ func (c *WSConnection) Close() error {
 	c.refcount = 0
 	c.mu.Unlock()
 	DefaultLogger().Debug("WS doing hard close", "ip", c.RemoteAddr().String())
+	c.signalClose()
 	return c.Conn.Close()
 }
 
@@ -374,6 +429,7 @@ func (c *WSConnection) TryClose() (int, error) {
 		return 0, nil
 	}
 	DefaultLogger().Debug("WS closing", "ip", c.RemoteAddr().String(), "ref", ref)
+	c.signalClose()
 	return ref, c.Conn.Close()
 }
 

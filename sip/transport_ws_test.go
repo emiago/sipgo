@@ -44,7 +44,7 @@ func TestWSConnectionPingIsAnsweredWithPong(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()
 
-	c := &WSConnection{Conn: serverConn, clientSide: false, refcount: 1}
+	c := newWSConnection(serverConn, false, 1)
 	defer c.Close()
 
 	readCh := make(chan string, 1)
@@ -85,7 +85,7 @@ func TestWSConnectionEmptyPingIsAnsweredWithPong(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()
 
-	c := &WSConnection{Conn: serverConn, clientSide: false, refcount: 1}
+	c := newWSConnection(serverConn, false, 1)
 	defer c.Close()
 
 	go func() {
@@ -102,16 +102,150 @@ func TestWSConnectionEmptyPingIsAnsweredWithPong(t *testing.T) {
 	assert.Empty(t, pong.Payload)
 }
 
-// TestWSConnectionConcurrentWrites exercises concurrent SIP writes on one
-// connection. Frames must not interleave on the wire, so every frame the peer
-// reads has to decode. Run with -race to also catch unsynchronized access to
-// the underlying conn.
+// TestWSConnectionKeepaliveSendsPing checks that an idle connection emits Ping
+// frames on the configured period.
+func TestWSConnectionKeepaliveSendsPing(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = 10 * time.Millisecond
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	c := newWSConnection(serverConn, false, 1)
+	defer c.Close()
+	go c.keepalive(DefaultLogger())
+
+	f := mustReadFrame(t, readFrameAsync(t, clientConn))
+	assert.Equal(t, ws.OpPing, f.Header.OpCode)
+	assert.False(t, f.Header.Masked, "server side must not mask")
+}
+
+// TestWSConnectionKeepaliveMasksClientSide checks a client side connection masks
+// its Ping frames, as required for client to server frames.
+func TestWSConnectionKeepaliveMasksClientSide(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = 10 * time.Millisecond
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	c := newWSConnection(serverConn, true, 1)
+	defer c.Close()
+	go c.keepalive(DefaultLogger())
+
+	f := mustReadFrame(t, readFrameAsync(t, clientConn))
+	assert.Equal(t, ws.OpPing, f.Header.OpCode)
+	assert.True(t, f.Header.Masked, "client side must mask")
+}
+
+// TestWSConnectionKeepaliveStopsOnClose checks the keepalive goroutine exits when
+// the connection is closed, rather than leaking for the process lifetime. The
+// period is long enough that the ticker cannot fire, so only Close can end it.
+func TestWSConnectionKeepaliveStopsOnClose(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = time.Hour
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
+	for _, tc := range []struct {
+		name  string
+		close func(c *WSConnection)
+	}{
+		{"Close", func(c *WSConnection) { _ = c.Close() }},
+		{"TryClose", func(c *WSConnection) { _, _ = c.TryClose() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			serverConn, clientConn := net.Pipe()
+			defer clientConn.Close()
+
+			c := newWSConnection(serverConn, false, 1)
+			done := make(chan struct{})
+			go func() {
+				c.keepalive(DefaultLogger())
+				close(done)
+			}()
+
+			tc.close(c)
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("keepalive goroutine leaked after close")
+			}
+		})
+	}
+}
+
+// TestWSConnectionKeepaliveExitsOnDeadPeer checks that when the peer is gone and
+// the ping write fails, the keepalive goroutine closes the connection and exits
+// instead of spinning on a dead link.
+func TestWSConnectionKeepaliveExitsOnDeadPeer(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = 10 * time.Millisecond
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
+	serverConn, clientConn := net.Pipe()
+	c := newWSConnection(serverConn, false, 1)
+
+	done := make(chan struct{})
+	go func() {
+		c.keepalive(DefaultLogger())
+		close(done)
+	}()
+
+	// Peer disappears. The pipe write then fails rather than blocking.
+	require.NoError(t, clientConn.Close())
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("keepalive did not exit after ping write failed")
+	}
+
+	// The connection must be closed so the read goroutine wakes up.
+	_, err := serverConn.Read(make([]byte, 1))
+	assert.Error(t, err)
+}
+
+// TestWSConnectionKeepaliveDisabled checks a zero period turns pings off.
+func TestWSConnectionKeepaliveDisabled(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = 0
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	c := newWSConnection(serverConn, false, 1)
+	defer c.Close()
+
+	done := make(chan struct{})
+	go func() {
+		c.keepalive(DefaultLogger())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("keepalive should return immediately when disabled")
+	}
+}
+
+// TestWSConnectionConcurrentWrites exercises pings racing SIP writes. Frames must
+// not interleave on the wire, so every frame the peer reads has to decode. Run
+// with -race to also catch unsynchronized access to the underlying conn.
 func TestWSConnectionConcurrentWrites(t *testing.T) {
+	prev := TransportWSKeepAlivePeriod
+	TransportWSKeepAlivePeriod = time.Millisecond
+	t.Cleanup(func() { TransportWSKeepAlivePeriod = prev })
+
 	const writers, perWriter = 8, 50
 
 	serverConn, clientConn := net.Pipe()
 
-	c := &WSConnection{Conn: serverConn, clientSide: false, refcount: 1}
+	c := newWSConnection(serverConn, false, 1)
+	go c.keepalive(DefaultLogger())
 
 	// Deadlines bound both ends. If writes interleave the peer sees a corrupt
 	// frame and stops reading, which would otherwise block the writers on the
@@ -133,7 +267,7 @@ func TestWSConnectionConcurrentWrites(t *testing.T) {
 				return
 			}
 			if f.Header.OpCode != ws.OpText {
-				continue // control frames
+				continue // keepalive pings
 			}
 			res.texts++
 			if string(f.Payload) != "SIP" {
