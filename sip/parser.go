@@ -275,6 +275,9 @@ func (p *Parser) Parse(data []byte, stream bool) (Message, int, error) {
 	if bodySize == 0 {
 		return msg, total, nil
 	}
+	if bodySize > p.MaxMessageLength-total {
+		return msg, total, ErrMessageTooLarge
+	}
 	body := make([]byte, bodySize)
 	n := copy(body, data)
 	total += n

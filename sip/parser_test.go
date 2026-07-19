@@ -352,6 +352,30 @@ func TestParseBadMessages(t *testing.T) {
 
 }
 
+func TestParseDatagramBodyBound(t *testing.T) {
+	parser := NewParser()
+
+	rawMsg := []string{
+		"INVITE sip:victim@example.com SIP/2.0",
+		"Via: SIP/2.0/UDP 10.0.0.1:5060;branch=z9hG4bK1",
+		"From: <sip:attacker@example.com>;tag=1",
+		"To: <sip:victim@example.com>",
+		"Call-ID: body-bound@10.0.0.1",
+		"CSeq: 1 INVITE",
+		// Over MaxMessageLength, but small enough not to allocate if the guard regresses.
+		"Content-Length: 1000000",
+		"",
+		"x",
+	}
+	msgstr := strings.Join(rawMsg, "\r\n")
+
+	_, _, err := parser.Parse([]byte(msgstr), false)
+	require.ErrorIs(t, err, ErrMessageTooLarge)
+
+	_, err = parser.ParseSIP([]byte(msgstr))
+	require.ErrorIs(t, err, ErrMessageTooLarge)
+}
+
 func TestParseRequest(t *testing.T) {
 	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())
