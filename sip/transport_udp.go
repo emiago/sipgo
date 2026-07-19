@@ -226,7 +226,10 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
-		t.log.Error("failed to parse", "data", string(data), "error", err)
+		// Any peer can reach this before it has authenticated, so it is not an
+		// application error and the payload is not ours to log. UDP has no
+		// handshake to filter on: every datagram sent to the port lands here.
+		t.log.Debug("failed to parse", "src", src, "bytes", len(data), "error", err)
 		return
 	}
 

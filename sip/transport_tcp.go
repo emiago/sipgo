@@ -234,7 +234,10 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 		if err == ErrParseSipPartial {
 			return
 		}
-		t.log.Error("failed to parse", "error", err, "data", string(data))
+		// Any peer can reach this before it has authenticated, so it is not an
+		// application error and the payload is not ours to log. TLS reaches
+		// this through the TransportTCP embed.
+		t.log.Debug("failed to parse", "src", src, "bytes", len(data), "error", err)
 		return
 	}
 }
