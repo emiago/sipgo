@@ -318,6 +318,27 @@ type WSConnection struct {
 	clientSide bool
 	mu         sync.RWMutex
 	refcount   int
+
+	// writeMu serializes frame writes on Conn. ws frame writing is not safe for
+	// concurrent use on a single net.Conn, and a Pong written from the read
+	// goroutine may race WriteMsg. Without this two frames can interleave on the
+	// wire and neither one decodes.
+	writeMu sync.Mutex
+}
+
+func (c *WSConnection) state() ws.State {
+	if c.clientSide {
+		return ws.StateClientSide
+	}
+	return ws.StateServerSide
+}
+
+// writeFrame writes a single frame. Every frame written on this connection must
+// go through here to keep writes serialized.
+func (c *WSConnection) writeFrame(f ws.Frame) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return ws.WriteFrame(c.Conn, f)
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -356,11 +377,24 @@ func (c *WSConnection) TryClose() (int, error) {
 	return ref, c.Conn.Close()
 }
 
+// handleControlFrame answers a Ping with a Pong and discards a Pong, reading the
+// control payload out of reader either way. The write lock is held across the
+// whole handler because it may write a header and payload separately, and those
+// must not be split by a concurrent Write.
+func (c *WSConnection) handleControlFrame(header ws.Header, reader io.Reader, state ws.State) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return wsutil.ControlHandler{
+		Src: reader,
+		Dst: c.Conn,
+		// reader already unmasks the payload it yields.
+		DisableSrcCiphering: true,
+		State:               state,
+	}.Handle(header)
+}
+
 func (c *WSConnection) Read(b []byte) (n int, err error) {
-	state := ws.StateServerSide
-	if c.clientSide {
-		state = ws.StateClientSide
-	}
+	state := c.state()
 	reader := wsutil.NewReader(c.Conn, state)
 	reader.MaxFrameSize = int64(ParseMaxMessageLength)
 	for {
@@ -380,6 +414,12 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		if header.OpCode.IsControl() {
 			if header.OpCode == ws.OpClose {
 				return n, net.ErrClosed
+			}
+			// Ping must be answered with a Pong carrying the same payload, and
+			// any control payload must be read out of the stream, otherwise the
+			// next header read starts mid payload. See RFC 6455 section 5.5.
+			if err := c.handleControlFrame(header, reader, state); err != nil {
+				return n, err
 			}
 			continue
 		}
@@ -405,12 +445,6 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		if err != nil {
 			return n, err
 		}
-
-		// if header.OpCode == ws.OpPing {
-		// 	f := ws.NewPongFrame(data)
-		// 	ws.WriteFrame(c.Conn, f)
-		// 	continue
-		// }
 
 		if header.Masked {
 			ws.Cipher(data, header.Mask, 0)
@@ -440,7 +474,7 @@ func (c *WSConnection) Write(b []byte) (n int, err error) {
 	if c.clientSide {
 		fs = ws.MaskFrameInPlace(fs)
 	}
-	err = ws.WriteFrame(c.Conn, fs)
+	err = c.writeFrame(fs)
 
 	return len(b), err
 }
