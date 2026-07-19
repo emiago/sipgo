@@ -629,3 +629,70 @@ func BenchmarkParserStream(b *testing.B) {
 	})
 
 }
+
+// A peer that streams complete header lines and never terminates the header
+// block keeps the internal buffer near empty, because every complete line is
+// drained into the message as soon as it arrives. Only the assembled message
+// grows, so bounding the buffer alone can never stop this.
+func TestParserStreamMessageSizeLimitStreamedHeaders(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+	defer parser.Close()
+
+	header := "X-Data: " + strings.Repeat("a", 200) + "\r\n"
+
+	var (
+		fed int
+		err error
+	)
+	for range 2000 {
+		data := []byte(header)
+		if fed == 0 {
+			data = []byte("INVITE sip:192.168.1.254:5060 SIP/2.0\r\n" + header)
+		}
+		fed += len(data)
+
+		err = parser.ParseSIPStream(data, func(msg Message) {
+			t.Error("no message may be delivered from an oversized stream")
+		})
+		if err != ErrParseSipPartial {
+			break
+		}
+	}
+
+	require.Equal(t, ErrMessageTooLarge, err)
+	require.Less(t, fed, 2*p.MaxMessageLength, "peer must be stopped near the limit")
+	require.Zero(t, parser.totalRead, "refused message must not be retained")
+	require.Zero(t, parser.Buffer().Len(), "refused bytes must not be retained")
+}
+
+// The mirror of the streamed-header case: a header line that never terminates is
+// never drained into the message, so it grows the buffer instead and leaves
+// totalRead at the start line. Both pools need the same bound.
+func TestParserStreamMessageSizeLimitUnterminatedLine(t *testing.T) {
+	p := NewParser()
+	parser := p.NewSIPStream()
+	defer parser.Close()
+
+	err := parser.ParseSIPStream([]byte("INVITE sip:192.168.1.254:5060 SIP/2.0\r\nX-Data: "), func(msg Message) {
+		t.Error("no message may be delivered from an oversized stream")
+	})
+	require.Equal(t, ErrParseSipPartial, err)
+
+	chunk := []byte(strings.Repeat("a", 4096))
+	fed := 0
+	for range 2000 {
+		fed += len(chunk)
+
+		err = parser.ParseSIPStream(chunk, func(msg Message) {
+			t.Error("no message may be delivered from an oversized stream")
+		})
+		if err != ErrParseSipPartial {
+			break
+		}
+	}
+
+	require.Equal(t, ErrMessageTooLarge, err)
+	require.Less(t, fed, 2*p.MaxMessageLength, "peer must be stopped near the limit")
+	require.Zero(t, parser.Buffer().Len(), "refused bytes must not be retained")
+}

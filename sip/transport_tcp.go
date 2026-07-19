@@ -219,11 +219,16 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 		// TODO fallback to parseFull if message size limit is set
 
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		t.parseStream(par, data, raddr, handler)
+		if err := t.parseStream(par, data, raddr, handler); errors.Is(err, ErrMessageTooLarge) {
+			// The parser could not frame a message within the size limit, so there
+			// is no boundary left to resync on. Reading on would only let the peer
+			// repeat it, so close the connection instead.
+			return
+		}
 	}
 }
 
-func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) error {
 	err := par.ParseSIPStream(data, func(msg Message) {
 		msg.SetTransport(t.Network())
 		msg.SetSource(src)
@@ -232,11 +237,12 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 
 	if err != nil {
 		if err == ErrParseSipPartial {
-			return
+			return nil
 		}
 		t.log.Error("failed to parse", "error", err, "data", string(data))
-		return
+		return err
 	}
+	return nil
 }
 
 type TCPConnection struct {
