@@ -212,6 +212,84 @@ func TestDialogClientMultiResponses(t *testing.T) {
 		assert.Equal(t, d.InviteRequest.CSeq().SeqNo, sentReq.CSeq().SeqNo)
 	})
 
+	// A nonce the server considers aged is re-challenged with stale=true and a
+	// fresh nonce. RFC 2617 3.2.1 defines stale, and RFC 3261 22.4 adopts the
+	// digest scheme for SIP; the UAC answers with the new
+	// nonce instead of treating it as a rejection.
+	t.Run("StaleNonceRechallenge", func(t *testing.T) {
+		challenges := 0
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			if challenges >= 2 {
+				return sip.NewResponseFromRequest(req, 200, "OK", nil)
+			}
+			challenges++
+			res := sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
+			// Second challenge carries stale=true and a different nonce.
+			nonce, stale := "662d65a084b88c6d2a745a9de086fa91", ""
+			if challenges == 2 {
+				nonce, stale = "9f3c1e7b2d4a5068cb1e0d7a3f6b2c84", `, stale=true`
+			}
+			challenge := `Digest realm="test", nonce="` + nonce + `", algorithm=MD5` + stale
+			res.AppendHeader(sip.NewHeader("WWW-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user", Password: "secret"})
+		require.NoError(t, err)
+		assert.Equal(t, 2, challenges)
+		// The re-challenge must be answered with the fresh nonce, and the aged
+		// credential replaced rather than stacked.
+		auth := d.InviteRequest.GetHeaders("Authorization")
+		require.Len(t, auth, 1)
+		assert.Contains(t, auth[0].Value(), "9f3c1e7b2d4a5068cb1e0d7a3f6b2c84")
+	})
+
+	// An endless challenge stream must still terminate, and must terminate as a
+	// plain non-2xx final response carrying the real status.
+	t.Run("AuthLoopTerminatesAsDialogResponse", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			res := sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
+			challenge := `Digest realm="test", nonce="662d65a084b88c6d2a745a9de086fa91", algorithm=MD5, stale=true`
+			res.AppendHeader(sip.NewHeader("WWW-Authenticate", challenge))
+			return res
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user", Password: "secret"})
+		var resErr *ErrDialogResponse
+		require.ErrorAs(t, err, &resErr)
+		assert.Equal(t, 401, resErr.Res.StatusCode)
+	})
+
+	// A 401 with no WWW-Authenticate is a plain rejection, not a challenge. It
+	// must reach the caller as its real response, not as a digest parse error.
+	t.Run("AuthNoChallenge", func(t *testing.T) {
+		client := testClient(t, func(req *sip.Request) *sip.Response {
+			return sip.NewResponseFromRequest(req, 401, "Unauthorized", nil)
+		})
+
+		dua := DialogUA{
+			Client: client,
+		}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+
+		err = d.WaitAnswer(context.TODO(), AnswerOptions{Username: "user", Password: "secret"})
+		var resErr *ErrDialogResponse
+		require.ErrorAs(t, err, &resErr)
+		assert.Equal(t, 401, resErr.Res.StatusCode)
+	})
 }
 
 func TestDialogClientACKRetransmission(t *testing.T) {
