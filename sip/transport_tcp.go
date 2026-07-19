@@ -219,10 +219,14 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 		// TODO fallback to parseFull if message size limit is set
 
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		if err := t.parseStream(par, data, raddr, handler); errors.Is(err, ErrMessageTooLarge) {
-			// The parser could not frame a message within the size limit, so there
-			// is no boundary left to resync on. Reading on would only let the peer
-			// repeat it, so close the connection instead.
+		if err := t.parseStream(par, data, raddr, handler); err != nil {
+			// A stream transport frames messages by Content-Length, so any parse
+			// error means framing is lost and there is no boundary to resync on.
+			// Reading on would reuse a parser that cannot cleanly start the next
+			// message, letting the peer graft its following bytes onto the message
+			// that just failed. Close the connection instead. parseStream maps an
+			// incomplete message (more bytes still coming) to a nil error, so this
+			// fires only on genuine framing failures, not on partial reads.
 			return
 		}
 	}
