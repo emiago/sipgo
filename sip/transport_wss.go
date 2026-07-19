@@ -50,7 +50,12 @@ func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		return nil, fmt.Errorf("remote address IP not resolved")
 	}
 
-	conn, err := t.pool.addSingleflight(laddr, raddr, t.connectionReuse, func() (Connection, error) {
+	// raddr first. The pool keys on its first argument, so passing laddr there
+	// registered this socket under our own local address -- twice, since the pool
+	// also keys the local address -- and under the far end's address never,
+	// leaving every lookup driven by the peer with no connection to find. UDP,
+	// TCP, TLS and WS all pass this order; WSS alone had it reversed.
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
 		// We need to distict IPAddr vs address with hostname
 		// Hostname must be passed for TLS if provided due to certificates check
 		hostname := raddr.Hostname
