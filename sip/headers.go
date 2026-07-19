@@ -443,6 +443,27 @@ func (hs *headers) ReferredBy() *ReferredByHeader {
 	return nil
 }
 
+// SessionExpires parses underlying RFC 4028 Session-Expires header or nil if not
+// exists. Nil is also returned when the value is malformed, which is the read
+// side of a peer that offers no session timers: the dialog then runs with no
+// refresh loop instead of failing.
+func (hs *headers) SessionExpires() *SessionExpiresHeader {
+	h := &SessionExpiresHeader{}
+	if parseHeaderLazy(hs, parseSessionExpiresHeader, []string{"session-expires", "x"}, h) {
+		return h
+	}
+	return nil
+}
+
+// MinSE parses underlying RFC 4028 Min-SE header or nil if not exists.
+func (hs *headers) MinSE() *MinSEHeader {
+	var h MinSEHeader
+	if parseHeaderLazy(hs, parseMinSEHeader, []string{"min-se"}, &h) {
+		return &h
+	}
+	return nil
+}
+
 // NewHeader creates generic type of header
 func NewHeader(name, value string) Header {
 	return &genericHeader{
@@ -852,6 +873,92 @@ func (h *ExpiresHeader) Name() string { return "Expires" }
 func (h ExpiresHeader) Value() string { return strconv.Itoa(int(h)) }
 
 func (h *ExpiresHeader) headerClone() Header { return h }
+
+// SessionExpiresHeader is RFC 4028 Session-Expires header representation.
+// It carries the session interval in seconds and any parameters, notably
+// refresher=uac|uas. The refresher is kept as sent: electing or honoring a
+// refresher is negotiation policy, not parsing.
+type SessionExpiresHeader struct {
+	// Delta is the session interval in seconds.
+	Delta uint32
+	// Any parameters present in the header.
+	Params HeaderParams
+}
+
+func (h *SessionExpiresHeader) String() string {
+	var buffer strings.Builder
+	h.StringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *SessionExpiresHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	h.valueStringWrite(buffer)
+}
+
+func (h *SessionExpiresHeader) Name() string { return "Session-Expires" }
+
+func (h *SessionExpiresHeader) Value() string {
+	var buffer strings.Builder
+	h.valueStringWrite(&buffer)
+	return buffer.String()
+}
+
+func (h *SessionExpiresHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(strconv.FormatUint(uint64(h.Delta), 10))
+
+	if (h.Params != nil) && (h.Params.Length() > 0) {
+		buffer.WriteString(";")
+		h.Params.ToStringWrite(';', buffer)
+	}
+}
+
+// Copy the header.
+func (h *SessionExpiresHeader) headerClone() Header {
+	return h.Clone()
+}
+
+func (h *SessionExpiresHeader) Clone() *SessionExpiresHeader {
+	var newSE *SessionExpiresHeader
+	if h == nil {
+		return newSE
+	}
+
+	newSE = &SessionExpiresHeader{
+		Delta: h.Delta,
+	}
+
+	if h.Params != nil {
+		newSE.Params = h.Params.Clone()
+	}
+
+	return newSE
+}
+
+// MinSEHeader is RFC 4028 Min-SE header representation. It is the minimum
+// session interval, in seconds, that the sender is willing to accept.
+type MinSEHeader uint32
+
+func (h *MinSEHeader) String() string {
+	return fmt.Sprintf("%s: %s", h.Name(), h.Value())
+}
+
+func (h *MinSEHeader) StringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Name())
+	buffer.WriteString(": ")
+	buffer.WriteString(h.Value())
+}
+
+func (h *MinSEHeader) valueStringWrite(buffer io.StringWriter) {
+	buffer.WriteString(h.Value())
+}
+
+func (h *MinSEHeader) Name() string { return "Min-SE" }
+
+func (h MinSEHeader) Value() string { return strconv.FormatUint(uint64(h), 10) }
+
+func (h *MinSEHeader) headerClone() Header { return h }
 
 // ContentLengthHeader is Content-Length header representation
 type ContentLengthHeader uint32
