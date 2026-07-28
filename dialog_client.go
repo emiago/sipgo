@@ -565,9 +565,12 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
 
-	if len(inviteRequest.GetHeaders("Route")) > 0 {
-		sip.CopyHeaders("Route", inviteRequest, byeRequest)
-	}
+	// For the UAC side, the Route header field(s) in the BYE request are constructed from reversing the order 
+	// of Record-Route header field(s) in the dialogue-establishing INVITE response such as a 2xx response.
+	// For the UAS side, the dialog route set is the list of Record-Route header fields from the 
+	// dialogue-establishing INVITE request, taken in the same order.
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.1
+	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.2
 
 	maxForwardsHeader := sip.MaxForwardsHeader(70)
 	byeRequest.AppendHeader(&maxForwardsHeader)
