@@ -16,6 +16,10 @@ type TransportWSS struct {
 }
 
 func (t *TransportWSS) init(par *Parser, dialTLSConf *tls.Config) {
+	// Set before TransportWS.init, which otherwise defaults this to the ws:// scheme.
+	if t.DialURI == nil {
+		t.DialURI = func(addr string) string { return "wss://" + addr }
+	}
 	t.TransportWS.init(par)
 	t.TransportWS.transport = "WSS"
 	t.dialer.TLSConfig = dialTLSConf
@@ -91,7 +95,7 @@ func (t *TransportWSS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		log.Debug("Setuping TLS connection", "hostname", hostname)
 		tlsConn := t.dialer.TLSClient(conn, hostname)
 
-		u, err := url.ParseRequestURI("wss://" + addr)
+		u, err := url.ParseRequestURI(t.DialURI(addr))
 		if err != nil {
 			return nil, fmt.Errorf("parse request wss uri failed: %w", err)
 		}

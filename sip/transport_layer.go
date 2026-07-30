@@ -45,6 +45,10 @@ type TransportLayer struct {
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
 	dnsPreferIP  int // 0 - no preference , 1 -ip4, 2 - ip6
+
+	// wsDialPath is the handshake path for the default WS and WSS transports.
+	// Empty keeps the "/" that the URI scheme implies.
+	wsDialPath string
 }
 
 type TransportLayerOption func(l *TransportLayer)
@@ -60,6 +64,18 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.connectionReuse = f
+	}
+}
+
+// WithTransportLayerWSDialPath sets the handshake path used when dialing WS and
+// WSS, for this transport layer only. Most SIP over WebSocket servers expect
+// "/ws", while the dialer otherwise requests "/".
+//
+// It is ignored for a transport supplied through WithTransportLayerTransports,
+// which carries its own DialURI.
+func WithTransportLayerWSDialPath(path string) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.wsDialPath = path
 	}
 }
 
@@ -153,6 +169,7 @@ func NewTransportLayer(
 		},
 		WS: &TransportWS{
 			log:        l.log.With("caller", "Transport<WS>"),
+			DialURI:    func(host string) string { return "ws://" + host + l.wsDialPath },
 			readFilter: l.readFilter,
 		},
 		// TODO. Using default dial tls, but it needs to configurable via client
@@ -160,7 +177,7 @@ func NewTransportLayer(
 			TransportWS: &TransportWS{
 				log:             l.log.With("caller", "Transport<WSS>"),
 				connectionReuse: l.connectionReuse,
-				DialURI:         func(host string) string { return "wss://" + host },
+				DialURI:         func(host string) string { return "wss://" + host + l.wsDialPath },
 				readFilter:      l.readFilter,
 			},
 		},
