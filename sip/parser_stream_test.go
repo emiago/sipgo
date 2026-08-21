@@ -529,6 +529,64 @@ func TestParserStreamPartialAfterStartLine(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParserStreamRaw(t *testing.T) {
+	invite := "INVITE sip:192.168.1.254:5060 SIP/2.0\r\nVia: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK1\r\n" +
+		"Call-ID: raw-invite\r\nCSeq: 1 INVITE\r\nContent-Type: application/sdp\r\nContent-Length: 9\r\n\r\n123456789"
+	options := "OPTIONS sip:192.168.1.254:5060 SIP/2.0\r\nVia: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK2\r\n" +
+		"Call-ID: raw-options\r\nCSeq: 2 OPTIONS\r\nContent-Length: 0\r\n\r\n"
+	ok := "SIP/2.0 200 OK\r\nVia: SIP/2.0/TCP 192.168.1.155:44861;branch=z9hG4bK2\r\n" +
+		"Call-ID: raw-options\r\nCSeq: 2 OPTIONS\r\nContent-Length: 0\r\n\r\n"
+	badCSeq := "OPTIONS sip:192.168.1.254:5060 SIP/2.0\r\nCSeq: notanumber OPTIONS\r\n" +
+		"Call-ID: raw-bad\r\nContent-Length: 0\r\n\r\n"
+
+	msgs := []string{invite, options, ok}
+	stream := strings.Join(msgs, "")
+
+	for split := 0; split <= len(stream); split++ {
+		parser := NewParser().NewSIPStream()
+		got := []string{}
+
+		for _, chunk := range []string{stream[:split], stream[split:]} {
+			if chunk == "" {
+				continue
+			}
+			err := parser.ParseSIPStreamRaw([]byte(chunk), func(msg Message, raw []byte) {
+				got = append(got, string(raw))
+			})
+			if err != nil {
+				require.ErrorIs(t, err, ErrParseSipPartial, "split=%d", split)
+			}
+		}
+
+		require.Equal(t, msgs, got, "split=%d", split)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		reads []string
+		want  []string
+	}{
+		{"keepalive coalesced", []string{"\r\n\r\n" + options}, []string{options}},
+		{"keepalive own read", []string{"\r\n\r\n\r\n", options[:30], options[30:]}, []string{options}},
+		{"three chunks", []string{invite[:20], invite[20:60], invite[60:]}, []string{invite}},
+		{"two messages one read", []string{options + ok}, []string{options, ok}},
+		{"header error mid message", []string{badCSeq[:70], badCSeq[70:]}, []string{badCSeq}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewParser().NewSIPStream()
+			got := []string{}
+
+			for _, chunk := range tc.reads {
+				_ = parser.ParseSIPStreamRaw([]byte(chunk), func(msg Message, raw []byte) {
+					got = append(got, string(raw))
+				})
+			}
+
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func BenchmarkParserStream(b *testing.B) {
 	branch := GenerateBranch()
 	callid := fmt.Sprintf("gotest-%d", time.Now().UnixNano())

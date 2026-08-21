@@ -11,8 +11,9 @@ const (
 )
 
 var (
-	SIPDebug  bool
-	siptracer SIPTracer
+	SIPDebug     bool
+	siptracer    SIPTracer
+	sipmsgtracer SIPMessageTracer
 )
 
 type SIPTracer interface {
@@ -40,6 +41,29 @@ func logSIPWrite(transport string, laddr string, raddr string, sipmsg []byte) {
 	}
 
 	fmt.Fprintf(os.Stderr, "=== %s write to %s -> %s ===\n%s\n", transport, laddr, raddr, sipmsg)
+}
+
+// SIPMessageTracer traces complete SIP messages, as framed by the transport that carried them.
+type SIPMessageTracer interface {
+	SIPTraceMessageRead(transport string, laddr string, raddr string, sipmsg []byte)
+	SIPTraceMessageWrite(transport string, laddr string, raddr string, sipmsg []byte)
+}
+
+// SIPMessageTrace sets tracer of complete SIP messages. It must be set before transports are started.
+func SIPMessageTrace(t SIPMessageTracer) {
+	sipmsgtracer = t
+}
+
+func traceMessageRead(transport string, laddr string, raddr string, sipmsg []byte) {
+	if sipmsgtracer != nil {
+		sipmsgtracer.SIPTraceMessageRead(transport, laddr, raddr, sipmsg)
+	}
+}
+
+func traceMessageWrite(transport string, laddr string, raddr string, sipmsg []byte) {
+	if sipmsgtracer != nil {
+		sipmsgtracer.SIPTraceMessageWrite(transport, laddr, raddr, sipmsg)
+	}
 }
 
 // GenerateBranch returns random unique branch ID.

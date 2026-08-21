@@ -36,6 +36,7 @@ type ParserStream struct {
 	headerBuf     []Header
 	contentLength *ContentLengthHeader
 	contentOff    int
+	raw           []byte
 }
 
 func (p *ParserStream) reset() {
@@ -53,6 +54,7 @@ func (p *ParserStream) reset() {
 // Reset the parser and the internal buffer.
 func (p *ParserStream) Reset() {
 	p.reset()
+	p.raw = p.raw[:0]
 	if p.buf != nil {
 		p.buf.Reset()
 	}
@@ -79,17 +81,38 @@ func (p *ParserStream) parseSIPStreamFull(data []byte) (msgs []Message, err erro
 
 // ParseSIPStream parses SIP stream and calls callback as soon first SIP message is parsed
 func (p *ParserStream) ParseSIPStream(data []byte, cb func(msg Message)) error {
+	return p.ParseSIPStreamRaw(data, func(msg Message, raw []byte) { cb(msg) })
+}
+
+// ParseSIPStreamRaw is ParseSIPStream, but callback also gets the message bytes as framed on the stream.
+// raw is only valid until the next call.
+func (p *ParserStream) ParseSIPStreamRaw(data []byte, cb func(msg Message, raw []byte)) error {
 	if _, err := p.Write(data); err != nil {
 		return err
 	}
 	for p.buf.Len() > 0 {
-		msg, _, err := p.ParseNext()
-		if errors.Is(err, io.ErrUnexpectedEOF) {
-			return ErrParseSipPartial
-		} else if err != nil {
+		unread, read := p.buf.Bytes(), p.totalRead
+		msg, n, err := p.ParseNext()
+		if err != nil {
+			p.raw = append(p.raw, unread[:n-read]...)
+			if len(p.raw) > p.p.MaxMessageLength {
+				p.raw = nil
+			}
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				return ErrParseSipPartial
+			}
 			return err
 		}
-		cb(msg)
+		raw := unread[:n-read]
+		if len(p.raw) > 0 {
+			p.raw = append(p.raw, raw...)
+			raw = p.raw
+		}
+		raw = bytes.TrimLeft(raw, "\r\n")
+		if len(raw) > 0 {
+			cb(msg, raw)
+		}
+		p.raw = p.raw[:0]
 	}
 	return nil
 }
@@ -108,6 +131,7 @@ func (p *ParserStream) Buffer() *bytes.Buffer {
 // Can be used to skip malformed messages and recover the stream.
 func (p *ParserStream) Discard(n int) {
 	p.reset()
+	p.raw = p.raw[:0]
 	if p.buf != nil {
 		_ = p.buf.Next(n)
 	}

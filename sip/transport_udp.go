@@ -181,7 +181,7 @@ func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 			acceptedAddr[rastr] = struct{}{}
 		}
 
-		t.parseAndHandle(data, rastr, handler)
+		t.parseAndHandle(data, laddr, rastr, handler)
 		lastRaddr = rastr
 	}
 }
@@ -214,7 +214,7 @@ func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 	}
 } */
 
-func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHandler) {
+func (t *TransportUDP) parseAndHandle(data []byte, laddr string, src string, handler MessageHandler) {
 	// Check is keep alive
 	if len(data) <= 4 {
 		//One or 2 CRLF
@@ -230,6 +230,7 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 		return
 	}
 
+	traceMessageRead(t.Network(), laddr, src, data)
 	msg.SetTransport(t.Network())
 	// Current transaction are taking connection but for UDP they can forward on different src address
 	msg.SetSource(src) // By default we expect our source is behind NAT. https://datatracker.ietf.org/doc/html/rfc3581#section-6
@@ -363,5 +364,6 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 	if n != len(data) {
 		return fmt.Errorf("fail to write full message")
 	}
+	traceMessageWrite(msg.Transport(), c.PacketConn.LocalAddr().String(), raddr.String(), data)
 	return nil
 }

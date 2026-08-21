@@ -3,6 +3,7 @@ package sip
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"sync"
@@ -335,4 +336,96 @@ func TestTransportLayerResolving(t *testing.T) {
 
 	assert.True(t, addr.IP.To4() != nil)
 	assert.Equal(t, "127.0.0.1:0", addr.String())
+}
+
+type msgTraceRecorder struct {
+	read  chan string
+	write chan string
+}
+
+func (r *msgTraceRecorder) SIPTraceMessageRead(transport string, laddr string, raddr string, sipmsg []byte) {
+	r.read <- transport + " " + string(sipmsg)
+}
+
+func (r *msgTraceRecorder) SIPTraceMessageWrite(transport string, laddr string, raddr string, sipmsg []byte) {
+	r.write <- transport + " " + string(sipmsg)
+}
+
+func (r *msgTraceRecorder) next(t *testing.T, ch chan string) string {
+	t.Helper()
+	select {
+	case s := <-ch:
+		return s
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for message trace")
+		return ""
+	}
+}
+
+func TestTransportMessageTrace(t *testing.T) {
+	// NOTE it creates real network connection
+	rec := &msgTraceRecorder{read: make(chan string, 4), write: make(chan string, 4)}
+	SIPMessageTrace(rec)
+	t.Cleanup(func() { SIPMessageTrace(nil) })
+
+	tcp := &TransportTCP{}
+	tcp.init(NewParser())
+	tlsTransport := &TransportTLS{TransportTCP: &TransportTCP{}}
+	tlsTransport.init(NewParser(), &tls.Config{})
+
+	for _, tran := range []*TransportTCP{tcp, tlsTransport.TransportTCP} {
+		t.Run(tran.Network(), func(t *testing.T) {
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer ln.Close()
+
+			handled := make(chan Message, 1)
+			go tran.Serve(ln, func(msg Message) { handled <- msg })
+
+			client, err := net.Dial("tcp", ln.Addr().String())
+			require.NoError(t, err)
+			defer client.Close()
+
+			raw := testRawOptions("trace-" + tran.Network())
+			_, err = client.Write(raw[:len(raw)/2])
+			require.NoError(t, err)
+			time.Sleep(50 * time.Millisecond)
+			_, err = client.Write(raw[len(raw)/2:])
+			require.NoError(t, err)
+
+			require.Equal(t, tran.Network()+" "+string(raw), rec.next(t, rec.read))
+
+			req := (<-handled).(*Request)
+			res := NewResponseFromRequest(req, StatusOK, "OK", nil)
+			require.NoError(t, tran.GetConnection(req.Source()).WriteMsg(res))
+			require.Equal(t, tran.Network()+" "+res.String(), rec.next(t, rec.write))
+		})
+	}
+
+	t.Run("UDP", func(t *testing.T) {
+		udp := &TransportUDP{}
+		udp.init(NewParser())
+
+		server, err := net.ListenPacket("udp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer server.Close()
+
+		handled := make(chan Message, 1)
+		go udp.Serve(server, func(msg Message) { handled <- msg })
+
+		client, err := net.ListenPacket("udp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer client.Close()
+
+		raw := testRawOptions("trace-UDP")
+		_, err = client.WriteTo(raw, server.LocalAddr())
+		require.NoError(t, err)
+		require.Equal(t, udp.Network()+" "+string(raw), rec.next(t, rec.read))
+
+		req := (<-handled).(*Request)
+		res := NewResponseFromRequest(req, StatusOK, "OK", nil)
+		res.SetDestination(client.LocalAddr().String())
+		require.NoError(t, udp.GetConnection(req.Source()).WriteMsg(res))
+		require.Equal(t, udp.Network()+" "+res.String(), rec.next(t, rec.write))
+	})
 }
