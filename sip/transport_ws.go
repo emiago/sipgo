@@ -24,10 +24,11 @@ var (
 
 // WS transport implementation
 type TransportWS struct {
-	parser     *Parser
-	log        *slog.Logger
-	transport  string
-	readFilter TransportReadFilter
+	parser           *Parser
+	log              *slog.Logger
+	transport        string
+	readFilter       TransportReadFilter
+	keepaliveHandler KeepaliveHandler
 
 	// ReadTimeout limits how long a WS or WSS connection may block waiting for
 	// a frame. It is copied when the connection is created. A non-positive
@@ -252,6 +253,13 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 			//One or 2 CRLF
 			if len(bytes.Trim(data, "\r\n")) == 0 {
 				log.Debug("Keep alive CRLF received")
+				if t.keepaliveHandler != nil {
+					t.keepaliveHandler(TransportReadProps{
+						Transport:  t.Network(),
+						LocalAddr:  conn.LocalAddr(),
+						RemoteAddr: conn.RemoteAddr(),
+					}, len(data) == 4)
+				}
 				continue
 			}
 		}

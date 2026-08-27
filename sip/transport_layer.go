@@ -39,8 +39,9 @@ type TransportLayer struct {
 	log *slog.Logger
 
 	// connectionReuse will force connection reuse when passing request
-	connectionReuse bool
-	readFilter      TransportReadFilter
+	connectionReuse  bool
+	readFilter       TransportReadFilter
+	keepaliveHandler KeepaliveHandler
 
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
@@ -72,6 +73,15 @@ func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
 func WithTransportLayerReadFilter(f TransportReadFilter) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.readFilter = f
+	}
+}
+
+// WithTransportLayerKeepaliveHandler sets a handler invoked when a
+// connection-oriented transport (TCP/TLS/WS/WSS) receives an RFC 5626 CRLF
+// keepalive. See KeepaliveHandler.
+func WithTransportLayerKeepaliveHandler(h KeepaliveHandler) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.keepaliveHandler = h
 	}
 }
 
@@ -140,28 +150,32 @@ func NewTransportLayer(
 			readFilter:      l.readFilter,
 		},
 		TCP: &TransportTCP{
-			log:             l.log.With("caller", "Transport<TCP>"),
-			connectionReuse: l.connectionReuse,
-			readFilter:      l.readFilter,
+			log:              l.log.With("caller", "Transport<TCP>"),
+			connectionReuse:  l.connectionReuse,
+			readFilter:       l.readFilter,
+			keepaliveHandler: l.keepaliveHandler,
 		},
 		TLS: &TransportTLS{
 			TransportTCP: &TransportTCP{
-				log:             l.log.With("caller", "Transport<TLS>"),
-				connectionReuse: l.connectionReuse,
-				readFilter:      l.readFilter,
+				log:              l.log.With("caller", "Transport<TLS>"),
+				connectionReuse:  l.connectionReuse,
+				readFilter:       l.readFilter,
+				keepaliveHandler: l.keepaliveHandler,
 			},
 		},
 		WS: &TransportWS{
-			log:        l.log.With("caller", "Transport<WS>"),
-			readFilter: l.readFilter,
+			log:              l.log.With("caller", "Transport<WS>"),
+			readFilter:       l.readFilter,
+			keepaliveHandler: l.keepaliveHandler,
 		},
 		// TODO. Using default dial tls, but it needs to configurable via client
 		WSS: &TransportWSS{
 			TransportWS: &TransportWS{
-				log:             l.log.With("caller", "Transport<WSS>"),
-				connectionReuse: l.connectionReuse,
-				DialURI:         func(host string) string { return "wss://" + host },
-				readFilter:      l.readFilter,
+				log:              l.log.With("caller", "Transport<WSS>"),
+				connectionReuse:  l.connectionReuse,
+				DialURI:          func(host string) string { return "wss://" + host },
+				readFilter:       l.readFilter,
+				keepaliveHandler: l.keepaliveHandler,
 			},
 		},
 	}
@@ -187,21 +201,25 @@ func (l *TransportLayer) withTransports(conf TransportsConfig) {
 		l.tcp = conf.TCP
 		l.tcp.connectionReuse = l.connectionReuse
 		l.tcp.readFilter = l.readFilter
+		l.tcp.keepaliveHandler = l.keepaliveHandler
 	}
 	if conf.TLS != nil && l.tls == nil {
 		l.tls = conf.TLS
 		l.tls.connectionReuse = l.connectionReuse
 		l.tls.readFilter = l.readFilter
+		l.tls.keepaliveHandler = l.keepaliveHandler
 	}
 	if conf.WS != nil && l.ws == nil {
 		l.ws = conf.WS
 		l.ws.connectionReuse = l.connectionReuse
 		l.ws.readFilter = l.readFilter
+		l.ws.keepaliveHandler = l.keepaliveHandler
 	}
 	if conf.WSS != nil && l.wss == nil {
 		l.wss = conf.WSS
 		l.wss.connectionReuse = l.connectionReuse
 		l.wss.readFilter = l.readFilter
+		l.wss.keepaliveHandler = l.keepaliveHandler
 	}
 }
 
