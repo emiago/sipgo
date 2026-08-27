@@ -79,8 +79,10 @@ var (
 	ErrTransactionTerminated = errors.New("transaction terminated")
 )
 
+// wrapTransportError wraps the cause with %w so it stays reachable through
+// errors.Is and errors.As. Matching on ErrTransactionTransport is unaffected.
 func wrapTransportError(err error) error {
-	return fmt.Errorf("%s. %w", err.Error(), ErrTransactionTransport)
+	return fmt.Errorf("%w. %w", err, ErrTransactionTransport)
 }
 
 func wrapTimeoutError(err error) error {
