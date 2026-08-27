@@ -63,18 +63,28 @@ func (d *Dialog) Init() {
 }
 
 func (d *Dialog) OnState(f DialogStateFn) {
-	for current := d.onStatePointer.Load(); current != nil; current = d.onStatePointer.Load() {
-		cb := *current
-		newCb := func(s sip.DialogState) {
-			f(s)
-			cb(s)
+	for {
+		current := d.onStatePointer.Load()
+		newCB := f
+		if current != nil {
+			cb := *current
+			newCB = func(s sip.DialogState) {
+				f(s)
+				cb(s)
+			}
 		}
-		newCBState := DialogStateFn(newCb)
-		if d.onStatePointer.CompareAndSwap(current, &newCBState) {
+		if d.onStatePointer.CompareAndSwap(current, &newCB) {
 			return
 		}
 	}
-	d.onStatePointer.Store(&f)
+
+}
+
+func (d *Dialog) OnStateReplay(f DialogStateFn) sip.DialogState {
+	d.OnState(f)
+	state := d.LoadState()
+	f(state)
+	return state
 }
 
 func (d *Dialog) InitWithState(s sip.DialogState) {
