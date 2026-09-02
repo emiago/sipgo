@@ -152,6 +152,48 @@ func TestTransportLayerReadFilterTCPErrorStopsRead(t *testing.T) {
 	}
 }
 
+func TestTransportLayerTCPFramingErrorClosesConnection(t *testing.T) {
+	tcp := &TransportTCP{}
+	tcp.init(NewParser())
+
+	closed := make(chan struct{})
+	tcp.onConnClose = func(conn Connection) {
+		close(closed)
+	}
+
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	conn := &TCPConnection{
+		Conn:     serverConn,
+		refcount: 1,
+	}
+
+	msgs := make(chan Message, 1)
+	go tcp.readConnection(conn, serverConn.LocalAddr().String(), serverConn.RemoteAddr().String(), func(msg Message) {
+		msgs <- msg
+	})
+
+	// Missing Content-Length on a stream transport is a framing error (RFC 3261 7.5).
+	cancel := []byte("CANCEL sip:bob@example.com SIP/2.0\r\n" +
+		"Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bK-framing\r\n" +
+		"From: <sip:alice@example.com>;tag=from1\r\n" +
+		"To: <sip:bob@example.com>\r\n" +
+		"Call-ID: framing-err\r\n" +
+		"CSeq: 1 CANCEL\r\n" +
+		"\r\n")
+	_, err := clientConn.Write(cancel)
+	require.NoError(t, err)
+
+	select {
+	case <-closed:
+	case msg := <-msgs:
+		t.Fatalf("handler called with %q, expected connection close", msg.String())
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected framing error to close the TCP read connection")
+	}
+}
+
 func TestTransportLayerClientConnectionReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
