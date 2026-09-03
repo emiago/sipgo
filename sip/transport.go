@@ -45,7 +45,27 @@ type TransportReadProps struct {
 }
 
 // TransportReadFilter can inspect or replace raw bytes before SIP parsing.
+//
+// data is a POOLED buffer that the transport recycles as soon as the filter
+// returns -- copy it if you retain it beyond the call. The filter runs on
+// the read path and must not block.
 type TransportReadFilter func(info TransportReadProps, data []byte) ([]byte, error)
+
+// TransportWriteProps describes the connection a message was written on.
+type TransportWriteProps struct {
+	Transport  string
+	LocalAddr  net.Addr
+	RemoteAddr net.Addr
+}
+
+// TransportWriteFilter observes the exact bytes of every message the
+// transport layer successfully writes. It is observe-only and is called
+// after the write returned nil.
+//
+// data is a POOLED buffer that is recycled when WriteMsg returns -- copy it
+// if you retain it. The filter runs inline on the write path and must not
+// block.
+type TransportWriteFilter func(info TransportWriteProps, data []byte)
 
 // DefaultPort returns transport default port by network.
 func DefaultPort(transport string) int {

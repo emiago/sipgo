@@ -152,6 +152,120 @@ func TestTransportLayerReadFilterTCPErrorStopsRead(t *testing.T) {
 	}
 }
 
+func TestTransportLayerWriteFilterUDP(t *testing.T) {
+	type call struct {
+		info TransportWriteProps
+		data []byte
+	}
+	writes := make(chan call, 4)
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil,
+		WithTransportLayerWriteFilter(func(info TransportWriteProps, data []byte) {
+			writes <- call{info: info, data: append([]byte(nil), data...)}
+		}),
+	)
+	defer tp.Close()
+
+	peer, err := net.ListenPacket("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer peer.Close()
+
+	req := NewRequest(OPTIONS, Uri{User: "x", Host: "127.0.0.1", Port: peer.LocalAddr().(*net.UDPAddr).Port})
+	req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
+	req.AppendHeader(NewHeader("Call-ID", "write-filter-1"))
+	req.SetDestination(peer.LocalAddr().String())
+	require.NoError(t, tp.WriteMsg(req))
+
+	buf := make([]byte, 65535)
+	n, _, err := peer.ReadFrom(buf)
+	require.NoError(t, err)
+
+	select {
+	case c := <-writes:
+		require.Equal(t, "udp", c.info.Transport)
+		require.Equal(t, peer.LocalAddr().String(), c.info.RemoteAddr.String())
+		require.NotNil(t, c.info.LocalAddr)
+		require.Equal(t, buf[:n], c.data, "filter must see the exact bytes that went on the wire")
+	case <-time.After(time.Second):
+		t.Fatal("write filter not called")
+	}
+}
+
+func TestTransportLayerWriteFilterTCPSuccess(t *testing.T) {
+	type call struct {
+		info TransportWriteProps
+		data []byte
+	}
+	writes := make(chan call, 4)
+	tcp := &TransportTCP{writeFilter: func(info TransportWriteProps, data []byte) {
+		writes <- call{info: info, data: append([]byte(nil), data...)}
+	}}
+	tcp.init(NewParser())
+
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	conn := &TCPConnection{Conn: serverConn, refcount: 1, writeFilter: tcp.writeFilter}
+
+	req := NewRequest(OPTIONS, Uri{User: "x", Host: "127.0.0.1", Port: 5060})
+	req.AppendHeader(&ViaHeader{Host: "127.0.0.1", Port: 0})
+	req.AppendHeader(NewHeader("Call-ID", "write-filter-tcp-1"))
+
+	// net.Pipe is synchronous and unbuffered: the reader must be running
+	// before WriteMsg, or the write blocks forever.
+	read := make(chan []byte, 1)
+	go func() {
+		buf := make([]byte, 65535)
+		n, err := clientConn.Read(buf)
+		if err != nil {
+			close(read)
+			return
+		}
+		read <- buf[:n]
+	}()
+
+	require.NoError(t, conn.WriteMsg(req))
+
+	var onWire []byte
+	select {
+	case b, ok := <-read:
+		require.True(t, ok, "peer read failed")
+		onWire = b
+	case <-time.After(2 * time.Second):
+		t.Fatal("peer never received the bytes")
+	}
+
+	select {
+	case c := <-writes:
+		require.Equal(t, "tcp", c.info.Transport)
+		require.Equal(t, onWire, c.data, "filter must see the exact bytes that went on the wire")
+	case <-time.After(time.Second):
+		t.Fatal("write filter not called on a successful TCP write")
+	}
+	select {
+	case <-writes:
+		t.Fatal("write filter fired more than once for one message")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestTransportLayerWriteFilterTCPNotCalledOnFailedWrite(t *testing.T) {
+	called := make(chan struct{}, 1)
+	tcp := &TransportTCP{writeFilter: func(TransportWriteProps, []byte) { called <- struct{}{} }}
+	tcp.init(NewParser())
+
+	serverConn, clientConn := net.Pipe()
+	_ = clientConn.Close() // peer gone: Write must fail
+	conn := &TCPConnection{Conn: serverConn, refcount: 1, writeFilter: tcp.writeFilter}
+	req := NewRequest(OPTIONS, Uri{User: "x", Host: "127.0.0.1", Port: 5060})
+	require.Error(t, conn.WriteMsg(req))
+	select {
+	case <-called:
+		t.Fatal("write filter must not fire when the write failed")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestTransportLayerClientConnectionReuse(t *testing.T) {
 	// NOTE it creates real network connection
 	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)

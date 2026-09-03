@@ -3,6 +3,7 @@ package sip
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -24,10 +25,11 @@ var (
 
 // WS transport implementation
 type TransportWS struct {
-	parser     *Parser
-	log        *slog.Logger
-	transport  string
-	readFilter TransportReadFilter
+	parser      *Parser
+	log         *slog.Logger
+	transport   string
+	readFilter  TransportReadFilter
+	writeFilter TransportWriteFilter
 
 	// ReadTimeout limits how long a WS or WSS connection may block waiting for
 	// a frame. It is copied when the connection is created. A non-positive
@@ -60,6 +62,7 @@ func (t *TransportWS) newConnection(conn net.Conn, refcount int, clientSide bool
 		readTimeout:  t.ReadTimeout,
 		writeTimeout: t.WriteTimeout,
 		refcount:     refcount,
+		writeFilter:  t.writeFilter,
 	}
 }
 
@@ -330,9 +333,18 @@ type WSConnection struct {
 	clientSide   bool
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	writeFilter  TransportWriteFilter
 
 	mu       sync.RWMutex
 	refcount int
+}
+
+// transport reports "ws" or "wss" depending on the underlying net.Conn.
+func (c *WSConnection) transport() string {
+	if _, ok := c.Conn.(*tls.Conn); ok {
+		return "wss"
+	}
+	return "ws"
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -490,6 +502,14 @@ func (c *WSConnection) WriteMsg(msg Message) error {
 
 	if n != len(data) {
 		return fmt.Errorf("fail to write full message")
+	}
+
+	if c.writeFilter != nil {
+		c.writeFilter(TransportWriteProps{
+			Transport:  c.transport(), // "ws" or "wss"
+			LocalAddr:  c.LocalAddr(),
+			RemoteAddr: c.RemoteAddr(),
+		}, data)
 	}
 	return nil
 }

@@ -24,6 +24,7 @@ type TransportUDP struct {
 	log             *slog.Logger
 	connectionReuse bool
 	readFilter      TransportReadFilter
+	writeFilter     TransportWriteFilter
 }
 
 func (t *TransportUDP) init(par *Parser) {
@@ -54,9 +55,10 @@ func (t *TransportUDP) Serve(conn net.PacketConn, handler MessageHandler) error 
 		Multiple readers makes problem, which can delay writing response
 	*/
 	c := &UDPConnection{
-		PacketConn: conn,
-		PacketAddr: conn.LocalAddr().String(),
-		Listener:   true,
+		PacketConn:  conn,
+		PacketAddr:  conn.LocalAddr().String(),
+		Listener:    true,
+		writeFilter: t.writeFilter,
 	}
 
 	t.pool.Add(c.PacketAddr, c)
@@ -103,7 +105,8 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 			PacketConn: udpconn,
 			PacketAddr: udpconn.LocalAddr().String(),
 			// 1 ref for current return , 2 ref for reader
-			refcount: 2 + TransportIdleConnection,
+			refcount:    2 + TransportIdleConnection,
+			writeFilter: t.writeFilter,
 		}
 		t.log.Debug("New connection", "raddr", addr)
 		go t.readUDPConnection(c, addr, c.PacketAddr, handler)
@@ -241,6 +244,8 @@ type UDPConnection struct {
 	PacketAddr string // For faster matching
 	Listener   bool
 
+	writeFilter TransportWriteFilter
+
 	mu       sync.RWMutex
 	refcount int
 }
@@ -362,6 +367,14 @@ func (c *UDPConnection) WriteMsg(msg Message) error {
 
 	if n != len(data) {
 		return fmt.Errorf("fail to write full message")
+	}
+
+	if c.writeFilter != nil {
+		c.writeFilter(TransportWriteProps{
+			Transport:  "udp",
+			LocalAddr:  c.PacketConn.LocalAddr(),
+			RemoteAddr: &raddr,
+		}, data)
 	}
 	return nil
 }
