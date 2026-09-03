@@ -41,6 +41,7 @@ type TransportLayer struct {
 	// connectionReuse will force connection reuse when passing request
 	connectionReuse bool
 	readFilter      TransportReadFilter
+	writeFilter     TransportWriteFilter
 
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
@@ -72,6 +73,14 @@ func WithTransportLayerDNSLookupSRV(preferSRV bool) TransportLayerOption {
 func WithTransportLayerReadFilter(f TransportReadFilter) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.readFilter = f
+	}
+}
+
+// WithTransportLayerWriteFilter registers an observer for every message
+// written by any transport. See TransportWriteFilter.
+func WithTransportLayerWriteFilter(f TransportWriteFilter) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.writeFilter = f
 	}
 }
 
@@ -138,22 +147,26 @@ func NewTransportLayer(
 			log:             l.log.With("caller", "Transport<UDP>"),
 			connectionReuse: l.connectionReuse,
 			readFilter:      l.readFilter,
+			writeFilter:     l.writeFilter,
 		},
 		TCP: &TransportTCP{
 			log:             l.log.With("caller", "Transport<TCP>"),
 			connectionReuse: l.connectionReuse,
 			readFilter:      l.readFilter,
+			writeFilter:     l.writeFilter,
 		},
 		TLS: &TransportTLS{
 			TransportTCP: &TransportTCP{
 				log:             l.log.With("caller", "Transport<TLS>"),
 				connectionReuse: l.connectionReuse,
 				readFilter:      l.readFilter,
+				writeFilter:     l.writeFilter,
 			},
 		},
 		WS: &TransportWS{
-			log:        l.log.With("caller", "Transport<WS>"),
-			readFilter: l.readFilter,
+			log:         l.log.With("caller", "Transport<WS>"),
+			readFilter:  l.readFilter,
+			writeFilter: l.writeFilter,
 		},
 		// TODO. Using default dial tls, but it needs to configurable via client
 		WSS: &TransportWSS{
@@ -162,6 +175,7 @@ func NewTransportLayer(
 				connectionReuse: l.connectionReuse,
 				DialURI:         func(host string) string { return "wss://" + host },
 				readFilter:      l.readFilter,
+				writeFilter:     l.writeFilter,
 			},
 		},
 	}
@@ -182,26 +196,31 @@ func (l *TransportLayer) withTransports(conf TransportsConfig) {
 		l.udp = conf.UDP
 		l.udp.connectionReuse = l.connectionReuse
 		l.udp.readFilter = l.readFilter
+		l.udp.writeFilter = l.writeFilter
 	}
 	if conf.TCP != nil && l.tcp == nil {
 		l.tcp = conf.TCP
 		l.tcp.connectionReuse = l.connectionReuse
 		l.tcp.readFilter = l.readFilter
+		l.tcp.writeFilter = l.writeFilter
 	}
 	if conf.TLS != nil && l.tls == nil {
 		l.tls = conf.TLS
 		l.tls.connectionReuse = l.connectionReuse
 		l.tls.readFilter = l.readFilter
+		l.tls.writeFilter = l.writeFilter
 	}
 	if conf.WS != nil && l.ws == nil {
 		l.ws = conf.WS
 		l.ws.connectionReuse = l.connectionReuse
 		l.ws.readFilter = l.readFilter
+		l.ws.writeFilter = l.writeFilter
 	}
 	if conf.WSS != nil && l.wss == nil {
 		l.wss = conf.WSS
 		l.wss.connectionReuse = l.connectionReuse
 		l.wss.readFilter = l.readFilter
+		l.wss.writeFilter = l.writeFilter
 	}
 }
 

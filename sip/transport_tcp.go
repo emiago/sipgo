@@ -3,6 +3,7 @@ package sip
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ type TransportTCP struct {
 	log             *slog.Logger
 	connectionReuse bool
 	readFilter      TransportReadFilter
+	writeFilter     TransportWriteFilter
 
 	// ReadTimeout limits how long a TCP or TLS connection may block waiting
 	// for data. It is copied when the connection is created. A non-positive
@@ -43,6 +45,7 @@ func (t *TransportTCP) newConnection(conn net.Conn, refcount int) *TCPConnection
 		readTimeout:  t.ReadTimeout,
 		writeTimeout: t.WriteTimeout,
 		refcount:     refcount,
+		writeFilter:  t.writeFilter,
 	}
 }
 
@@ -263,9 +266,18 @@ type TCPConnection struct {
 
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	writeFilter  TransportWriteFilter
 
 	mu       sync.RWMutex
 	refcount int
+}
+
+// transport reports "tcp" or "tls" depending on the underlying net.Conn.
+func (c *TCPConnection) transport() string {
+	if _, ok := c.Conn.(*tls.Conn); ok {
+		return "tls"
+	}
+	return "tcp"
 }
 
 func (c *TCPConnection) Ref(i int) int {
@@ -352,6 +364,14 @@ func (c *TCPConnection) WriteMsg(msg Message) error {
 
 	if n != len(data) {
 		return fmt.Errorf("fail to write full message")
+	}
+
+	if c.writeFilter != nil {
+		c.writeFilter(TransportWriteProps{
+			Transport:  c.transport(), // "tcp" or "tls"
+			LocalAddr:  c.LocalAddr(),
+			RemoteAddr: c.RemoteAddr(),
+		}, data)
 	}
 	return nil
 }
