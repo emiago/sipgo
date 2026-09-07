@@ -213,7 +213,10 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 
 		// Check is keep alive
 		datalen := len(data)
-		if datalen <= 4 {
+		// RFC 5626 section 3.5.1 puts a keep alive between messages. A read is
+		// whatever TCP chose to deliver, so a CRLF ending a line of a message can
+		// arrive alone; only an idle parser can be between messages.
+		if datalen <= 4 && par.state == stateStartLine && par.Buffer().Len() == 0 {
 			// One or 2 CRLF
 			// https://datatracker.ietf.org/doc/html/rfc5626#section-3.5.1
 			if len(bytes.Trim(data, "\r\n")) == 0 {
