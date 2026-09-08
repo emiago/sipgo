@@ -1,0 +1,166 @@
+package sip
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+)
+
+func headerParserVia(headerName []byte, headerText string) (
+	header Header, err error) {
+	// sections := strings.Split(headerText, ",")
+	h := ViaHeader{
+		Params: HeaderParams{},
+	}
+	return &h, parseViaHeader(headerText, &h)
+}
+
+// parseViaHeader parses ViaHeader
+// Note that although Via headers may contain a comma-separated list, RFC 3261 makes it clear that
+// these should not be treated as separate logical Via headers, but as multiple values on a single
+// Via header.
+func parseViaHeader(headerText string, h *ViaHeader) error {
+	h.Params = nil
+
+	state := viaStateProtocol
+	str := headerText
+	var ind, nextInd int
+	var err error
+	for state != nil {
+		state, nextInd, err = state(h, str[ind:])
+		if err != nil {
+
+			// Fix the offset
+			if _, ok := err.(errComaDetected); ok {
+				err = errComaDetected(ind + nextInd)
+			}
+			return err
+		}
+		ind += nextInd
+	}
+	return nil
+}
+
+type viaFSM func(h *ViaHeader, s string) (viaFSM, int, error)
+
+func viaStateProtocol(h *ViaHeader, s string) (viaFSM, int, error) {
+	ind := strings.IndexRune(s, '/')
+	if ind < 0 {
+		return nil, 0, errors.New("Malformed protocol name in Via header")
+	}
+	h.ProtocolName = strings.TrimSpace(s[:ind])
+	return viaStateProtocolVersion, ind + 1, nil
+}
+
+func viaStateProtocolVersion(h *ViaHeader, s string) (viaFSM, int, error) {
+	ind := strings.IndexRune(s, '/')
+	if ind < 0 {
+		return nil, 0, errors.New("Malformed protocol version in Via header")
+	}
+	h.ProtocolVersion = strings.TrimSpace(s[:ind])
+	return viaStateProtocolTransport, ind + 1, nil
+}
+
+func viaStateProtocolTransport(h *ViaHeader, s string) (viaFSM, int, error) {
+	ind := strings.IndexAny(s, " \t")
+	if ind < 0 {
+		return nil, 0, errors.New("Malformed transport in Via header")
+	}
+	h.Transport = strings.TrimSpace(s[:ind])
+	return viaStateHost, ind + 1, nil
+}
+
+func viaStateHost(h *ViaHeader, s string) (viaFSM, int, error) {
+	// IPv6 host literal: "[addr]" with optional ":port" and ";params".
+	// The colons inside the IPv6 literal must not be confused with the
+	// host:port separator, so this case is handled before the generic
+	// colon-walking path below.
+	if len(s) > 0 && s[0] == '[' {
+		closeIdx := strings.Index(s, "]")
+		if closeIdx < 0 {
+			return nil, 0, errors.New("Malformed IPv6 host in Via header: no closing bracket")
+		}
+		// Store the bare IPv6 address without brackets to match the
+		// convention expected by uriIP() at serialization time.
+		h.Host = strings.TrimSpace(s[1:closeIdx])
+
+		rest := s[closeIdx+1:]
+		baseOff := closeIdx + 1
+		if len(rest) == 0 {
+			return nil, 0, nil
+		}
+		if rest[0] == ':' {
+			// Optional port follows the IPv6 literal.
+			endIdx := strings.IndexByte(rest, ';')
+			var portStr string
+			if endIdx < 0 {
+				portStr = rest[1:]
+			} else {
+				portStr = rest[1:endIdx]
+			}
+			port, err := strconv.Atoi(strings.TrimSpace(portStr))
+			if err != nil {
+				return nil, 0, nil
+			}
+			h.Port = port
+			if endIdx < 0 {
+				return nil, 0, nil
+			}
+			return viaStateParams, baseOff + endIdx + 1, nil
+		}
+		if rest[0] == ';' {
+			return viaStateParams, baseOff + 1, nil
+		}
+		// Unexpected character right after the IPv6 literal; bail
+		// without producing an error to keep behavior consistent with
+		// the legacy path which also returns nil on parse trouble.
+		return nil, 0, nil
+	}
+
+	var colonInd int
+	var endIndex int = len(s)
+	var err error
+loop:
+	for i, c := range s {
+		switch c {
+		case ';':
+			endIndex = i
+			break loop
+		case ':':
+			colonInd = i
+			// Uri has port
+		}
+	}
+
+	if colonInd > 0 {
+		h.Port, err = strconv.Atoi(s[colonInd+1 : endIndex])
+		if err != nil {
+			return nil, 0, nil
+		}
+		h.Host = strings.TrimSpace(s[:colonInd])
+	} else {
+		h.Host = strings.TrimSpace(s[:endIndex])
+	}
+
+	if endIndex == len(s) {
+		return nil, 0, nil
+	}
+
+	// return nil, "", nil
+	return viaStateParams, endIndex + 1, nil
+}
+
+func viaStateParams(h *ViaHeader, s string) (viaFSM, int, error) {
+	var err error
+	coma := strings.IndexRune(s, ',')
+	if coma > 0 {
+		_, err = UnmarshalHeaderParams(s[:coma], ';', ',', &h.Params)
+		if err != nil {
+			return nil, 0, err
+		}
+		return viaStateProtocol, coma, errComaDetected(coma)
+	}
+
+	_, err = UnmarshalHeaderParams(s, ';', '\r', &h.Params)
+	return nil, 0, err
+}

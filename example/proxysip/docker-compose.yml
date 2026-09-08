@@ -1,0 +1,59 @@
+version: "2.4"
+
+services:
+  proxy:
+    image: golang:latest
+    command: go run . -ip=10.5.0.20:5060 -dst 10.5.0.30:5060
+    # stdin_open: true
+    # command: bash
+    working_dir: /usr/src/sipgo/example/proxysip
+    volumes:
+      - ../../../sipgo:/usr/src/sipgo
+
+    cpus: 4.0
+    cpuset: "0,1,2,3"
+
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.20
+
+    # mem_limit: 4G
+    # network_mode: "host"
+    environment:
+      - GOMAXPROCS=4 # Go does not match this by default
+      - LOGDEBUG=${LOGDEBUG}
+      # - GODEBUG=madvdontneed=0
+      # - GODEBUG=madvdontneed=1,gctrace=1
+      # - GOGC=70
+    ports:
+      - 8080:8080
+
+  uas:
+    image: ctaloi/sipp
+    command: -sn uas -f 5 -i 10.5.0.30
+    # network_mode: "host"
+    cpuset: "4"
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.30
+
+  uac:
+    image: ctaloi/sipp
+    command: -sn uac -r 1 -rp 1000 -rate_increase 25 -rate_interval 1 -rate_max 2000 -no_rate_quit -m 1000000 -fd 1 -i 10.5.0.10 10.5.0.20:5060
+    # network_mode: "host"
+    cpuset: "5"
+    networks:
+      mynet:
+        ipv4_address: 10.5.0.10
+    # depends_on:
+    # - proxy
+    #  - uas
+
+
+networks:
+  mynet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
