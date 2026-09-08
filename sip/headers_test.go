@@ -75,6 +75,22 @@ func TestLazyParsing(t *testing.T) {
 		require.Equal(t, "SIP/2.0/UDP 10.1.1.1:5060;branch=z9hG4bKabcdef", h.Value())
 	})
 
+	t.Run("SessionExpires", func(t *testing.T) {
+		headers.AppendHeader(NewHeader("Session-Expires", "1800;refresher=uas"))
+		h := headers.SessionExpires()
+		require.NotNil(t, h)
+		require.Equal(t, uint32(1800), h.Delta)
+		require.Equal(t, "uas", h.Params.GetOr("refresher", ""))
+		require.Equal(t, "Session-Expires: 1800;refresher=uas", h.String())
+	})
+
+	t.Run("MinSE", func(t *testing.T) {
+		headers.AppendHeader(NewHeader("Min-SE", "90"))
+		h := headers.MinSE()
+		require.NotNil(t, h)
+		require.Equal(t, uint32(90), uint32(*h))
+		require.Equal(t, "Min-SE: 90", h.String())
+	})
 }
 
 func BenchmarkLazyParsing(b *testing.B) {
