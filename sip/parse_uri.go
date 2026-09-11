@@ -9,9 +9,9 @@ import (
 
 type uriFSM func(uri *Uri, s string) (uriFSM, string, error)
 
-// ParseUri converts a string representation of a URI into a Uri object.
-// Following https://datatracker.ietf.org/doc/html/rfc3261#section-19.1.1
-// sip:user:password@host:port;uri-parameters?headers
+// ParseUri converts a string representation of a URI into a Uri object. SIP
+// and SIPS URIs are parsed according to RFC 3261 section 19.1.1. For every
+// other scheme, the scheme-specific part is available through [Uri.Raw].
 func ParseUri(uriStr string, uri *Uri) (err error) {
 	if len(uriStr) == 0 {
 		return errors.New("empty URI")
@@ -42,6 +42,14 @@ func uriStateScheme(uri *Uri, s string) (uriFSM, string, error) {
 	for i, c := range s {
 		if c == ':' {
 			uri.Scheme = ASCIIToLower(s[:i])
+			if uri.Scheme != "sip" && uri.Scheme != "sips" {
+				// Only SIP and SIPS URIs use the user, host, port, URI
+				// parameters and headers grammar below. Keep the
+				// scheme-specific part of every other URI uninterpreted so
+				// that custom schemes can be handled by the application.
+				uri.raw = s[i+1:]
+				return nil, "", nil
+			}
 			return uriStateSlashes, s[i+1:], nil
 		}
 		// Check is c still ASCII

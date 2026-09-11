@@ -6,11 +6,16 @@ import (
 	"strings"
 )
 
-// Uri is parsed form of
-// sip:user:password@host:port;uri-parameters?headers
-// In case of `sips:“ Encrypted is set to true
+// Uri represents a URI used in a SIP message. SIP and SIPS URIs are split
+// into their structured fields. The scheme-specific part of every other URI
+// is retained without interpretation and is available through [Uri.Raw].
 type Uri struct {
 	Scheme string
+
+	// raw is the uninterpreted scheme-specific part of a non-SIP URI. Use
+	// Raw to read it. It is kept private so callers cannot put a Uri into a
+	// state containing both a raw value and parsed SIP fields.
+	raw string
 
 	// If value is star (*)
 	Wildcard bool
@@ -44,7 +49,7 @@ type Uri struct {
 	Headers HeaderParams
 }
 
-// Generates the string representation of a SipUri struct.
+// String returns the string representation of the URI.
 func (uri *Uri) String() string {
 	var buffer strings.Builder
 	uri.StringWrite(&buffer)
@@ -63,6 +68,10 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 
 	buffer.WriteString(scheme)
 	buffer.WriteString(":")
+	if uri.raw != "" {
+		buffer.WriteString(uri.raw)
+		return
+	}
 
 	if uri.HierarhicalSlashes {
 		buffer.WriteString("//")
@@ -96,6 +105,13 @@ func (uri *Uri) StringWrite(buffer io.StringWriter) {
 		buffer.WriteString("?")
 		buffer.WriteString(uri.Headers.ToString('&'))
 	}
+}
+
+// Raw returns the uninterpreted scheme-specific part of a non-SIP URI. It
+// excludes the scheme and its separating colon. The value is empty for SIP
+// and SIPS URIs.
+func (uri *Uri) Raw() string {
+	return uri.raw
 }
 
 // Clone

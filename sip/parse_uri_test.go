@@ -134,6 +134,69 @@ func TestParseUri(t *testing.T) {
 
 }
 
+func TestParseUriRaw(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		scheme string
+		raw    string
+		output string
+	}{
+		{
+			name:   "URN",
+			input:  "urn:service:sos",
+			scheme: "urn",
+			raw:    "service:sos",
+			output: "urn:service:sos",
+		},
+		{
+			name:   "scheme is case insensitive",
+			input:  "URN:service:SOS",
+			scheme: "urn",
+			raw:    "service:SOS",
+			output: "urn:service:SOS",
+		},
+		{
+			name:   "hierarchical URI",
+			input:  "https://example.com/a:b?q=x#part",
+			scheme: "https",
+			raw:    "//example.com/a:b?q=x#part",
+			output: "https://example.com/a:b?q=x#part",
+		},
+		{
+			name:   "TEL parameters remain raw",
+			input:  "tel:+493012345;ext=7",
+			scheme: "tel",
+			raw:    "+493012345;ext=7",
+			output: "tel:+493012345;ext=7",
+		},
+		{
+			name:   "scheme only resembling SIP remains raw",
+			input:  "sipx:user:password@example.com",
+			scheme: "sipx",
+			raw:    "user:password@example.com",
+			output: "sipx:user:password@example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := Uri{}
+			err := ParseUri(tt.input, &uri)
+			require.NoError(t, err)
+			assert.Equal(t, tt.scheme, uri.Scheme)
+			assert.Equal(t, tt.raw, uri.Raw())
+			assert.Equal(t, tt.output, uri.String())
+			assert.Empty(t, uri.User)
+			assert.Empty(t, uri.Host)
+			assert.Zero(t, uri.Port)
+			assert.Nil(t, uri.UriParams)
+			assert.Nil(t, uri.Headers)
+		})
+	}
+
+}
+
 func TestParseUriBad(t *testing.T) {
 	t.Run("double ports", func(t *testing.T) {
 		str := "sip:127.0.0.1:5060:5060;lr;transport=udp"
