@@ -139,7 +139,10 @@ func (txl *TransactionLayer) handleMessage(msg Message) {
 	case *Request:
 		go txl.handleRequestBackground(msg)
 	case *Response:
-		go txl.handleResponseBackground(msg)
+		// Matching is done here, in the receiving goroutine, so that
+		// responses of one transaction keep their arrival order.
+		// Passing them to the FSM still happens in a separate goroutine.
+		txl.handleResponseOrdered(msg)
 	default:
 		txl.log.Error("unsupported message, skip it")
 	}
@@ -275,28 +278,47 @@ func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx
 	return tx, nil
 }
 
-func (txl *TransactionLayer) handleResponseBackground(res *Response) {
-	if err := txl.handleResponse(res); err != nil {
-		txl.log.Error("Client tx failed to handle response", "error", err)
-	}
-}
-
-func (txl *TransactionLayer) handleResponse(res *Response) error {
+// handleResponseOrdered matches a response to its client transaction and
+// passes it to the transaction FSM without losing the order of arrival.
+//
+// Matching runs in the calling (transport receiving) goroutine, which is
+// what makes the order well defined; the FSM is still spun in a separate
+// goroutine, because fsmPassUp blocks until the TU consumes the response and
+// blocking the receiving goroutine on that would stall the connection.
+//
+// Without ordering, two responses received back to back race for fsmMu. When
+// the 2xx wins, the client INVITE transaction moves to "Accepted" and the 1xx
+// that arrived first is then discarded by that state as a stray response
+// (RFC 6026 7.2), so the TU never sees it. In practice this loses ringing and
+// early media announcements from user agents that answer immediately.
+func (txl *TransactionLayer) handleResponseOrdered(res *Response) {
 	key, err := ClientTxKeyMake(res)
 	if err != nil {
-		return fmt.Errorf("make key failed: %w", err)
+		txl.log.Error("Client tx failed to handle response", "error", fmt.Errorf("make key failed: %w", err))
+		return
 	}
 
 	tx, exists := txl.getClientTx(key)
 	if !exists {
 		// RFC 3261 - 17.1.1.2.
 		// Not matched responses should be passed directly to the UA
-		txl.unRespHandler(res)
-		return nil
+		go txl.unRespHandler(res)
+		return
 	}
 
-	tx.Receive(res)
-	return nil
+	wait, ticket := tx.receiveTicket()
+	go func() {
+		// The ticket is released even when the transaction is already gone,
+		// so that responses queued behind this one are not stuck.
+		defer close(ticket)
+
+		select {
+		case <-wait:
+		case <-tx.done:
+			return
+		}
+		tx.Receive(res)
+	}()
 }
 
 func (txl *TransactionLayer) Request(ctx context.Context, req *Request) (*ClientTx, error) {
