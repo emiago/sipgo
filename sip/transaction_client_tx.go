@@ -59,8 +59,18 @@ func (tx *ClientTx) Init() error {
 		tx.timer_a = time.AfterFunc(tx.timer_a_time, func() {
 			tx.spinFsm(client_input_timer_a)
 		})
-		// Timer D is set to 32 seconds for unreliable transports
-		tx.timer_d_time = Timer_D
+		// How long the transaction stays in Completed absorbing retransmitted
+		// final responses. RFC 3261 17.1.1.2 gives an INVITE client transaction
+		// Timer D (32 seconds for unreliable transports); 17.1.2.2 gives a
+		// non-INVITE one Timer K (T4). Using Timer D for both keeps every
+		// OPTIONS, BYE and INFO transaction in the layer six times longer than
+		// the RFC asks for, which shows as transaction table growth on a proxy
+		// or B2BUA that sends keep-alive OPTIONS to many peers.
+		if tx.origin.IsInvite() {
+			tx.timer_d_time = Timer_D
+		} else {
+			tx.timer_d_time = Timer_K
+		}
 		tx.mu.Unlock()
 	}
 

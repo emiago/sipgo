@@ -129,3 +129,56 @@ func TestClientTransactionFSM(t *testing.T) {
 		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.inviteStateAccepted))
 	})
 }
+
+// A client transaction lingers in Completed to absorb retransmitted final
+// responses, and RFC 3261 gives the two transaction kinds different timers for
+// that wait: 17.1.1.2 gives an INVITE one Timer D (32 seconds on unreliable
+// transports), 17.1.2.2 gives a non-INVITE one Timer K (T4). Using Timer D for
+// both keeps every OPTIONS, BYE and INFO in the transaction layer six times
+// longer than needed.
+//
+// On a reliable transport both waits are zero, and this checks that too: the
+// timer is picked in the unreliable branch only, and a change there must not
+// start arming a timer over TCP.
+func TestClientTxCompletedWaitPerMethod(t *testing.T) {
+	SetTimers(1*time.Millisecond, 1*time.Millisecond, 1*time.Millisecond)
+
+	completedWait := func(t *testing.T, req *Request) time.Duration {
+		t.Helper()
+		req.raddr = Addr{IP: net.ParseIP("127.0.0.99"), Port: 5060}
+		conn := &UDPConnection{
+			PacketConn: &fakes.UDPConn{
+				Reader:  bytes.NewBuffer([]byte{}),
+				Writers: map[string]io.Writer{"127.0.0.99:5060": bytes.NewBuffer([]byte{})},
+			},
+		}
+		tx := NewClientTx("timer-k", req, conn, slog.Default())
+		require.NoError(t, tx.Init())
+		tx.mu.Lock()
+		defer tx.mu.Unlock()
+		return tx.timer_d_time
+	}
+
+	invite := func(transport string) *Request {
+		req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", transport, "127.0.0.2:5060")
+		return req
+	}
+	options := func(transport string) *Request {
+		return testCreateRequest(t, "OPTIONS", "sip:127.0.0.99:5060", transport, "127.0.0.2:5060")
+	}
+
+	for _, tc := range []struct {
+		name string
+		req  *Request
+		want time.Duration
+	}{
+		{"INVITE over UDP waits Timer D", invite("udp"), Timer_D},
+		{"OPTIONS over UDP waits Timer K", options("udp"), Timer_K},
+		{"INVITE over TCP does not wait", invite("tcp"), 0},
+		{"OPTIONS over TCP does not wait", options("tcp"), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, completedWait(t, tc.req))
+		})
+	}
+}
