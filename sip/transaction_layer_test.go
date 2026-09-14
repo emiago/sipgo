@@ -179,3 +179,83 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	require.Equal(t, 2, tp.udp.pool.Size())
 	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
 }
+
+func TestTransactionLayerServerTxCreationDoesNotBlockOtherTransactions(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	defer tp.Close()
+
+	dialStarted := make(chan struct{})
+	releaseDial := make(chan struct{})
+	var releaseDialOnce sync.Once
+	release := func() {
+		releaseDialOnce.Do(func() { close(releaseDial) })
+	}
+	defer release()
+
+	tp.tcp.DialerCreate = func(laddr net.Addr) net.Dialer {
+		close(dialStarted)
+		<-releaseDial
+		return net.Dialer{LocalAddr: laddr}
+	}
+
+	txl := NewTransactionLayer(tp)
+	blockedReq := testCreateRequest(t, "OPTIONS", "sip:127.0.0.1", "TCP", listener.Addr().String())
+	unrelatedReq := testCreateRequest(t, "OPTIONS", "sip:127.0.0.1", "UDP", "127.0.0.1:5060")
+	const blockedKey = "blocked"
+	const unrelatedKey = "unrelated"
+
+	var blockedHandlerCalls int32
+	txl.OnRequest(func(req *Request, tx *ServerTx) {
+		if req == blockedReq {
+			atomic.AddInt32(&blockedHandlerCalls, 1)
+		}
+	})
+
+	// Start a server transaction for the request that blocks.
+	blockedDone := make(chan error, 2)
+	go func() { blockedDone <- txl.serverTxRequest(blockedReq, blockedKey) }()
+
+	select {
+	case <-dialStarted:
+	case <-time.After(time.Second):
+		t.Fatal("TCP connection creation did not start")
+	}
+
+	// Simulate a second request on the same server tx (blocks waiting for the first).
+	go func() { blockedDone <- txl.serverTxRequest(blockedReq, blockedKey) }()
+
+	// Simulate a request for a different server transaction (shouldn't block).
+	unrelatedDone := make(chan error, 1)
+	go func() { unrelatedDone <- txl.serverTxRequest(unrelatedReq, unrelatedKey) }()
+
+	select {
+	case err := <-unrelatedDone:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("unrelated server transaction blocked by connection creation")
+	}
+
+	// Allow the two blocked requests to complete.
+	release()
+	for range 2 {
+		select {
+		case err := <-blockedDone:
+			require.NoError(t, err)
+		case <-time.After(time.Second):
+			t.Fatal("blocked server transaction did not complete")
+		}
+	}
+
+	// Only one created a connection.
+	require.EqualValues(t, 1, atomic.LoadInt32(&blockedHandlerCalls))
+
+	for _, key := range []string{blockedKey, unrelatedKey} {
+		if tx, exists := txl.getServerTx(key); exists {
+			tx.Terminate()
+		}
+	}
+}

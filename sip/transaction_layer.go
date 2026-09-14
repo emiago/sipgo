@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type TransactionRequestHandler func(req *Request, tx *ServerTx)
@@ -26,6 +28,8 @@ type TransactionLayer struct {
 
 	clientTransactions *transactionStore[*ClientTx]
 	serverTransactions *transactionStore[*ServerTx]
+
+	serverTxCreateGroup singleflight.Group
 
 	terminateOnConnClose bool
 
@@ -226,26 +230,41 @@ func (txl *TransactionLayer) rejectMalformedRequest(req *Request, reason error) 
 }
 
 func (txl *TransactionLayer) serverTxRequest(req *Request, key string) error {
-	txl.serverTransactions.lock()
-	tx, exists := txl.serverTransactions.items[key]
+	tx, exists := txl.serverTransactions.get(key)
 	if exists {
-		txl.serverTransactions.unlock()
 		if err := tx.Receive(req); err != nil {
 			return fmt.Errorf("failed to receive req: %w", err)
 		}
 		return nil
 	}
 
-	tx, err := txl.serverTxCreate(req, key)
+	created := false
+	result, err, _ := txl.serverTxCreateGroup.Do(key, func() (any, error) {
+		if tx, exists := txl.serverTransactions.get(key); exists {
+			return tx, nil
+		}
+
+		tx, err := txl.serverTxCreate(req, key)
+		if err != nil {
+			return nil, err
+		}
+
+		tx.OnTerminate(txl.serverTxTerminate)
+		txl.serverTransactions.put(key, tx)
+		created = true
+		return tx, nil
+	})
 	if err != nil {
-		txl.serverTransactions.unlock()
 		return err
 	}
+	tx = result.(*ServerTx)
 
-	// put tx to store
-	txl.serverTransactions.items[key] = tx
-	tx.OnTerminate(txl.serverTxTerminate)
-	txl.serverTransactions.unlock()
+	if !created {
+		if err := tx.Receive(req); err != nil {
+			return fmt.Errorf("failed to receive req: %w", err)
+		}
+		return nil
+	}
 
 	// pass request and transaction to handler
 	txl.reqHandler(req, tx)
