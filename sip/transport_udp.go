@@ -124,6 +124,15 @@ func (t *TransportUDP) readUDPConnection(conn *UDPConnection, raddr string, ladd
 func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
 	defer func() {
+		if !conn.Listener {
+			// The idle reference keeps a dialed connection in the pool for
+			// reuse. Its reader is gone, so the connection is leaving the
+			// pool and cannot be reused: without releasing that reference
+			// here the count never reaches zero and the socket stays open
+			// for the life of the process. A listener carries no such
+			// reference, it is added to the pool with a single one.
+			conn.Ref(-TransportIdleConnection)
+		}
 		if err := t.pool.CloseAndDelete(conn, laddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
 		}
@@ -243,11 +252,25 @@ type UDPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// closed marks a connection whose socket is already released. The pool
+	// keeps a connection under several keys and drops them one at a time, so
+	// without this flag Get still returns it after closing.
+	closed bool
+}
+
+// Closed reports a connection that is already closed, so the pool does not
+// hand it out again. Not part of the Connection interface: the pool asks for
+// it through an anonymous interface.
+func (c *UDPConnection) Closed() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.closed
 }
 
 func (c *UDPConnection) close() error {
 	c.mu.Lock()
 	c.refcount = 0
+	c.closed = true
 	c.mu.Unlock()
 
 	if c.Listener {
@@ -279,10 +302,17 @@ func (c *UDPConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
+	if ref <= 0 {
+		c.closed = true
+	}
 	c.mu.Unlock()
 
 	if c.Listener {
-		// Listeners must be closed manually or by forcing error
+		// Listeners must be closed manually or by forcing error, so this
+		// does not touch the socket. It still marks the connection closed
+		// once the last reference is gone: the listener is kept in the pool
+		// under every peer it accepted, and its reader has stopped, so
+		// handing it out would send the caller to a socket nothing reads.
 		return ref, nil
 	}
 

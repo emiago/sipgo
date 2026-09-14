@@ -141,19 +141,36 @@ func (p *connectionPool) getUnref(a string) (c Connection) {
 	if !exists {
 		return nil
 	}
+	// A closed connection can still sit in the pool: one connection is stored
+	// under several keys (remote and local address, and for the UDP listener
+	// every peer it accepted), while closing removes them one at a time.
+	// Handing such a connection out sends the caller to a socket that is
+	// already gone instead of letting it dial a new one, and Ref pulls the
+	// count of a closed connection back above zero, so the next TryClose
+	// closes it a second time. Asked through an anonymous interface to keep
+	// the exported Connection interface unchanged.
+	if closer, ok := c.(interface{ Closed() bool }); ok && closer.Closed() {
+		return nil
+	}
 	return c
 }
 
-// CloseAndDelete closes connection and deletes from pool
+// CloseAndDelete deletes connection from pool and releases the reference held
+// by its reader.
+//
+// It used to force a hard Close whenever references remained, which defeats
+// the reference counting the pool is built on: the socket is taken away from
+// the owners still holding it, and Close resets refcount to 0, so their later
+// TryClose runs on a connection that is already gone. TryClose closes as soon
+// as the last reference is released, which is the only point where closing is
+// safe. Readers give up the idle reference (TransportIdleConnection) before
+// calling this, so a connection leaving the pool still reaches zero.
 func (p *connectionPool) CloseAndDelete(c Connection, addr string) error {
 	p.Lock()
 	defer p.Unlock()
 	delete(p.m, addr)
-	ref, _ := c.TryClose() // Be nice. Saves from double closing
-	if ref > 0 {
-		return c.Close()
-	}
-	return nil
+	_, err := c.TryClose()
+	return err
 }
 
 func (p *connectionPool) Delete(addr string) {
