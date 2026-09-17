@@ -2,11 +2,13 @@ package sip
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -178,4 +180,147 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	require.EqualValues(t, 1, atomic.LoadInt32(&count))
 	require.Equal(t, 2, tp.udp.pool.Size())
 	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
+}
+
+// A server transaction is created outside the transaction store's lock.
+//
+// Creating one acquires the connection its responses will ride, and when the
+// connection the request arrived on is gone that is a dial to the Via host,
+// which to a peer that has gone away lasts the whole connect timeout. Every
+// request the layer receives waits on the same lock, so a dial held under it
+// stalls the entire server side — and the requests queued behind it time out
+// at their senders, whose closed connections make them the next dials. This
+// pins the dial open and checks that an unrelated request still gets through.
+func TestTransactionLayerServerTxCreationDoesNotHoldTheStore(t *testing.T) {
+	receiverAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	receiverConn, err := net.ListenUDP("udp", receiverAddr)
+	require.NoError(t, err)
+	defer receiverConn.Close()
+	receiverActualAddr := receiverConn.LocalAddr().String()
+
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	dialing := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	tp.tcp.DialerCreate = func(laddr net.Addr) net.Dialer {
+		return net.Dialer{
+			LocalAddr: laddr,
+			Control: func(_, _ string, _ syscall.RawConn) error {
+				once.Do(func() { close(dialing) })
+				<-release
+				return errors.New("the peer is gone")
+			},
+		}
+	}
+	txl := NewTransactionLayer(tp)
+	handled := make(chan string, 2)
+	txl.OnRequest(func(req *Request, tx *ServerTx) {
+		handled <- req.Method.String()
+	})
+
+	// A UDP connection in the pool, so the second request needs no dial.
+	_, err = tp.udp.CreateConnection(
+		context.TODO(),
+		testCreateAddr(t, "127.0.0.1:15073"),
+		testCreateAddr(t, receiverActualAddr),
+		tp.handleMessage,
+	)
+	require.NoError(t, err)
+
+	// A TCP request whose arrival connection no longer exists: the transport
+	// falls back to dialing its Via host, and the dialer above never comes back
+	// until released.
+	gone := testCreateRequest(t, "OPTIONS", "sip:bob@127.0.0.1", "TCP", "127.0.0.1:15099")
+	gone.SetTransport("TCP")
+	gone.SetSource("127.0.0.1:15099")
+	slow := make(chan error, 1)
+	go func() { slow <- txl.handleRequest(gone) }()
+	select {
+	case <-dialing:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request with no connection never reached the dialer")
+	}
+
+	// While that dial is pending, a request over the pooled UDP connection
+	// must still be handled.
+	quick := testCreateRequest(t, "INFO", "sip:bob@127.0.0.1", "UDP", receiverActualAddr)
+	quick.SetTransport("UDP")
+	quick.SetSource(receiverActualAddr)
+	fast := make(chan error, 1)
+	go func() { fast <- txl.handleRequest(quick) }()
+	select {
+	case err := <-fast:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("a request with a live connection waited behind another's dial")
+	}
+	select {
+	case method := <-handled:
+		assert.Equal(t, "INFO", method)
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request over the live connection was never handed to the handler")
+	}
+
+	close(release)
+	select {
+	case err := <-slow:
+		require.Error(t, err, "the dial was made to fail, and the transaction with it")
+	case <-time.After(2 * time.Second):
+		t.Fatal("the released dial never returned")
+	}
+}
+
+// Two copies of one request racing into the layer end as one transaction: the
+// copy that loses the race releases what it created and is received by the
+// winner, as a retransmission would be.
+func TestTransactionLayerRacingCopiesShareOneServerTx(t *testing.T) {
+	receiverAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	receiverConn, err := net.ListenUDP("udp", receiverAddr)
+	require.NoError(t, err)
+	defer receiverConn.Close()
+	receiverActualAddr := receiverConn.LocalAddr().String()
+
+	tp := NewTransportLayer(net.DefaultResolver, NewParser(), nil)
+	txl := NewTransactionLayer(tp)
+	var handled int32
+	txl.OnRequest(func(req *Request, tx *ServerTx) {
+		atomic.AddInt32(&handled, 1)
+		// Answer, so that the transaction finishes on its own.
+		require.NoError(t, tx.Respond(NewResponseFromRequest(req, 200, "OK", nil)))
+	})
+	_, err = tp.udp.CreateConnection(
+		context.TODO(),
+		testCreateAddr(t, "127.0.0.1:15074"),
+		testCreateAddr(t, receiverActualAddr),
+		tp.handleMessage,
+	)
+	require.NoError(t, err)
+
+	req := testCreateRequest(t, "OPTIONS", "sip:bob@127.0.0.1", "UDP", receiverActualAddr)
+	req.SetTransport("UDP")
+	req.SetSource(receiverActualAddr)
+
+	const copies = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, copies)
+	for range copies {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- txl.handleRequest(req)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	assert.EqualValues(t, 1, atomic.LoadInt32(&handled), "one transaction, one handler call")
+	key, err := ServerTxKeyMake(req)
+	require.NoError(t, err)
+	_, exists := txl.serverTransactions.get(key)
+	assert.True(t, exists, "the winner is in the store")
 }

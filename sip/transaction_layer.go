@@ -226,23 +226,39 @@ func (txl *TransactionLayer) rejectMalformedRequest(req *Request, reason error) 
 }
 
 func (txl *TransactionLayer) serverTxRequest(req *Request, key string) error {
-	txl.serverTransactions.lock()
-	tx, exists := txl.serverTransactions.items[key]
-	if exists {
-		txl.serverTransactions.unlock()
+	if tx, exists := txl.serverTransactions.get(key); exists {
 		if err := tx.Receive(req); err != nil {
 			return fmt.Errorf("failed to receive req: %w", err)
 		}
 		return nil
 	}
 
+	// Created outside the store's lock. serverTxCreate acquires the connection
+	// the response will ride, and when the connection the request arrived on
+	// is already gone that means a dial to the Via host — which, to a peer
+	// that has gone away, takes the whole connect timeout to fail. Every
+	// other request the layer receives waits on this same lock, so a dial
+	// under it stalls the entire server side for as long as the dial lasts,
+	// and the requests queued behind it time out at their senders and turn
+	// into the next dial. The cost of creating unlocked is a retransmission
+	// racing the first copy into two transactions, which is settled below.
 	tx, err := txl.serverTxCreate(req, key)
 	if err != nil {
-		txl.serverTransactions.unlock()
 		return err
 	}
 
-	// put tx to store
+	txl.serverTransactions.lock()
+	if existing, raced := txl.serverTransactions.items[key]; raced {
+		txl.serverTransactions.unlock()
+		// A retransmission got here first. Ours never reached the store, so
+		// nothing but its timers and its connection reference need undoing;
+		// the request itself is handed to the transaction that won.
+		tx.Terminate()
+		if err := existing.Receive(req); err != nil {
+			return fmt.Errorf("failed to receive req: %w", err)
+		}
+		return nil
+	}
 	txl.serverTransactions.items[key] = tx
 	tx.OnTerminate(txl.serverTxTerminate)
 	txl.serverTransactions.unlock()
