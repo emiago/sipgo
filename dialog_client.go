@@ -402,14 +402,20 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	// request is passed to the transport layer directly for transmission,
 	// rather than a client transaction.  This is because the UAC core
 	// handles retransmissions of the ACK, not the transaction layer.
-	retransmissionAck := ack.Clone() // We need to clone for RACE safety
+	// Snapshot once and never mutate it. Each retransmission sends a FRESH clone:
+	// WriteRequest -> ClientRequestAddVia mutates the request's header list in place
+	// (PrependHeader), which is not safe to share across retransmission handlers.
+	// Each retransmitted 2xx is delivered on its own transaction-layer goroutine, so
+	// two close retransmissions racing on one shared request panic in PrependHeader
+	// ("index out of range"); reusing it also appends a duplicate Via per resend.
+	ackTemplate := ack.Clone()
 	s.inviteTx.OnRetransmission(func(r *sip.Response) {
 		// Detect retransmission
 		if r.StatusCode != 200 {
 			return
 		}
 
-		if err := s.WriteRequest(retransmissionAck); err != nil {
+		if err := s.WriteRequest(ackTemplate.Clone()); err != nil {
 			s.endWithCause(fmt.Errorf("ACK retransmission failed: %w", err))
 		}
 	})

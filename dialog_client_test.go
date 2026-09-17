@@ -3,6 +3,7 @@ package sipgo
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -303,6 +304,62 @@ func TestDialogClientACKRetransmission(t *testing.T) {
 	state := d.LoadState()
 	assert.Equal(t, sip.DialogStateConfirmed, state)
 	assert.EqualValues(t, 3, atomic.LoadInt32(&acks))
+}
+
+// TestDialogClientACKRetransmissionOverlap fires several 200 OK retransmissions at
+// once so their ACK-resend callbacks run concurrently. If WriteAck reuses one shared
+// ACK across retransmissions, the concurrent WriteRequest -> ClientRequestAddVia ->
+// Request.PrependHeader races (panics with "index out of range" under -race) and can
+// emit an ACK carrying more than one Via. Cloning the ACK per retransmission keeps
+// each resend independent: no shared mutation, and exactly one Via per ACK.
+//
+// The sequential TestDialogClientACKRetransmission does not catch this: it sends
+// replies one at a time and only counts ACKs, so it passes with the shared request.
+func TestDialogClientACKRetransmissionOverlap(t *testing.T) {
+	const retransmits = 8
+	var mu sync.Mutex
+	var viaCounts []int
+	answered := make(chan struct{})
+
+	client := testClientResponder(t, func(req *sip.Request, w *siptest.ClientTxResponder) {
+		if req.IsAck() {
+			mu.Lock()
+			viaCounts = append(viaCounts, len(req.GetHeaders("Via")))
+			mu.Unlock()
+			return
+		}
+		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+		w.Receive(res) // initial answer -> WaitAnswer returns, caller ACKs
+		<-answered     // wait until OnRetransmission is registered (after Ack)
+		// Fire the retransmissions simultaneously so the ACK-resend callbacks overlap.
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < retransmits; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				w.Receive(res)
+			}()
+		}
+		close(start)
+		wg.Wait()
+	})
+
+	dua := DialogUA{Client: client}
+	d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+	require.NoError(t, err)
+	require.NoError(t, d.WaitAnswer(context.TODO(), AnswerOptions{}))
+	require.NoError(t, d.Ack(context.TODO()))
+	close(answered) // release the overlapping retransmissions
+	time.Sleep(4 * sip.T1)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(viaCounts), 2, "want the initial ACK plus retransmission ACKs")
+	for i, n := range viaCounts {
+		assert.Equalf(t, 1, n, "ACK #%d has %d Via headers, want exactly 1", i, n)
+	}
 }
 
 func BenchmarkDialogDo(b *testing.B) {
