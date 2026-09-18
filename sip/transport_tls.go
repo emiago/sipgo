@@ -71,6 +71,7 @@ func (t *TransportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr A
 		tlsConn := t.tlsClient(conn, hostname)
 
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
 			return nil, fmt.Errorf("TLS handshake error: %w", err)
 		}
 
