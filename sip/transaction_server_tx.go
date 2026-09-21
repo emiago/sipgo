@@ -28,8 +28,10 @@ func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	tx.key = key
 	tx.conn = conn
 
-	// about ~10 retransmits
-	tx.acks = make(chan *Request)
+	// Buffered by one so that an ACK which arrives before the dialog reaches
+	// its `Acks()` receive is held rather than dropped, without parking a
+	// goroutine to do the holding.
+	tx.acks = make(chan *Request, 1)
 	// tx.cancels = make(chan *Request)
 	tx.done = make(chan struct{})
 	tx.log = logger
@@ -127,32 +129,20 @@ func (tx *ServerTx) Respond(res *Response) error {
 	return tx.Err()
 }
 
-// Acks makes channel for sending acks. Channel is created on demand
+// Acks returns the channel on which ACKs to a 2xx are passed up. It is
+// buffered by one, so an ACK that arrives before the receive is not lost.
 func (tx *ServerTx) Acks() <-chan *Request {
 	return tx.acks
-}
-
-func (tx *ServerTx) ackSend(r *Request) {
-	select {
-	case <-tx.done:
-		callID := ""
-		if h := r.CallID(); h != nil {
-			callID = h.Value()
-		}
-		tx.log.Warn("ACK missed", "callid", callID, "tx", tx.Key())
-	case tx.acks <- r:
-	}
 }
 
 func (tx *ServerTx) ackSendAsync(r *Request) {
 	select {
 	case tx.acks <- r:
-		return
 	default:
+		// Buffer full: an earlier ACK is still unread, so this is a
+		// retransmission of one already held.
+		tx.log.Debug("ACK not passed up", "tx", tx.Key())
 	}
-
-	// Go routines should be cheap and it will prevent blocking
-	go tx.ackSend(r)
 }
 
 func (tx *ServerTx) Terminate() {

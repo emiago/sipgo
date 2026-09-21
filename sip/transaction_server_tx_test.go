@@ -163,16 +163,41 @@ func TestServerTransactionFSMInvite(t *testing.T) {
 	})
 }
 
-func TestServerTransactionAckSendMissingCallID(t *testing.T) {
+func TestServerTransactionAckIsHeldForALateReader(t *testing.T) {
 	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
 	tx := NewServerTx("123", req, nil, slog.Default())
 	ack := NewRequest(ACK, req.Recipient)
 
-	close(tx.done)
+	// The dialog only reaches its Acks() receive after it has sent the final
+	// response, so the ACK routinely arrives first.
+	tx.ackSendAsync(ack)
 
+	select {
+	case got := <-tx.Acks():
+		require.Equal(t, ack, got)
+	default:
+		t.Fatal("ACK was dropped before the dialog could receive it")
+	}
+}
+
+func TestServerTransactionAckWithNoReaderIsNotReportedAsMissed(t *testing.T) {
+	var log bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&log, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	req, _, _ := testCreateInvite(t, "sip:127.0.0.99:5060", "udp", "127.0.0.2:5060")
+	tx := NewServerTx("123", req, nil, logger)
+
+	// Only the ACK to a 2xx is ever offered here, and nothing in the tree
+	// receives it, so an unread ACK is the ordinary case, not a lost message.
 	require.NotPanics(t, func() {
-		tx.ackSend(ack)
+		tx.ackSendAsync(NewRequest(ACK, req.Recipient))
 	})
+	close(tx.done)
+	time.Sleep(10 * time.Millisecond)
+
+	require.NotContains(t, log.String(), "ACK missed")
 }
 
 func TestServerTransactionContext(t *testing.T) {
