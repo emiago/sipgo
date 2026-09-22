@@ -192,6 +192,11 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	// defer t.pool.Del(raddr)
 	defer t.pool.Delete(laddr)
 	defer func() {
+		// The idle reference keeps the connection in the pool for reuse. Its
+		// reader is gone, so the connection is leaving the pool and cannot be
+		// reused: without releasing that reference here the count never
+		// reaches zero and the socket stays open for the life of the process.
+		conn.Ref(-TransportIdleConnection)
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
 		}
@@ -333,6 +338,19 @@ type WSConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// closed marks a connection whose socket is already released. The pool
+	// keeps a connection under several keys and drops them one at a time, so
+	// without this flag Get still returns it after closing.
+	closed bool
+}
+
+// Closed reports a connection that is already closed, so the pool does not
+// hand it out again. Not part of the Connection interface: the pool asks for
+// it through an anonymous interface.
+func (c *WSConnection) Closed() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.closed
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -348,6 +366,7 @@ func (c *WSConnection) Ref(i int) int {
 func (c *WSConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
+	c.closed = true
 	c.mu.Unlock()
 	DefaultLogger().Debug("WS doing hard close", "ip", c.RemoteAddr().String())
 	return c.Conn.Close()
@@ -357,6 +376,9 @@ func (c *WSConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
+	if ref <= 0 {
+		c.closed = true
+	}
 	c.mu.Unlock()
 	DefaultLogger().Debug("WS reference decrement", "ip", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
