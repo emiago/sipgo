@@ -44,6 +44,55 @@ func TestParserStreamBadMessage(t *testing.T) {
 	})
 }
 
+func TestParserStreamContentLengthOverflow(t *testing.T) {
+	for _, header := range []string{"Content-Length", "l"} {
+		for _, length := range []uint32{65536, 2147483647, 2147483648, 3000000000, 4294967295} {
+			for _, split := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%d/split=%t", header, length, split), func(t *testing.T) {
+					parser := NewParser().NewSIPStream()
+					defer parser.Close()
+					data := []byte(fmt.Sprintf("SIP/2.0 200 OK\r\n%s: %d\r\n\r\n", header, length))
+					cb := func(Message) {
+						t.Error("oversized message must not be delivered")
+					}
+					if split {
+						// Finish the header block in a separate write.
+						err := parser.ParseSIPStream(data[:len(data)-2], cb)
+						require.ErrorIs(t, err, ErrParseSipPartial)
+						data = data[len(data)-2:]
+					}
+					err := parser.ParseSIPStream(data, cb)
+					require.ErrorIs(t, err, ErrMessageTooLarge)
+					require.Empty(t, parser.msg.Body(), "oversized body must not be allocated")
+				})
+			}
+		}
+	}
+}
+
+func TestParserStreamContentLengthSizeLimit(t *testing.T) {
+	const body = "test"
+	data := []byte(fmt.Sprintf("SIP/2.0 200 OK\r\nContent-Length: %d\r\n\r\n%s", len(body), body))
+	for _, extra := range []int{-1, 0, 1} {
+		t.Run(fmt.Sprintf("limit=%d", len(data)+extra), func(t *testing.T) {
+			p := NewParser()
+			p.MaxMessageLength = len(data) + extra
+			parser := p.NewSIPStream()
+			defer parser.Close()
+			msgs, err := parser.parseSIPStreamFull(data)
+			if extra < 0 {
+				require.ErrorIs(t, err, ErrMessageTooLarge)
+				require.Empty(t, msgs)
+				require.Empty(t, parser.msg.Body())
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
+			require.Equal(t, body, string(msgs[0].Body()))
+		})
+	}
+}
+
 func TestParserStreamFoldedHeaderSplitAcrossWrites(t *testing.T) {
 	parser := NewParser().NewSIPStream()
 	msgstr := strings.Join([]string{

@@ -26,3 +26,9 @@ jobs:
 
       - name: Test
         run: go test -v -failfast ./...
+
+      - name: Test SIP on 32-bit
+        env:
+          GOARCH: '386'
+          CGO_ENABLED: '0'
+        run: go test -v -failfast ./sip
