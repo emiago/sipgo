@@ -8,7 +8,11 @@ import (
 
 type ClientTx struct {
 	baseTx
-	responses    chan *Response
+	responses chan *Response
+	// receiveOrder is the tail of the chain of tickets handed out by
+	// receiveTicket. It keeps responses of this transaction reaching the
+	// FSM in the order they were received from the transport.
+	receiveOrder chan struct{}
 	timer_a_time time.Duration // Current duration of timer A.
 	timer_a      *time.Timer
 	timer_b      *time.Timer
@@ -29,8 +33,36 @@ func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	tx.done = make(chan struct{})
 	tx.log = logger
 
+	// First ticket has nothing to wait for.
+	first := make(chan struct{})
+	close(first)
+	tx.receiveOrder = first
+
 	tx.origin = origin // TODO:Due to subsequent request like ack we need to use clone to avoid races
 	return tx
+}
+
+// receiveTicket hands out a ticket that keeps responses reaching the FSM in
+// the order they arrived from the transport.
+//
+// The transport layer delivers every message in its own goroutine, so the
+// goroutines carrying two responses of the same transaction race for fsmMu
+// and can enter the FSM in reverse order. A 1xx entering after a 2xx is then
+// dropped by the "Accepted" state as a stray response (RFC 6026), even
+// though it was received before the 2xx.
+//
+// Callers must take the ticket while still in the receiving goroutine, wait
+// for the returned channel before calling Receive, and close the ticket
+// afterwards.
+func (tx *ClientTx) receiveTicket() (wait <-chan struct{}, ticket chan struct{}) {
+	next := make(chan struct{})
+
+	tx.mu.Lock()
+	prev := tx.receiveOrder
+	tx.receiveOrder = next
+	tx.mu.Unlock()
+
+	return prev, next
 }
 
 func (tx *ClientTx) Init() error {
