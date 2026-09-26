@@ -178,6 +178,10 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 	// Create stream parser context
 	par := t.parser.NewSIPStream()
 
+	// Last parse result. While it is ErrParseSipPartial the parser is part way
+	// through a message, and a CRLF-only read is a continuation, not a keep alive.
+	var parseErr error
+
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
@@ -213,7 +217,11 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 
 		// Check is keep alive
 		datalen := len(data)
-		if datalen <= 4 {
+		// RFC 5626 section 3.5.1 puts a keep alive between messages. A read is
+		// whatever TCP chose to deliver, so the CRLF ending a header line can
+		// arrive alone; swallowing that leaves the parser on a bare CR and every
+		// later message on the connection fails to frame.
+		if datalen <= 4 && !errors.Is(parseErr, ErrParseSipPartial) {
 			// One or 2 CRLF
 			// https://datatracker.ietf.org/doc/html/rfc5626#section-3.5.1
 			if len(bytes.Trim(data, "\r\n")) == 0 {
@@ -232,7 +240,8 @@ func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr s
 		// TODO fallback to parseFull if message size limit is set
 
 		// t.log.Debug().Str("raddr", raddr).Str("data", string(data)).Msg("new message")
-		if err := t.parseStream(par, data, raddr, handler); err != nil {
+		parseErr = t.parseStream(par, data, raddr, handler)
+		if parseErr != nil && !errors.Is(parseErr, ErrParseSipPartial) {
 			// A framing error leaves no message boundary to resync on, so close the connection.
 			return
 		}
@@ -246,14 +255,10 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 		handler(msg)
 	})
 
-	if err != nil {
-		if err == ErrParseSipPartial {
-			return nil
-		}
+	if err != nil && !errors.Is(err, ErrParseSipPartial) {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
-		return err
 	}
-	return nil
+	return err
 }
 
 type TCPConnection struct {
