@@ -20,7 +20,7 @@ var (
 type TransportUDP struct {
 	// listener *net.UDPConn
 	parser          *Parser
-	pool            *connectionPool
+	pool            *ConnectionPool
 	log             *slog.Logger
 	connectionReuse bool
 	readFilter      TransportReadFilter

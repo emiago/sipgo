@@ -41,7 +41,7 @@ type TransportWS struct {
 
 	connectionReuse bool
 
-	pool   *connectionPool
+	pool   *ConnectionPool
 	dialer ws.Dialer
 
 	DialerCreate func(laddr net.Addr) ws.Dialer

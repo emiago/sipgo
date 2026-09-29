@@ -742,6 +742,26 @@ func (l *TransportLayer) GetConnection(network, addr string) (Connection, error)
 	return l.getConnection(network, addr)
 }
 
+// Pool returns the selected transport's live connection pool. Network names
+// are case insensitive. It returns nil for an unsupported network. Mutating
+// the returned pool affects the active transport.
+func (l *TransportLayer) Pool(network string) *ConnectionPool {
+	switch NetworkToLower(network) {
+	case "udp":
+		return l.udp.pool
+	case "tcp":
+		return l.tcp.pool
+	case "tls":
+		return l.tls.pool
+	case "ws":
+		return l.ws.pool
+	case "wss":
+		return l.wss.pool
+	default:
+		return nil
+	}
+}
+
 func (l *TransportLayer) getConnection(network, addr string) (Connection, error) {
 	transport := l.getTransport(network)
 	if transport == nil {

@@ -30,7 +30,7 @@ type TransportTCP struct {
 	// disables the timeout.
 	WriteTimeout time.Duration
 
-	pool *connectionPool
+	pool *ConnectionPool
 
 	DialerCreate func(laddr net.Addr) net.Dialer
 
