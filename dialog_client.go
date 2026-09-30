@@ -402,10 +402,12 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 	// request is passed to the transport layer directly for transmission,
 	// rather than a client transaction.  This is because the UAC core
 	// handles retransmissions of the ACK, not the transaction layer.
-	// Immutable snapshot; never mutated. Each retransmission sends a fresh clone so
-	// WriteRequest's in-place header edit (ClientRequestAddVia -> PrependHeader) is
-	// not shared across concurrent 2xx-retransmission handlers (a data race that
-	// panics in PrependHeader), and does not accumulate a duplicate Via per resend.
+	s.buildReq(ack)
+	if err := s.requestValidate(s.UA.Client, ack); err != nil {
+		return err
+	}
+	// Snapshot the fully routed ACK once; Clone pins the current destination.
+	// Replay fresh copies without rebuilding dialog headers to avoid races and header accumulation.
 	ackTemplate := ack.Clone()
 	s.inviteTx.OnRetransmission(func(r *sip.Response) {
 		// Detect retransmission
@@ -413,12 +415,12 @@ func (s *DialogClientSession) WriteAck(ctx context.Context, ack *sip.Request) er
 			return
 		}
 
-		if err := s.WriteRequest(ackTemplate.Clone()); err != nil {
+		if err := s.UA.Client.WriteRequest(ackTemplate.Clone(), s.requestValidate); err != nil {
 			s.endWithCause(fmt.Errorf("ACK retransmission failed: %w", err))
 		}
 	})
 
-	if err := s.WriteRequest(ack); err != nil {
+	if err := s.UA.Client.WriteRequest(ack, s.requestValidate); err != nil {
 		// Make sure we close our error
 		// s.Close()
 		return err
