@@ -117,7 +117,7 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 }
 
 func (t *TransportUDP) readUDPConnection(conn *UDPConnection, raddr string, laddr string, handler MessageHandler) {
-	defer t.pool.Delete(raddr) // should be closed in previous defer
+	defer t.pool.deleteExact(raddr, conn) // should be closed in previous defer
 	t.readListenerConnection(conn, laddr, handler)
 }
 
@@ -139,7 +139,7 @@ func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 		for addr := range acceptedAddr {
 			addrs = append(addrs, addr)
 		}
-		t.pool.DeleteMultiple(addrs)
+		t.pool.deleteExactN(addrs, conn)
 	}()
 
 	for {

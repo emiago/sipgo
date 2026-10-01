@@ -163,7 +163,7 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 // This should performe better to avoid any interface allocation
 func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
-	defer t.pool.Delete(laddr)
+	defer t.pool.deleteExact(laddr, conn)
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)

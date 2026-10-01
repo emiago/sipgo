@@ -148,11 +148,12 @@ func (p *ConnectionPool) getUnref(a string) (c Connection) {
 	return c
 }
 
-// CloseAndDelete closes connection and deletes from pool
+// CloseAndDelete closes c and removes addr only if it still refers to c.
+// A replacement connection registered at addr is left in the pool.
 func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	delete(p.m, addr)
+	p.deleteIfCurrentLocked(addr, c)
 	ref, _ := c.TryClose() // Be nice. Saves from double closing
 	if ref > 0 {
 		return c.Close()
@@ -160,17 +161,40 @@ func (p *ConnectionPool) CloseAndDelete(c Connection, addr string) error {
 	return nil
 }
 
+// Delete removes addr regardless of which connection it refers to.
 func (p *ConnectionPool) Delete(addr string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.m, addr)
 }
 
+// DeleteMultiple removes the addresses regardless of which connections they refer to.
 func (p *ConnectionPool) DeleteMultiple(addrs []string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, a := range addrs {
 		delete(p.m, a)
+	}
+}
+
+func (p *ConnectionPool) deleteExact(addr string, c Connection) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.deleteIfCurrentLocked(addr, c)
+}
+
+func (p *ConnectionPool) deleteExactN(addrs []string, c Connection) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, addr := range addrs {
+		p.deleteIfCurrentLocked(addr, c)
+	}
+}
+
+// deleteIfCurrentLocked requires p.mu to be held for writing.
+func (p *ConnectionPool) deleteIfCurrentLocked(addr string, c Connection) {
+	if p.m[addr] == c {
+		delete(p.m, addr)
 	}
 }
 

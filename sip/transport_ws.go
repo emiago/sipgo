@@ -190,7 +190,7 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	buf := make([]byte, TransportBufferReadSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
-	defer t.pool.Delete(laddr)
+	defer t.pool.deleteExact(laddr, conn)
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
