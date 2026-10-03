@@ -261,6 +261,21 @@ func (tx *baseTx) spinFsmWithResponse(in fsmInput, resp *Response) {
 	tx.fsmMu.Unlock()
 }
 
+// spinFsmWithResponseErr spins the FSM and returns the error that spin left,
+// read before fsmMu is released.
+//
+// Timer J is zero on reliable transports (RFC 3261 section 17.2.2), so the
+// time.AfterFunc armed in actFinal is runnable at once. If it takes fsmMu in
+// the gap between spinning and reading fsmErr, it terminates the transaction
+// and a response that was written to the connection is reported as failed.
+func (tx *baseTx) spinFsmWithResponseErr(in fsmInput, resp *Response) error {
+	tx.fsmMu.Lock()
+	defer tx.fsmMu.Unlock()
+	tx.fsmResp = resp
+	tx.spinFsmUnsafe(in)
+	return tx.fsmErr
+}
+
 func (tx *baseTx) spinFsmWithRequest(in fsmInput, req *Request) {
 	// TODO do we really need handling ACK and Cancel seperate
 	tx.fsmMu.Lock()
