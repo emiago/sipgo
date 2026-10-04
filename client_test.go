@@ -192,6 +192,240 @@ func TestClientRequestOptions(t *testing.T) {
 	assert.Len(t, res.GetHeaders("Via"), 1)
 }
 
+func TestClientRequestAddRoute(t *testing.T) {
+	ua, err := NewUA()
+	require.Nil(t, err)
+
+	c, err := NewClient(ua, WithClientHostname("10.0.0.0"))
+	require.Nil(t, err)
+
+	sender := sip.Uri{User: "alice", Host: "10.1.1.1", Port: 5060}
+	recipient := sip.Uri{User: "bob", Host: "10.2.2.2", Port: 5060}
+
+	t.Run("AddsLooseRouteHeader", func(t *testing.T) {
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		proxy := sip.Uri{Host: "proxy.example.com", Port: 5080}
+
+		err := ClientRequestAddRoute(proxy)(c, req)
+		require.Nil(t, err)
+
+		got := req.Route()
+		require.NotNil(t, got)
+		assert.Equal(t, "proxy.example.com", got.Address.Host)
+		assert.Equal(t, 5080, got.Address.Port)
+		assert.True(t, got.Address.UriParams.Has("lr"))
+
+		// Per RFC 3261, the request must be dispatched to the top Route URI,
+		// not to the Request-URI host.
+		assert.Equal(t, "proxy.example.com:5080", req.Destination())
+		assert.Equal(t, recipient.Host, req.Recipient.Host, "Request-URI must be unchanged")
+	})
+
+	t.Run("PreservesExistingLrParam", func(t *testing.T) {
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		params := sip.NewParams()
+		params.Add("lr", "")
+		params.Add("transport", "tcp")
+		proxy := sip.Uri{Host: "proxy.example.com", Port: 5080, UriParams: params}
+
+		err := ClientRequestAddRoute(proxy)(c, req)
+		require.Nil(t, err)
+
+		got := req.Route()
+		require.NotNil(t, got)
+		// Both params should be present and lr should not be duplicated.
+		assert.True(t, got.Address.UriParams.Has("lr"))
+		assert.Equal(t, "tcp", got.Address.UriParams.GetOr("transport", ""))
+		lrCount := 0
+		for _, p := range got.Address.UriParams {
+			if p.K == "lr" {
+				lrCount++
+			}
+		}
+		assert.Equal(t, 1, lrCount, "lr parameter must not be duplicated")
+	})
+
+	t.Run("ClonesCallerURI", func(t *testing.T) {
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		proxy := sip.Uri{Host: "proxy.example.com", Port: 5080}
+
+		err := ClientRequestAddRoute(proxy)(c, req)
+		require.Nil(t, err)
+
+		// Mutating the URI passed to the option must not affect the header.
+		proxy.Host = "tampered.example.com"
+		assert.Equal(t, "proxy.example.com", req.Route().Address.Host)
+	})
+}
+
+func TestClientOutboundProxy(t *testing.T) {
+	ua, err := NewUA()
+	require.Nil(t, err)
+
+	sender := sip.Uri{User: "alice", Host: "10.1.1.1", Port: 5060}
+	recipient := sip.Uri{User: "bob", Host: "10.2.2.2", Port: 5060}
+
+	t.Run("OptionInjectsRouteOnBuild", func(t *testing.T) {
+		c, err := NewClient(ua,
+			WithClientHostname("10.0.0.0"),
+			WithClientOutboundProxy("proxy.example.com:5080", ""),
+		)
+		require.Nil(t, err)
+		hp, tp := c.OutboundProxy()
+		assert.Equal(t, "proxy.example.com:5080", hp)
+		assert.Equal(t, "", tp)
+
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		require.Nil(t, clientRequestBuildReq(c, req))
+
+		got := req.Route()
+		require.NotNil(t, got)
+		assert.Equal(t, "proxy.example.com", got.Address.Host)
+		assert.Equal(t, 5080, got.Address.Port)
+		assert.True(t, got.Address.UriParams.Has("lr"))
+
+		// Destination must follow the proxy, not the Request-URI.
+		assert.Equal(t, "proxy.example.com:5080", req.Destination())
+		assert.Equal(t, recipient.Host, req.Recipient.Host)
+	})
+
+	t.Run("TransportStampedOnRouteAndVia", func(t *testing.T) {
+		c, err := NewClient(ua,
+			WithClientHostname("10.0.0.0"),
+			WithClientOutboundProxy("proxy.example.com:5080", "TCP"),
+		)
+		require.Nil(t, err)
+		hp, tp := c.OutboundProxy()
+		assert.Equal(t, "proxy.example.com:5080", hp)
+		assert.Equal(t, "tcp", tp, "transport must be normalized to lowercase")
+
+		// Build a request without an explicit transport: the proxy's hint
+		// must drive both Via and Request.Transport().
+		req := sip.NewRequest(sip.INVITE, recipient)
+		require.Nil(t, clientRequestBuildReq(c, req))
+
+		assert.Equal(t, "tcp", req.Route().Address.UriParams.GetOr("transport", ""))
+		assert.Equal(t, "TCP", req.Transport(), "Route ;transport= must drive Request.Transport()")
+		assert.Equal(t, "TCP", req.Via().Transport, "Via must reflect the proxy's transport")
+	})
+
+	t.Run("RuntimeSetterAndClear", func(t *testing.T) {
+		c, err := NewClient(ua, WithClientHostname("10.0.0.0"))
+		require.Nil(t, err)
+		hp, _ := c.OutboundProxy()
+		assert.Equal(t, "", hp)
+
+		require.Nil(t, c.SetOutboundProxy("proxy.example.com:5080", "tls"))
+		hp, tp := c.OutboundProxy()
+		assert.Equal(t, "proxy.example.com:5080", hp)
+		assert.Equal(t, "tls", tp)
+
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		require.Nil(t, clientRequestBuildReq(c, req))
+		require.NotNil(t, req.Route())
+
+		require.Nil(t, c.SetOutboundProxy("", ""))
+		hp, tp = c.OutboundProxy()
+		assert.Equal(t, "", hp)
+		assert.Equal(t, "", tp)
+
+		req2 := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		require.Nil(t, clientRequestBuildReq(c, req2))
+		assert.Nil(t, req2.Route(), "no Route should be added once proxy is cleared")
+	})
+
+	t.Run("InvalidHostPortReturnsError", func(t *testing.T) {
+		c, err := NewClient(ua, WithClientHostname("10.0.0.0"))
+		require.Nil(t, err)
+		require.Error(t, c.SetOutboundProxy("not a host port", ""))
+		hp, _ := c.OutboundProxy()
+		assert.Equal(t, "", hp)
+	})
+
+	t.Run("EmptyTransportDoesNotStampParam", func(t *testing.T) {
+		c, err := NewClient(ua,
+			WithClientHostname("10.0.0.0"),
+			WithClientOutboundProxy("proxy.example.com:5080", ""),
+		)
+		require.Nil(t, err)
+
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		require.Nil(t, clientRequestBuildReq(c, req))
+
+		got := req.Route()
+		require.NotNil(t, got)
+		require.NotNil(t, got.Address.UriParams)
+		assert.True(t, got.Address.UriParams.Has("lr"))
+		_, ok := got.Address.UriParams.Get("transport")
+		assert.False(t, ok, "no ;transport= must be stamped when caller passes empty transport")
+	})
+
+	t.Run("RecipientTransportRespectedWhenProxyTransportEmpty", func(t *testing.T) {
+		c, err := NewClient(ua,
+			WithClientHostname("10.0.0.0"),
+			WithClientOutboundProxy("proxy.example.com:5080", ""),
+		)
+		require.Nil(t, err)
+
+		// Recipient carries the transport hint; outbound proxy does not.
+		recipientTCP := sip.Uri{
+			User:      "bob",
+			Host:      "10.2.2.2",
+			Port:      5060,
+			UriParams: sip.HeaderParams{{K: "transport", V: "tcp"}},
+		}
+		req := sip.NewRequest(sip.INVITE, recipientTCP)
+		require.Nil(t, clientRequestBuildReq(c, req))
+
+		// Destination still follows the proxy.
+		assert.Equal(t, "proxy.example.com:5080", req.Destination())
+		// But the Recipient's transport hint must drive Via and Transport,
+		// since the proxy did not specify its own transport.
+		assert.Equal(t, "TCP", req.Via().Transport, "Via must inherit Recipient transport when proxy transport is empty")
+		assert.Equal(t, "TCP", req.Transport(), "Request.Transport() must reflect the inherited transport")
+	})
+
+	t.Run("RuntimeSwapReflectedOnNextBuild", func(t *testing.T) {
+		c, err := NewClient(ua, WithClientHostname("10.0.0.0"))
+		require.Nil(t, err)
+
+		require.Nil(t, c.SetOutboundProxy("proxy.example.com:5080", "tcp"))
+		req1 := sip.NewRequest(sip.INVITE, recipient)
+		require.Nil(t, clientRequestBuildReq(c, req1))
+		assert.Equal(t, "TCP", req1.Transport())
+		assert.Equal(t, "tcp", req1.Route().Address.UriParams.GetOr("transport", ""))
+
+		require.Nil(t, c.SetOutboundProxy("proxy.example.com:5080", "tls"))
+		req2 := sip.NewRequest(sip.INVITE, recipient)
+		require.Nil(t, clientRequestBuildReq(c, req2))
+		assert.Equal(t, "TLS", req2.Transport(), "next build must observe the swapped transport")
+		assert.Equal(t, "tls", req2.Route().Address.UriParams.GetOr("transport", ""))
+	})
+
+	t.Run("DoesNotOverrideExistingRoute", func(t *testing.T) {
+		c, err := NewClient(ua,
+			WithClientHostname("10.0.0.0"),
+			WithClientOutboundProxy("proxy.example.com:5080", "tcp"),
+		)
+		require.Nil(t, err)
+
+		req := createSimpleRequest(sip.INVITE, sender, recipient, "UDP")
+		// Simulate an in-dialog request that already carries a Route from
+		// Record-Route processing.
+		params := sip.NewParams()
+		params.Add("lr", "")
+		req.PrependHeader(&sip.RouteHeader{
+			Address: sip.Uri{Host: "indialog.example.com", Port: 5060, UriParams: params},
+		})
+
+		require.Nil(t, clientRequestBuildReq(c, req))
+
+		routes := req.GetHeaders("Route")
+		assert.Len(t, routes, 1, "outbound proxy must not stack on top of an existing Route")
+		assert.Equal(t, "indialog.example.com", req.Route().Address.Host)
+	})
+}
+
 /* func TestClientVia(t *testing.T) {
 	ua, err := NewUA()
 	require.Nil(t, err)
