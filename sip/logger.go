@@ -1,20 +1,21 @@
 package sip
 
-import "log/slog"
-
-var (
-	defLogger *slog.Logger
+import (
+	"log/slog"
+	"sync/atomic"
 )
 
+var defLogger atomic.Pointer[slog.Logger]
+
 // SetDefaultLogger sets default logger that will be used withing sip package
-// Must be called before any usage of library
+// It is safe to call while the library is in use.
 func SetDefaultLogger(l *slog.Logger) {
-	defLogger = l
+	defLogger.Store(l)
 }
 
 func DefaultLogger() *slog.Logger {
-	if defLogger != nil {
-		return defLogger
+	if l := defLogger.Load(); l != nil {
+		return l
 	}
 	return slog.Default()
 }
