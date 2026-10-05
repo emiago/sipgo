@@ -264,6 +264,8 @@ type TCPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// Set by Close. Holders that release after it take refcount below zero.
+	hardClosed bool
 }
 
 func (c *TCPConnection) Ref(i int) int {
@@ -278,6 +280,7 @@ func (c *TCPConnection) Ref(i int) int {
 func (c *TCPConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
+	c.hardClosed = true
 	c.mu.Unlock()
 	DefaultLogger().Debug("TCP doing hard close", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", 0)
 	return c.Conn.Close()
@@ -287,6 +290,7 @@ func (c *TCPConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
+	hardClosed := c.hardClosed
 	c.mu.Unlock()
 	DefaultLogger().Debug("TCP reference decrement", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
@@ -294,7 +298,9 @@ func (c *TCPConnection) TryClose() (int, error) {
 	}
 
 	if ref < 0 {
-		DefaultLogger().Warn("TCP ref went negative", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+		if !hardClosed {
+			DefaultLogger().Warn("TCP ref went negative", "ip", c.LocalAddr().String(), "dst", c.RemoteAddr().String(), "ref", ref)
+		}
 		return 0, nil
 	}
 
