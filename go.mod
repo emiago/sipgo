@@ -7,7 +7,7 @@ toolchain go1.24.2
 require (
 	github.com/gobwas/ws v1.3.2
 	github.com/google/uuid v1.6.0
-	github.com/icholy/digest v1.1.0
+	github.com/icholy/digest v1.2.0
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/sync v0.16.0
 )
