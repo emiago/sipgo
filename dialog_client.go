@@ -115,6 +115,9 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 	}
 
 	cseq := req.CSeq()
+	// Whether the caller chose the sequence number matters for ACK and CANCEL
+	// below: only then does the header identify the request they refer to.
+	cseqFromCaller := cseq != nil
 	if cseq == nil {
 		cseq = &sip.CSeqHeader{
 			SeqNo:      s.InviteRequest.CSeq().SeqNo,
@@ -126,13 +129,41 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		req.PrependHeader(mustHaveHeaders...)
 	}
 
-	// For safety make sure we are starting with our last dialog cseq num
-	cseq.SeqNo = s.lastCSeqNo.Load()
-
-	if !req.IsAck() && !req.IsCancel() {
+	// ACK and CANCEL refer to an earlier request instead of starting a new
+	// transaction, so they keep its sequence number and do not consume one of
+	// their own:
+	//
+	//	https://datatracker.ietf.org/doc/html/rfc3261#section-13.2.2.4
+	//	The sequence number of the CSeq header field MUST be the same as the
+	//	INVITE being acknowledged, but the CSeq method MUST be ACK.
+	//
+	//	https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
+	//	The CSeq header field in the CANCEL request MUST have the same value as
+	//	the CSeq field in the request being cancelled.
+	//
+	// Everything else takes the next number in the dialog.
+	switch {
+	case !req.IsAck() && !req.IsCancel():
 		// Do cseq increment within dialog
-		cseq.SeqNo++
+		cseq.SeqNo = s.lastCSeqNo.Load() + 1
+		s.lastCSeqNo.Store(cseq.SeqNo)
+		if req.IsInvite() {
+			s.lastInviteCSeqNo.Store(cseq.SeqNo)
+		}
+	case cseqFromCaller:
+		// The caller said which request is being acknowledged or cancelled.
+	default:
+		// Otherwise it is the last INVITE sent within the dialog: for a bare
+		// ACK built by the caller that is the re-INVITE just answered, and for
+		// the first one the initial INVITE. The dialog counter is not usable
+		// here, as a PRACK or an UPDATE between the INVITE and its final
+		// response has moved it on.
+		if seq := s.lastInviteCSeqNo.Load(); seq > 0 {
+			cseq.SeqNo = seq
+		}
 	}
+	// The counter is left alone by ACK and CANCEL, so that the next request
+	// stays above the PRACK instead of colliding with it.
 
 	// Check record route header
 	if s.InviteResponse != nil {
@@ -161,7 +192,6 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		req.AppendHeader(sip.HeaderClone(&s.UA.ContactHDR))
 	}
 
-	s.lastCSeqNo.Store(cseq.SeqNo)
 	// Make sure transport matches original invite
 	req.SetTransport(s.InviteRequest.Transport())
 }
@@ -210,7 +240,10 @@ func (d *DialogClientSession) Invite(ctx context.Context, options ...ClientReque
 	}()
 
 	if err == nil {
+		// The initial INVITE is built by the client, not by buildReq, so both
+		// counters are set here.
 		d.lastCSeqNo.Store(inviteReq.CSeq().SeqNo)
+		d.lastInviteCSeqNo.Store(inviteReq.CSeq().SeqNo)
 	}
 
 	return err

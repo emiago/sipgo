@@ -33,8 +33,13 @@ type Dialog struct {
 	InviteRequest *sip.Request
 
 	// lastCSeqNo is set for every request within dialog except ACK CANCEL
-	lastCSeqNo   atomic.Uint32
-	remoteCSeqNo atomic.Uint32
+	lastCSeqNo atomic.Uint32
+	// lastInviteCSeqNo is the sequence number of the last INVITE sent within
+	// the dialog. ACK and CANCEL refer to a request instead of starting one,
+	// so this is the number they carry when the caller did not set a CSeq
+	// header of their own.
+	lastInviteCSeqNo atomic.Uint32
+	remoteCSeqNo     atomic.Uint32
 
 	// InviteResponse is last response received or sent. It is not thread safe!
 	// Use it only as read only and do not change values
@@ -53,10 +58,12 @@ func (d *Dialog) Init() {
 	d.ctx, d.cancel = context.WithCancelCause(context.Background())
 	d.state = atomic.Int32{}
 	d.lastCSeqNo = atomic.Uint32{}
+	d.lastInviteCSeqNo = atomic.Uint32{}
 
 	// We may have sequence number initialized
 	if cseq := d.InviteRequest.CSeq(); cseq != nil {
 		d.lastCSeqNo.Store(cseq.SeqNo)
+		d.lastInviteCSeqNo.Store(cseq.SeqNo)
 		d.remoteCSeqNo.Store(cseq.SeqNo)
 	}
 	d.onStatePointer = atomic.Pointer[DialogStateFn]{}
