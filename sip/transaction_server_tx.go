@@ -122,9 +122,9 @@ func (tx *ServerTx) Respond(res *Response) error {
 	default:
 		input = server_input_user_300_plus
 	}
-	tx.spinFsmWithResponse(input, res)
-	// In case of termination or some error
-	return tx.Err()
+	// Return the transition's result; Timer J may terminate the transaction
+	// as soon as the FSM lock is released.
+	return tx.spinFsmWithResponse(input, res)
 }
 
 // Acks makes channel for sending acks. Channel is created on demand

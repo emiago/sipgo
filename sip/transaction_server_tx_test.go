@@ -81,9 +81,14 @@ func TestServerTransactionNonInviteFSM(t *testing.T) {
 
 	t.Run("UDP", func(t *testing.T) {
 		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "UDP", "127.0.0.1:5060")
+		conn.Ref(1)
 		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
+		t.Cleanup(tx.Terminate)
+		// Other FSM tests shorten the global timers. Keep this transaction
+		// alive until cleanup so the Completed state can be inspected.
+		tx.timer_j_time = time.Hour
 
 		err = tx.Receive(req)
 		require.NoError(t, err)
@@ -95,14 +100,19 @@ func TestServerTransactionNonInviteFSM(t *testing.T) {
 		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateCompleted))
 
 		// Timer j must be started
-		require.NotNil(t, tx.timer_j)
+		tx.mu.Lock()
+		timerJ := tx.timer_j
+		tx.mu.Unlock()
+		require.NotNil(t, timerJ)
 	})
 
 	t.Run("TCP", func(t *testing.T) {
 		req := testCreateRequest(t, "OPTIONS", "sip:example.com", "TCP", "127.0.0.1:5060")
+		conn.Ref(1)
 		tx := NewServerTx("123", req, conn, slog.Default())
 		err := tx.Init()
 		require.NoError(t, err)
+		t.Cleanup(tx.Terminate)
 
 		err = tx.Receive(req)
 		require.NoError(t, err)
@@ -111,11 +121,16 @@ func TestServerTransactionNonInviteFSM(t *testing.T) {
 		// passing 200 response
 		err = tx.Respond(NewResponseFromRequest(req, 200, "OK", nil))
 		require.NoError(t, err)
-		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateCompleted))
 
 		// timer J should be zero
 		require.Zero(t, tx.timer_j_time)
-		require.Zero(t, <-tx.done)
+		select {
+		case <-tx.Done():
+		case <-time.After(time.Second):
+			t.Fatal("zero Timer J did not terminate the TCP transaction")
+		}
+		require.ErrorIs(t, tx.Err(), ErrTransactionTerminated)
+		require.NoError(t, compareFunctions(tx.currentFsmState(), tx.stateTerminated))
 	})
 }
 

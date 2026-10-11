@@ -254,11 +254,15 @@ func (tx *baseTx) spinFsm(in fsmInput) {
 	tx.fsmMu.Unlock()
 }
 
-func (tx *baseTx) spinFsmWithResponse(in fsmInput, resp *Response) {
+// spinFsmWithResponse returns the error from this transition before another
+// FSM input can change it.
+func (tx *baseTx) spinFsmWithResponse(in fsmInput, resp *Response) error {
 	tx.fsmMu.Lock()
 	tx.fsmResp = resp
 	tx.spinFsmUnsafe(in)
+	err := tx.fsmErr
 	tx.fsmMu.Unlock()
+	return err
 }
 
 func (tx *baseTx) spinFsmWithRequest(in fsmInput, req *Request) {
