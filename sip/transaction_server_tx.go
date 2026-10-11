@@ -139,7 +139,7 @@ func (tx *ServerTx) ackSend(r *Request) {
 		if h := r.CallID(); h != nil {
 			callID = h.Value()
 		}
-		tx.log.Warn("ACK missed", "callid", callID, "tx", tx.Key())
+		tx.log.Debug("ACK missed", "callid", callID, "tx", tx.Key())
 	case tx.acks <- r:
 	}
 }
