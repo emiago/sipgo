@@ -226,7 +226,7 @@ func (t *TransportUDP) parseAndHandle(data []byte, src string, handler MessageHa
 
 	msg, err := t.parser.ParseSIP(data) //Very expensive operation
 	if err != nil {
-		t.log.Error("failed to parse", "data", string(data), "error", err)
+		t.log.Debug("failed to parse", "src", src, "bytes", len(data), "error", err)
 		return
 	}
 
