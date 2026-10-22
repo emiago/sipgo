@@ -3,8 +3,13 @@ package sip
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -201,4 +206,78 @@ func TestServerTransactionReleasesConnRef(t *testing.T) {
 	<-tx.Done()
 
 	require.Equal(t, 1, conn.Ref(0), "Terminate must release exactly one connection reference")
+}
+
+type serverResponseConn struct {
+	writeErr error
+	writes   atomic.Int64
+}
+
+func (c *serverResponseConn) LocalAddr() net.Addr    { return &net.TCPAddr{} }
+func (c *serverResponseConn) Ref(int) int            { return 1 }
+func (c *serverResponseConn) TryClose() (int, error) { return 1, nil }
+func (c *serverResponseConn) Close() error           { return nil }
+func (c *serverResponseConn) WriteMsg(Message) error {
+	c.writes.Add(1)
+	return c.writeErr
+}
+
+func newServerResponseTx(t testing.TB, method, transport string, conn Connection) *ServerTx {
+	t.Helper()
+	req := testCreateRequest(t, method, "sip:example.com", transport, "127.0.0.1:5061")
+	tx := NewServerTx("response-test", req, conn, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	require.NoError(t, tx.Init())
+	return tx
+}
+
+func TestServerTransactionRespondResult(t *testing.T) {
+	writeErr := errors.New("response write failed")
+	for _, method := range []string{"BYE", "INVITE"} {
+		t.Run(method, func(t *testing.T) {
+			for _, transport := range []string{"UDP", "TCP", "TLS", "WS", "WSS"} {
+				t.Run(transport, func(t *testing.T) {
+					for _, status := range []int{StatusTrying, StatusOK, StatusBadRequest} {
+						t.Run(strconv.Itoa(status), func(t *testing.T) {
+							conn := &serverResponseConn{writeErr: writeErr}
+							tx := newServerResponseTx(t, method, transport, conn)
+							defer tx.Terminate()
+							err := tx.Respond(NewResponseFromRequest(tx.Origin(), status, strconv.Itoa(status), nil))
+							require.ErrorIs(t, err, ErrTransactionTransport)
+							require.ErrorContains(t, err, writeErr.Error())
+							require.EqualValues(t, 1, conn.writes.Load())
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestServerTransactionRespondReliableCleanup(t *testing.T) {
+	const transactions = 20000
+	for _, transport := range []string{"TCP", "TLS", "WS", "WSS"} {
+		t.Run(transport, func(t *testing.T) {
+			for _, status := range []int{StatusOK, StatusBadRequest} {
+				t.Run(strconv.Itoa(status), func(t *testing.T) {
+					conn := &serverResponseConn{}
+					var failures atomic.Int64
+					var wg sync.WaitGroup
+					for i := 0; i < transactions; i++ {
+						tx := newServerResponseTx(t, "BYE", transport, conn)
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							if err := tx.Respond(NewResponseFromRequest(tx.Origin(), status, strconv.Itoa(status), nil)); err != nil {
+								failures.Add(1)
+							}
+							<-tx.Done()
+						}()
+					}
+					wg.Wait()
+					require.EqualValues(t, transactions, conn.writes.Load())
+					require.Zero(t, failures.Load(), "successful responses must survive Timer J cleanup")
+				})
+			}
+		})
+	}
 }
