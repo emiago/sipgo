@@ -333,6 +333,8 @@ type WSConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// Set by Close. Holders that release after it take refcount below zero.
+	hardClosed bool
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -348,6 +350,7 @@ func (c *WSConnection) Ref(i int) int {
 func (c *WSConnection) Close() error {
 	c.mu.Lock()
 	c.refcount = 0
+	c.hardClosed = true
 	c.mu.Unlock()
 	DefaultLogger().Debug("WS doing hard close", "ip", c.RemoteAddr().String())
 	return c.Conn.Close()
@@ -357,6 +360,7 @@ func (c *WSConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
+	hardClosed := c.hardClosed
 	c.mu.Unlock()
 	DefaultLogger().Debug("WS reference decrement", "ip", c.RemoteAddr().String(), "ref", ref)
 	if ref > 0 {
@@ -364,7 +368,9 @@ func (c *WSConnection) TryClose() (int, error) {
 	}
 
 	if ref < 0 {
-		DefaultLogger().Warn("WS ref went negative", "ip", c.RemoteAddr().String(), "ref", ref)
+		if !hardClosed {
+			DefaultLogger().Warn("WS ref went negative", "ip", c.RemoteAddr().String(), "ref", ref)
+		}
 		return 0, nil
 	}
 	DefaultLogger().Debug("WS closing", "ip", c.RemoteAddr().String(), "ref", ref)
