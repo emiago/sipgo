@@ -33,6 +33,19 @@ func (r *ClientTxResponder) Receive(res *sip.Response) {
 	r.tx.Receive(res)
 }
 
+// Requests returns a snapshot of sent requests, including retransmissions.
+func (r *ClientTxResponder) Requests() []*sip.Request {
+	rec := r.tx.Connection().(*connRecorder)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	requests := make([]*sip.Request, len(rec.msgs))
+	for i, msg := range rec.msgs {
+		requests[i] = msg.(*sip.Request).Clone()
+	}
+	return requests
+}
+
 type ClientTxRequesterResponder struct {
 	OnRequest func(req *sip.Request, w *ClientTxResponder)
 }

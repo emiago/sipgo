@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/emiago/sipgo/sip"
 	"github.com/emiago/sipgo/siptest"
@@ -233,6 +234,58 @@ func TestClientViaRouting(t *testing.T) {
 	via := options.Via()
 	assert.Equal(t, "myhost.xy", via.Host)
 	assert.Equal(t, 5060, via.Port)
+}
+
+func testCreateOptions(recipient sip.Uri, transport string) *sip.Request {
+	req := sip.NewRequest(sip.OPTIONS, recipient)
+	req.SetTransport(transport)
+	return req
+}
+
+func TestClientNonInviteRetransmitsAfterTrying(t *testing.T) {
+	t1, t2, t4 := sip.T1, sip.T2, sip.T4
+	sip.SetTimers(50*time.Millisecond, 200*time.Millisecond, time.Second)
+	t.Cleanup(func() { sip.SetTimers(t1, t2, t4) })
+
+	ua, err := NewUA()
+	require.NoError(t, err)
+	defer ua.Close()
+	client, err := NewClient(ua)
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	client.TxRequester = &siptest.ClientTxRequesterResponder{
+		OnRequest: func(req *sip.Request, w *siptest.ClientTxResponder) {
+			defer close(done)
+			// Wait until Timer E reaches T2 before sending 100 Trying (RFC 4320).
+			if !assert.Eventually(t, func() bool {
+				return len(w.Requests()) >= 3
+			}, time.Second, time.Millisecond) {
+				return
+			}
+			w.Receive(sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil))
+			w.Receive(sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil))
+
+			// The first final response is lost. Resend it only after receiving
+			// another copy of the OPTIONS request.
+			before := len(w.Requests())
+			if !assert.Eventually(t, func() bool {
+				return len(w.Requests()) > before
+			}, time.Second, time.Millisecond) {
+				return
+			}
+			requests := w.Requests()
+			assert.Equal(t, requests[0].String(), requests[len(requests)-1].String())
+			w.Receive(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req := testCreateOptions(sip.Uri{Host: "localhost", Port: 5060}, "UDP")
+	res, err := client.Do(ctx, req)
+	<-done
+	require.NoError(t, err)
+	require.Equal(t, sip.StatusOK, res.StatusCode)
 }
 
 func TestIntegrationClientViaBindHost(t *testing.T) {

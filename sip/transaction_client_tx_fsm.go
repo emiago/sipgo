@@ -129,7 +129,7 @@ func (tx *ClientTx) stateCalling(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
-		tx.fsmState, spinfn = tx.stateProceeding, tx.actPassup
+		tx.fsmState, spinfn = tx.stateProceeding, tx.actProceeding
 	case client_input_2xx:
 		tx.fsmState, spinfn = tx.stateCompleted, tx.actFinal
 	case client_input_300_plus:
@@ -151,7 +151,7 @@ func (tx *ClientTx) stateProceeding(s fsmInput) fsmInput {
 	var spinfn fsmState
 	switch s {
 	case client_input_1xx:
-		tx.fsmState, spinfn = tx.stateProceeding, tx.actPassup
+		tx.fsmState, spinfn = tx.stateProceeding, tx.actProceeding
 	case client_input_2xx:
 		tx.fsmState, spinfn = tx.stateCompleted, tx.actFinal
 	case client_input_300_plus:
@@ -234,6 +234,18 @@ func (tx *ClientTx) actResend() fsmInput {
 	tx.mu.Unlock()
 
 	tx.resend()
+
+	return FsmInputNone
+}
+
+func (tx *ClientTx) actProceeding() fsmInput {
+	tx.fsmPassUp()
+
+	// RFC 3261 section 17.1.2.2: keep Timer E's current deadline and
+	// use T2 when it is reset after retransmitting in Proceeding.
+	tx.mu.Lock()
+	tx.timer_a_time = T2
+	tx.mu.Unlock()
 
 	return FsmInputNone
 }

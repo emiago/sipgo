@@ -30,6 +30,9 @@ func NewServerTxRecorder(req *sip.Request) *ServerTxRecorder {
 
 // Result returns sip response. Can be nil if none was processed
 func (r *ServerTxRecorder) Result() []*sip.Response {
+	r.c.mu.Lock()
+	defer r.c.mu.Unlock()
+
 	if len(r.c.msgs) == 0 {
 		return nil
 	}
