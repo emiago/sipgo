@@ -243,6 +243,9 @@ type UDPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// Set by Close, not when TryClose closes at zero. Holders that release
+	// after it take refcount below zero.
+	hardClosed bool
 }
 
 func (c *UDPConnection) close() error {
@@ -272,6 +275,9 @@ func (c *UDPConnection) Ref(i int) int {
 }
 
 func (c *UDPConnection) Close() error {
+	c.mu.Lock()
+	c.hardClosed = true
+	c.mu.Unlock()
 	return c.close()
 }
 
@@ -279,6 +285,7 @@ func (c *UDPConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
 	ref := c.refcount
+	hardClosed := c.hardClosed
 	c.mu.Unlock()
 
 	if c.Listener {
@@ -292,7 +299,9 @@ func (c *UDPConnection) TryClose() (int, error) {
 	}
 
 	if ref < 0 {
-		DefaultLogger().Warn("UDP ref went negative on try close", "src", c.LocalAddr().String(), "ref", ref)
+		if !hardClosed {
+			DefaultLogger().Warn("UDP ref went negative on try close", "src", c.LocalAddr().String(), "ref", ref)
+		}
 		return 0, nil
 	}
 
