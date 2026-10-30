@@ -24,10 +24,11 @@ var (
 
 // WS transport implementation
 type TransportWS struct {
-	parser     *Parser
-	log        *slog.Logger
-	transport  string
-	readFilter TransportReadFilter
+	parser      *Parser
+	log         *slog.Logger
+	transport   string
+	readFilter  TransportReadFilter
+	writeFilter TransportWriteFilter
 
 	// ReadTimeout limits how long a WS or WSS connection may block waiting for
 	// a frame. It is copied when the connection is created. A non-positive
@@ -60,6 +61,8 @@ func (t *TransportWS) newConnection(conn net.Conn, refcount int, clientSide bool
 		readTimeout:  t.ReadTimeout,
 		writeTimeout: t.WriteTimeout,
 		refcount:     refcount,
+		writeFilter:  t.writeFilter,
+		transport:    t.transport,
 	}
 }
 
@@ -330,6 +333,8 @@ type WSConnection struct {
 	clientSide   bool
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	writeFilter  TransportWriteFilter
+	transport    string
 
 	mu       sync.RWMutex
 	refcount int
@@ -478,6 +483,14 @@ func (c *WSConnection) WriteMsg(msg Message) error {
 	buf.Reset()
 	msg.StringWrite(buf)
 	data := buf.Bytes()
+
+	if c.writeFilter != nil {
+		var err error
+		data, err = c.writeFilter(TransportWriteProps{Transport: c.transport, LocalAddr: c.LocalAddr(), RemoteAddr: c.RemoteAddr()}, data)
+		if err != nil {
+			return err
+		}
+	}
 
 	n, err := c.Write(data)
 	if err != nil {

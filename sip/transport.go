@@ -47,6 +47,18 @@ type TransportReadProps struct {
 // TransportReadFilter can inspect or replace raw bytes before SIP parsing.
 type TransportReadFilter func(info TransportReadProps, data []byte) ([]byte, error)
 
+// TransportWriteProps describes the connection a message is being written to
+type TransportWriteProps struct {
+	Transport  string
+	LocalAddr  net.Addr
+	RemoteAddr net.Addr
+}
+
+// TransportWriteFilter can inspect or replace the serialized message right before it is written.
+// data is one complete SIP message and must not be retained after the call: the buffer is reused.
+// Returning an error drops the message and is returned by WriteMsg.
+type TransportWriteFilter func(info TransportWriteProps, data []byte) ([]byte, error)
+
 // DefaultPort returns transport default port by network.
 func DefaultPort(transport string) int {
 	switch ASCIIToLower(transport) {
