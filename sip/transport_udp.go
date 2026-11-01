@@ -149,6 +149,10 @@ func (t *TransportUDP) readListenerConnection(conn *UDPConnection, laddr string,
 				t.log.Debug("Read connection closed", "laddr", laddr, "error", err)
 				return
 			}
+			// Windows reports an error when a datagram exceeds the read buffer.
+			if isRecvMsgSizeErr(err) {
+				continue
+			}
 			t.log.Error("Read connection error", "laddr", laddr, "error", err)
 			return
 		}
