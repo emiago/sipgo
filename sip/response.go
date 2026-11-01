@@ -204,7 +204,15 @@ func NewResponseFromRequest(
 		reason,
 	)
 	res.SipVersion = req.SipVersion
-	CopyHeaders("Record-Route", req, res)
+	// RFC 3261 §20, Table 3.
+	allowedMethod := req.Method != REGISTER && !req.IsAck()
+	allowedStatus := (statusCode >= 180 && statusCode < 190) ||
+		(statusCode >= 200 && statusCode < 300)
+	// RFC 3261 §12.1–12.1.1 also requires copying for early-dialog responses.
+	earlyInvite := req.IsInvite() && statusCode > 100 && statusCode < 200
+	if allowedMethod && (allowedStatus || earlyInvite) {
+		CopyHeaders("Record-Route", req, res)
+	}
 	CopyHeaders("Via", req, res)
 	if h := req.From(); h != nil {
 		res.AppendHeader(h.headerClone())
