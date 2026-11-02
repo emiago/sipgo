@@ -203,9 +203,6 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	}()
 	defer log.Debug("Websocket read connection stopped", "raddr", raddr)
 
-	// Create stream parser context
-	par := t.parser.NewSIPStream()
-
 	for {
 		num, err := conn.Read(buf)
 		if err != nil {
@@ -262,15 +259,14 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 			}
 		}
 
-		if err := t.parseStream(par, data, raddr, handler); err != nil {
+		if err := t.parseMessage(data, raddr, handler); err != nil {
 			return
 		}
 	}
 
 }
 
-// TODO: Try to reuse this from TCP transport as func are same
-func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) error {
+func (t *TransportWS) parseMessage(data []byte, src string, handler MessageHandler) error {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operationParseSIP
 	if err != nil {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
