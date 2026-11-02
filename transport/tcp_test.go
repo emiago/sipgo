@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -478,4 +479,41 @@ func TestCloseAndDeleteKeepsReplacement(t *testing.T) {
 
 	pool.CloseAndDelete(slog.New(slog.NewTextHandler(io.Discard, nil)), old, addr)
 	require.Same(t, replacement, pool.Get(addr))
+}
+
+// warnCounter counts log records at Warn or above.
+type warnCounter struct {
+	slog.Handler
+	n atomic.Int32
+}
+
+func (h *warnCounter) Handle(_ context.Context, r slog.Record) error {
+	if r.Level >= slog.LevelWarn {
+		h.n.Add(1)
+	}
+	return nil
+}
+
+func (h *warnCounter) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+// A transaction that still holds a connection when the peer closes it releases
+// its reference afterwards. That is expected, not a refcount bug.
+func TestReleaseAfterPeerCloseIsQuiet(t *testing.T) {
+	warns := &warnCounter{Handler: slog.NewTextHandler(io.Discard, nil)}
+	tr := NewTCPTransport(slog.New(warns), sipgo.NewParser(), nil)
+	defer tr.Close()
+	local, remote := net.Pipe()
+
+	addr := "10.2.2.2:5060"
+	tr.initConnection(local, addr, func(sipgo.Message) {})
+	c := tr.pool.Get(addr)
+	require.NotNil(t, c)
+
+	remote.Close()
+	require.Eventually(t, func() bool { return tr.pool.Size() == 0 }, 2*time.Second, 5*time.Millisecond)
+
+	ref, err := c.TryClose()
+	require.NoError(t, err)
+	require.Zero(t, ref)
+	require.Zero(t, warns.n.Load())
 }
