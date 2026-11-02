@@ -256,22 +256,25 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 			}
 		}
 
-		t.parseStream(par, data, raddr, handler)
+		if err := t.parseStream(par, data, raddr, handler); err != nil {
+			return
+		}
 	}
 
 }
 
 // TODO: Try to reuse this from TCP transport as func are same
-func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) {
+func (t *TransportWS) parseStream(par *ParserStream, data []byte, src string, handler MessageHandler) error {
 	msg, err := t.parser.ParseSIP(data) //Very expensive operationParseSIP
 	if err != nil {
 		t.log.Error("failed to parse", "error", err, "data", string(data))
-		return
+		return err
 	}
 
 	msg.SetTransport(t.transport)
 	msg.SetSource(src)
 	handler(msg)
+	return nil
 }
 
 func (t *TransportWS) ResolveAddr(addr string) (net.Addr, error) {
