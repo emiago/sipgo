@@ -333,6 +333,8 @@ type WSConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+
+	writeMu sync.Mutex
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -453,6 +455,9 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	if c.writeTimeout > 0 {
 		if err := c.Conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
 			return 0, err
