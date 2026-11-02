@@ -249,9 +249,15 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 
 		// Check is keep alive
 		if len(data) <= 4 {
-			//One or 2 CRLF
+			// One or 2 CRLF (RFC 5626, section 3.5.1).
 			if len(bytes.Trim(data, "\r\n")) == 0 {
 				log.Debug("Keep alive CRLF received")
+				if bytes.Equal(data, []byte("\r\n\r\n")) {
+					if _, err := conn.Write(data[:2]); err != nil {
+						log.Error("Failed to pong keep alive", "error", err)
+						return
+					}
+				}
 				continue
 			}
 		}
@@ -336,6 +342,7 @@ type WSConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	writeMu  sync.Mutex
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -456,6 +463,9 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	if c.writeTimeout > 0 {
 		if err := c.Conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
 			return 0, err
