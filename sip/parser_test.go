@@ -205,6 +205,26 @@ func TestParseHeaders(t *testing.T) {
 		assert.Empty(t, second.Params)
 	})
 
+	// RFC 3261 §25.1: a quoted-pair (\") inside a display name does not end
+	// the quoted-string, so a comma after it is not a value separator.
+	t.Run("ContactHeaderEscapedQuote", func(t *testing.T) {
+		header := `Contact: "Alice \"X, Inc" <sip:alice@example.com>, <sip:bob@example.com>`
+		out, err := parser.headersParsers.ParseHeader(nil, []byte(header))
+		require.NoError(t, err)
+		require.Len(t, out, 2)
+		assert.Equal(t, "sip:alice@example.com", out[0].(*ContactHeader).Address.String())
+		assert.Equal(t, "sip:bob@example.com", out[1].(*ContactHeader).Address.String())
+	})
+
+	t.Run("RouteHeaderEscapedQuote", func(t *testing.T) {
+		header := `Route: "Edge \"A, B" <sip:edge@example.com;lr>, <sip:core@example.com;lr>`
+		out, err := parser.headersParsers.ParseHeader(nil, []byte(header))
+		require.NoError(t, err)
+		require.Len(t, out, 2)
+		assert.Equal(t, "edge", out[0].(*RouteHeader).Address.User)
+		assert.Equal(t, "core", out[1].(*RouteHeader).Address.User)
+	})
+
 	t.Run("RouteHeader", func(t *testing.T) {
 		header := "Route: <sip:rr$n=net_me_tls@62.109.228.74:5061;transport=tls;lr>"
 		h := testParseHeader(t, parser, header)

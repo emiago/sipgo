@@ -249,12 +249,18 @@ func headerParserContact(headerName []byte, headerText string) (header Header, e
 func parseContactHeader(headerText string, h *ContactHeader) error {
 	inBrackets := false
 	inQuotes := false
+	escaped := false
 
 	endInd := len(headerText)
 	end := endInd - 1
 
 	var err error
 	for idx, char := range headerText {
+		// A quoted-pair inside quotes is one character (RFC 3261 §25.1).
+		if inQuotes && (escaped || char == '\\') {
+			escaped = !escaped
+			continue
+		}
 		if char == '<' && !inQuotes {
 			inBrackets = true
 		} else if char == '>' && !inQuotes {
@@ -347,8 +353,14 @@ func parseReferredByHeader(headerText string, h *ReferredByHeader) error {
 func parseRouteAddress(headerText string, address *Uri) (err error) {
 	inBrackets := false
 	inQuotes := false
+	escaped := false
 	end := len(headerText) - 1
 	for idx, char := range headerText {
+		// A quoted-pair inside quotes is one character (RFC 3261 §25.1).
+		if inQuotes && (escaped || char == '\\') {
+			escaped = !escaped
+			continue
+		}
 		if char == '<' && !inQuotes {
 			inBrackets = true
 			continue
