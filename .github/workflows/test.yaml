@@ -1,0 +1,34 @@
+name: Test
+
+on:
+  push:
+    branches: [fork]
+  pull_request:
+    branches: [fork]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate test certificates
+        run: go generate server_integration_test.go
+
+      # The composites check fails on unkeyed sip.HeaderKV literals in client.go.
+      - name: Vet
+        run: go vet -composites=false ./...
+
+      - name: Test
+        run: go test -race ./...

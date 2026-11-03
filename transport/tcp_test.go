@@ -468,7 +468,7 @@ func TestCloseAndDeleteKeepsReplacement(t *testing.T) {
 		return &TCPConnection{Conn: &fakes.TCPConn{
 			LAddr: net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060},
 			RAddr: net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
-		}}
+		}, log: slog.Default()}
 	}
 	addr := "127.0.0.2:5060"
 

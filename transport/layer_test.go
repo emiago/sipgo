@@ -699,6 +699,7 @@ func (t *dialCountingTransport) CreateConnection(laddr Addr, host string, raddr 
 			LAddr: net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 40000},
 			RAddr: net.TCPAddr{IP: raddr.IP, Port: raddr.Port},
 		},
+		log:      slog.Default(),
 		refcount: 1 + IdleConnection,
 	}
 	t.pool.Add(raddr.String(), c)
