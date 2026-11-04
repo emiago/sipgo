@@ -254,10 +254,10 @@ func (tx *ServerTx) delete() {
 		tx.mu.Unlock()
 		tx.onTerminate(tx.key)
 
-		// TODO with ref this can be added, but normally we expect client does closing
-		// if _, err := tx.conn.TryClose(); err != nil {
-		// 	tx.log.Info().Err(err).Msg("Closing connection returned error")
-		// }
+		// Release the reference taken for this transaction by the transport layer.
+		if _, err := tx.conn.TryClose(); err != nil {
+			tx.log.Info("Closing connection returned error", "err", err)
+		}
 	})
 
 	// time.Sleep(time.Microsecond)
