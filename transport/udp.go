@@ -255,6 +255,9 @@ type UDPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// closed is set once the conn is closed. Holders may still release their
+	// references afterwards, so refcount is left alone.
+	closed bool
 }
 
 func (c *UDPConnection) LocalAddr() net.Addr {
@@ -281,9 +284,14 @@ func (c *UDPConnection) Close() error {
 		return nil
 	}
 	c.mu.Lock()
-	c.refcount = 0
+	closed := c.closed
+	c.closed = true
+	ref := c.refcount
 	c.mu.Unlock()
-	c.log.Debug("UDP doing hard close", "ip", c.LocalAddr(), "dst", c.raddr, "ref", 0)
+	if closed {
+		return nil
+	}
+	c.log.Debug("UDP doing hard close", "ip", c.LocalAddr(), "dst", c.raddr, "ref", ref)
 	return c.PacketConn.Close()
 }
 
@@ -294,16 +302,21 @@ func (c *UDPConnection) TryClose() (int, error) {
 
 	c.mu.Lock()
 	c.refcount--
-	ref := c.refcount
+	ref, closed := c.refcount, c.closed
+	if ref == 0 {
+		c.closed = true
+	}
 	c.mu.Unlock()
 	c.log.Debug("UDP reference decrement", "src", c.PacketConn.LocalAddr(), "dst", c.raddr, "ref", ref)
-	if ref > 0 {
-		return ref, nil
-	}
-
 	if ref < 0 {
 		c.log.Warn("UDP ref went negative", "src", c.PacketConn.LocalAddr(), "dst", c.raddr, "ref", ref)
 		return 0, nil
+	}
+	if closed {
+		return 0, nil
+	}
+	if ref > 0 {
+		return ref, nil
 	}
 
 	c.log.Debug("UDP closing", "ip", c.LocalAddr(), "dst", c.raddr, "ref", ref)

@@ -111,7 +111,11 @@ func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug("New WS connection", "raddr", addr)
 	c := &WSConnection{
-		Conn:       conn,
+		Conn: conn,
+		// TODO: dialed or accepted, one reference. On a dialed connection the
+		// dialer and the pool share it: the first transaction to end closes the
+		// connection, whatever IdleConnection says, and the read loop's
+		// CloseAndDelete then releases a reference nobody holds.
 		refcount:   1,
 		clientSide: clientSide,
 		log:        t.log,
@@ -269,6 +273,9 @@ type WSConnection struct {
 	log        *slog.Logger
 	mu         sync.RWMutex
 	refcount   int
+	// closed is set once the conn is closed. Holders may still release their
+	// references afterwards, so refcount is left alone.
+	closed bool
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -283,28 +290,38 @@ func (c *WSConnection) Ref(i int) int {
 
 func (c *WSConnection) Close() error {
 	c.mu.Lock()
-	c.refcount = 0
+	closed := c.closed
+	c.closed = true
+	ref := c.refcount
 	c.mu.Unlock()
-	c.log.Debug("WS doing hard close", "ip", c.RemoteAddr(), "ref", c.refcount)
+	if closed {
+		return nil
+	}
+	c.log.Debug("WS doing hard close", "ip", c.RemoteAddr(), "ref", ref)
 	return c.Conn.Close()
 }
 
 func (c *WSConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
-	ref := c.refcount
+	ref, closed := c.refcount, c.closed
+	if ref == 0 {
+		c.closed = true
+	}
 	c.mu.Unlock()
-	c.log.Debug("WS reference decrement", "ip", c.RemoteAddr(), "ref", c.refcount)
+	c.log.Debug("WS reference decrement", "ip", c.RemoteAddr(), "ref", ref)
+	if ref < 0 {
+		c.log.Warn("WS ref went negative", "ip", c.RemoteAddr(), "ref", ref)
+		return 0, nil
+	}
+	if closed {
+		return 0, nil
+	}
 	if ref > 0 {
 		return ref, nil
 	}
-
-	if ref < 0 {
-		c.log.Warn("WS ref went negative", "ip", c.RemoteAddr(), "ref", c.refcount)
-		return 0, nil
-	}
-	c.log.Debug("WS closing", "ip", c.RemoteAddr(), "ref", c.refcount)
-	return ref, c.Conn.Close()
+	c.log.Debug("WS closing", "ip", c.RemoteAddr(), "ref", ref)
+	return 0, c.Conn.Close()
 }
 
 func (c *WSConnection) Read(b []byte) (n int, err error) {

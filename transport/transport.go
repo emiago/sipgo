@@ -15,6 +15,8 @@ var (
 	// -1 	- single response or request will close
 	// 0 	- close connection immediatelly after transaction terminate
 	// 1 	- keep connection idle after transaction termination
+	//
+	// TODO: only 1 keeps reference counts balanced, see ConnectionPool.CloseAndDelete.
 	IdleConnection int = 1
 
 	// TCPReadTimeout closes a TCP or TLS connection that receives nothing for

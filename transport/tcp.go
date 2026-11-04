@@ -144,8 +144,10 @@ func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.Me
 
 	t.log.Debug("New connection", "raddr", addr)
 	c := &TCPConnection{
-		Conn:     conn,
-		log:      t.log,
+		Conn: conn,
+		log:  t.log,
+		// TODO: the 1 is the dialer's reference. A connection accepted by Serve
+		// has no dialer, so nobody ever releases it.
 		refcount: 1 + IdleConnection,
 	}
 	c.drop = func() { t.pool.CloseAndDelete(t.log, c, addr) }
@@ -353,7 +355,7 @@ func (t *TCPTransport) parseFull(data []byte, src string, handler sip.MessageHan
 
 type TCPConnection struct {
 	net.Conn
-	log      *slog.Logger
+	log *slog.Logger
 
 	// drop takes the connection out of its pool and closes it.
 	drop     func()
@@ -363,6 +365,9 @@ type TCPConnection struct {
 
 	mu       sync.RWMutex
 	refcount int
+	// closed is set once the conn is closed. Holders may still release their
+	// references afterwards, so refcount is left alone.
+	closed bool
 }
 
 // dropFromPool runs drop once, whichever of the read loop and a failed write
@@ -385,29 +390,41 @@ func (c *TCPConnection) Ref(i int) int {
 
 func (c *TCPConnection) Close() error {
 	c.mu.Lock()
-	c.refcount = 0
+	closed := c.closed
+	c.closed = true
+	ref := c.refcount
 	c.mu.Unlock()
-	c.log.Debug("TCP doing hard close", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", 0)
+	if closed {
+		return nil
+	}
+	c.log.Debug("TCP doing hard close", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
 	return c.Conn.Close()
 }
 
 func (c *TCPConnection) TryClose() (int, error) {
 	c.mu.Lock()
 	c.refcount--
-	ref := c.refcount
-	c.mu.Unlock()
-	c.log.Debug("TCP reference decrement", "ip", c.LocalAddr(), "dst", c.RemoteAddr().String(), "ref", ref)
-	if ref > 0 {
-		return ref, nil
+	ref, closed := c.refcount, c.closed
+	if ref == 0 {
+		c.closed = true
 	}
-
+	c.mu.Unlock()
+	c.log.Debug("TCP reference decrement", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
 	if ref < 0 {
 		c.log.Warn("TCP ref went negative", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
 		return 0, nil
 	}
-
+	// TODO: counts are not balanced. initConnection gives a connection accepted by
+	// Serve the dialer's reference, which nobody owns, so ref stays above 0 after
+	// every holder of a closed accepted connection has released it.
+	if closed {
+		return 0, nil
+	}
+	if ref > 0 {
+		return ref, nil
+	}
 	c.log.Debug("TCP closing", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
-	return ref, c.Conn.Close()
+	return 0, c.Conn.Close()
 }
 
 func (c *TCPConnection) Read(b []byte) (n int, err error) {

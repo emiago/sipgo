@@ -53,6 +53,8 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 func (p *ConnectionPool) CloseAndDelete(log *slog.Logger, c Connection, addr string) {
 	p.Lock()
 	defer p.Unlock()
+	// TODO: this releases the pool's reference, but the pool holds one only when
+	// IdleConnection is 1. With 0 or -1 it releases a reference nobody holds.
 	ref, _ := c.TryClose() // Be nice. Saves from double closing
 	if ref > 0 {
 		if err := c.Close(); err != nil {
