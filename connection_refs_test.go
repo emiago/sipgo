@@ -112,6 +112,8 @@ func listenFor(t *testing.T, network string, srv *transport.Layer) net.Listener 
 	case "tls":
 		l = tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{selfSignedCert(t)}})
 		go srv.ServeTLS(l)
+	case "ws":
+		go srv.ServeWS(l)
 	}
 	t.Cleanup(func() { l.Close() })
 	return l
@@ -187,9 +189,7 @@ func waitRefs(t *testing.T, s *refSide, network string, addr net.Addr, want int)
 // A dialed connection with 0 transactions was dialed by a request sent outside a
 // transaction. With 1 or more, the first is the transaction that dialed it.
 func TestConnectionReferences(t *testing.T) {
-	// TODO: add ws once concurrent writes on a WS connection no longer
-	// interleave frames.
-	for _, network := range []string{"tcp", "tls"} {
+	for _, network := range []string{"tcp", "tls", "ws"} {
 		for _, side := range []string{"accepted", "dialed"} {
 			for txs := 0; txs <= 2; txs++ {
 				// open connects a pair and leaves txs transactions open from the

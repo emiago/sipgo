@@ -274,6 +274,10 @@ type WSConnection struct {
 	// closed is set once the conn is closed. Holders may still release their
 	// references afterwards, so refcount is left alone.
 	closed bool
+
+	// writeMu keeps a frame's header and payload together: they go out as two
+	// writes, and another writer between them corrupts the stream.
+	writeMu sync.Mutex
 }
 
 func (c *WSConnection) Ref(i int) int {
@@ -387,7 +391,9 @@ func (c *WSConnection) Write(b []byte) (n int, err error) {
 	if c.clientSide {
 		fs = ws.MaskFrameInPlace(fs)
 	}
+	c.writeMu.Lock()
 	err = ws.WriteFrame(c.Conn, fs)
+	c.writeMu.Unlock()
 
 	return len(b), err
 }
