@@ -75,6 +75,6 @@ func (t *TLSTransport) createConnection(laddr *net.TCPAddr, host string, raddr *
 	}
 	tconn := tls.Client(conn, conf)
 
-	c := t.initConnection(tconn, addr, handler)
+	c := t.initConnection(tconn, addr, 2, handler)
 	return c, nil
 }

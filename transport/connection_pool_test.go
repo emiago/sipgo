@@ -18,7 +18,7 @@ func TestConnectionPool(t *testing.T) {
 		Reader: nil,
 		Writer: nil,
 	}
-	conn := &TCPConnection{Conn: fakeConn, log: slog.Default()}
+	conn := &TCPConnection{Conn: fakeConn, log: slog.Default(), refcount: 1}
 
 	pool.Add(fakeConn.RAddr.String(), conn)
 
@@ -40,7 +40,7 @@ func BenchmarkConnectionPool(b *testing.B) {
 			RAddr:  net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
 			Reader: nil,
 			Writer: nil,
-		}, log: slog.Default()}
+		}, log: slog.Default(), refcount: 1}
 		a := &net.TCPAddr{
 			IP:   net.IPv4('1', '2', '3', byte(i)),
 			Port: 1000,

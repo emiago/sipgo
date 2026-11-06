@@ -102,21 +102,19 @@ func (t *WSTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 			continue
 		}
 
-		t.initConnection(conn, raddr, false, handler)
+		t.initConnection(conn, raddr, false, 1, handler)
 	}
 }
 
-func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, handler sip.MessageHandler) Connection {
+// initConnection pools conn with refs references: 1 for the pool, plus 1 for
+// the caller when it dialed.
+func (t *WSTransport) initConnection(conn net.Conn, addr string, clientSide bool, refs int, handler sip.MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 	t.log.Debug("New WS connection", "raddr", addr)
 	c := &WSConnection{
-		Conn: conn,
-		// TODO: dialed or accepted, one reference. On a dialed connection the
-		// dialer and the pool share it: the first transaction to end closes the
-		// connection, whatever IdleConnection says, and the read loop's
-		// CloseAndDelete then releases a reference nobody holds.
-		refcount:   1,
+		Conn:       conn,
+		refcount:   refs,
 		clientSide: clientSide,
 		log:        t.log,
 	}
@@ -262,7 +260,7 @@ func (t *WSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, h
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr, true, handler)
+	c := t.initConnection(conn, addr, true, 2, handler)
 	return c, nil
 }
 
@@ -314,11 +312,11 @@ func (c *WSConnection) TryClose() (int, error) {
 		c.log.Warn("WS ref went negative", "ip", c.RemoteAddr(), "ref", ref)
 		return 0, nil
 	}
-	if closed {
-		return 0, nil
-	}
 	if ref > 0 {
 		return ref, nil
+	}
+	if closed {
+		return 0, nil
 	}
 	c.log.Debug("WS closing", "ip", c.RemoteAddr(), "ref", ref)
 	return 0, c.Conn.Close()

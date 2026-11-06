@@ -77,7 +77,7 @@ func (t *TCPTransport) Serve(l net.Listener, handler sip.MessageHandler) error {
 			return err
 		}
 
-		t.initConnection(conn, conn.RemoteAddr().String(), handler)
+		t.initConnection(conn, conn.RemoteAddr().String(), 1, handler)
 	}
 }
 
@@ -134,21 +134,21 @@ func (t *TCPTransport) createConnection(raddr *net.TCPAddr, handler sip.MessageH
 	// 	return nil, fmt.Errorf("%s keepalive period err=%w", t, err)
 	// }
 
-	c := t.initConnection(conn, addr, handler)
+	c := t.initConnection(conn, addr, 2, handler)
 	return c, nil
 }
 
-func (t *TCPTransport) initConnection(conn net.Conn, addr string, handler sip.MessageHandler) Connection {
+// initConnection pools conn with refs references: 1 for the pool, plus 1 for
+// the caller when it dialed.
+func (t *TCPTransport) initConnection(conn net.Conn, addr string, refs int, handler sip.MessageHandler) Connection {
 	// // conn.SetKeepAlive(true)
 	// conn.SetKeepAlivePeriod(3 * time.Second)
 
 	t.log.Debug("New connection", "raddr", addr)
 	c := &TCPConnection{
-		Conn: conn,
-		log:  t.log,
-		// TODO: the 1 is the dialer's reference. A connection accepted by Serve
-		// has no dialer, so nobody ever releases it.
-		refcount: 1 + IdleConnection,
+		Conn:     conn,
+		log:      t.log,
+		refcount: refs,
 	}
 	c.drop = func() { t.pool.CloseAndDelete(t.log, c, addr) }
 	t.pool.Add(addr, c)
@@ -414,14 +414,11 @@ func (c *TCPConnection) TryClose() (int, error) {
 		c.log.Warn("TCP ref went negative", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
 		return 0, nil
 	}
-	// TODO: counts are not balanced. initConnection gives a connection accepted by
-	// Serve the dialer's reference, which nobody owns, so ref stays above 0 after
-	// every holder of a closed accepted connection has released it.
-	if closed {
-		return 0, nil
-	}
 	if ref > 0 {
 		return ref, nil
+	}
+	if closed {
+		return 0, nil
 	}
 	c.log.Debug("TCP closing", "ip", c.LocalAddr(), "dst", c.RemoteAddr(), "ref", ref)
 	return 0, c.Conn.Close()

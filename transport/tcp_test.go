@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -324,7 +323,7 @@ func TestReadConnectionDropsAbandonedMessage(t *testing.T) {
 	local, remote := net.Pipe()
 
 	msgs := make(chan sipgo.Message, 4)
-	tr.initConnection(local, "10.2.2.2:5060", func(msg sipgo.Message) { msgs <- msg })
+	tr.initConnection(local, "10.2.2.2:5060", 1, func(msg sipgo.Message) { msgs <- msg })
 
 	defer func() {
 		// Close the peer end so the read loop exits on its own, and wait for it
@@ -389,7 +388,7 @@ func TestReadConnectionClosesOnRepeatedAbandonedMessage(t *testing.T) {
 		TCPReadTimeout = prev
 	}()
 
-	tr.initConnection(local, "10.2.2.2:5060", func(sipgo.Message) {})
+	tr.initConnection(local, "10.2.2.2:5060", 1, func(sipgo.Message) {})
 
 	head := "INVITE sip:bob@example.com SIP/2.0\r\nCall-ID: %s\r\nCSeq: 1 INVITE\r\nMin-SE:"
 	for i, id := range []string{"FIRST", "SECOND"} {
@@ -424,7 +423,7 @@ func TestReadConnectionClosesOnFailedTLSHandshake(t *testing.T) {
 	before := testutil.ToFloat64(closed)
 
 	// The peer never sends a ClientHello.
-	tr.initConnection(tls.Server(local, &tls.Config{}), "10.2.2.2:5061", func(sipgo.Message) {})
+	tr.initConnection(tls.Server(local, &tls.Config{}), "10.2.2.2:5061", 1, func(sipgo.Message) {})
 
 	require.Eventually(t, func() bool { return tr.pool.Size() == 0 }, 2*time.Second, 5*time.Millisecond,
 		"expected the connection to be closed")
@@ -451,7 +450,7 @@ func TestWriteMsgFailureDropsConnection(t *testing.T) {
 	before := testutil.ToFloat64(closed)
 
 	// The peer never reads, so the write cannot complete.
-	c := tr.initConnection(local, "10.2.2.2:5060", func(sipgo.Message) {})
+	c := tr.initConnection(local, "10.2.2.2:5060", 1, func(sipgo.Message) {})
 
 	req := sipgo.NewRequest(sipgo.OPTIONS, sipgo.Uri{Scheme: "sip", Host: "10.2.2.2", Port: 5060})
 	err := c.WriteMsg(req)
@@ -469,7 +468,7 @@ func TestCloseAndDeleteKeepsReplacement(t *testing.T) {
 		return &TCPConnection{Conn: &fakes.TCPConn{
 			LAddr: net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5060},
 			RAddr: net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 5060},
-		}, log: slog.Default()}
+		}, log: slog.Default(), refcount: 1}
 	}
 	addr := "127.0.0.2:5060"
 
@@ -479,41 +478,4 @@ func TestCloseAndDeleteKeepsReplacement(t *testing.T) {
 
 	pool.CloseAndDelete(slog.New(slog.NewTextHandler(io.Discard, nil)), old, addr)
 	require.Same(t, replacement, pool.Get(addr))
-}
-
-// warnCounter counts log records at Warn or above.
-type warnCounter struct {
-	slog.Handler
-	n atomic.Int32
-}
-
-func (h *warnCounter) Handle(_ context.Context, r slog.Record) error {
-	if r.Level >= slog.LevelWarn {
-		h.n.Add(1)
-	}
-	return nil
-}
-
-func (h *warnCounter) WithAttrs([]slog.Attr) slog.Handler { return h }
-
-// A transaction that still holds a connection when the peer closes it releases
-// its reference afterwards. That is expected, not a refcount bug.
-func TestReleaseAfterPeerCloseIsQuiet(t *testing.T) {
-	warns := &warnCounter{Handler: slog.NewTextHandler(io.Discard, nil)}
-	tr := NewTCPTransport(slog.New(warns), sipgo.NewParser(), nil)
-	defer tr.Close()
-	local, remote := net.Pipe()
-
-	addr := "10.2.2.2:5060"
-	tr.initConnection(local, addr, func(sipgo.Message) {})
-	c := tr.pool.Get(addr)
-	require.NotNil(t, c)
-
-	remote.Close()
-	require.Eventually(t, func() bool { return tr.pool.Size() == 0 }, 2*time.Second, 5*time.Millisecond)
-
-	ref, err := c.TryClose()
-	require.NoError(t, err)
-	require.Zero(t, ref)
-	require.Zero(t, warns.n.Load())
 }

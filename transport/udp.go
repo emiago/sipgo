@@ -134,7 +134,7 @@ func (t *UDPTransport) CreateConnection(laddr Addr, host string, raddr Addr, han
 		PacketConn: udpconn,
 		raddr:      uraddr,
 		log:        t.log,
-		refcount:   1 + IdleConnection,
+		refcount:   2, // The pool's and the dialer's.
 	}
 
 	addr := uraddr.String()
@@ -312,11 +312,11 @@ func (c *UDPConnection) TryClose() (int, error) {
 		c.log.Warn("UDP ref went negative", "src", c.PacketConn.LocalAddr(), "dst", c.raddr, "ref", ref)
 		return 0, nil
 	}
-	if closed {
-		return 0, nil
-	}
 	if ref > 0 {
 		return ref, nil
+	}
+	if closed {
+		return 0, nil
 	}
 
 	c.log.Debug("UDP closing", "ip", c.LocalAddr(), "dst", c.raddr, "ref", ref)

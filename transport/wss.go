@@ -78,6 +78,6 @@ func (t *WSSTransport) createConnection(laddr *net.TCPAddr, raddr *net.TCPAddr, 
 		return nil, fmt.Errorf("%s dial err=%w", t, err)
 	}
 
-	c := t.initConnection(conn, addr, true, handler)
+	c := t.initConnection(conn, addr, true, 2, handler)
 	return c, nil
 }

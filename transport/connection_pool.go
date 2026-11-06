@@ -22,10 +22,8 @@ func NewConnectionPool() *ConnectionPool {
 // Add registers a connection for an address. One connection per address: the
 // last one added wins, so a duplicate silently orphans the previous one.
 // Layer.createConnection keeps concurrent requests from dialing duplicates.
+// The pool owns one reference to c, released by CloseAndDelete.
 func (p *ConnectionPool) Add(a string, c Connection) {
-	if c.Ref(0) < 1 {
-		c.Ref(1) // Make 1 reference count by default
-	}
 	p.Lock()
 	p.m[a] = c
 	p.Unlock()
@@ -53,9 +51,7 @@ func (p *ConnectionPool) Get(a string) (c Connection) {
 func (p *ConnectionPool) CloseAndDelete(log *slog.Logger, c Connection, addr string) {
 	p.Lock()
 	defer p.Unlock()
-	// TODO: this releases the pool's reference, but the pool holds one only when
-	// IdleConnection is 1. With 0 or -1 it releases a reference nobody holds.
-	ref, _ := c.TryClose() // Be nice. Saves from double closing
+	ref, _ := c.TryClose() // Release the pool's reference.
 	if ref > 0 {
 		if err := c.Close(); err != nil {
 			log.Info("Closing connection returned error", "err", err)

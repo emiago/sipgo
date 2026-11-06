@@ -700,7 +700,7 @@ func (t *dialCountingTransport) CreateConnection(laddr Addr, host string, raddr 
 			RAddr: net.TCPAddr{IP: raddr.IP, Port: raddr.Port},
 		},
 		log:      slog.Default(),
-		refcount: 1 + IdleConnection,
+		refcount: 2, // The pool's and the dialer's.
 	}
 	t.pool.Add(raddr.String(), c)
 	return c, nil
@@ -747,7 +747,7 @@ func TestClientRequestConnectionSharesDial(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.Same(t, conns[0], conns[i])
 	}
-	require.Equal(t, IdleConnection+n, conns[0].Ref(0))
+	require.Equal(t, 1+n, conns[0].Ref(0))
 }
 
 // A failed dial fails every request waiting on it rather than each dialing in

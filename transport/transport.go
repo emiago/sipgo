@@ -11,14 +11,6 @@ import (
 var (
 	SIPDebug bool
 
-	// IdleConnection will keep connections idle even after transaction terminate
-	// -1 	- single response or request will close
-	// 0 	- close connection immediatelly after transaction terminate
-	// 1 	- keep connection idle after transaction termination
-	//
-	// TODO: only 1 keeps reference counts balanced, see ConnectionPool.CloseAndDelete.
-	IdleConnection int = 1
-
 	// TCPReadTimeout closes a TCP or TLS connection that receives nothing for
 	// this long. CRLF keep alives count as a read, so this mostly catches a
 	// peer that went away without a FIN or RST. 0 disables it.
@@ -47,6 +39,8 @@ const (
 // Protocol implements network specific features.
 type Transport interface {
 	Network() string
+	// GetConnection and CreateConnection return a connection holding one
+	// reference for the caller, released with TryClose.
 	GetConnection(addr string) (Connection, error)
 	CreateConnection(laddr Addr, host string, raddr Addr, handler sip.MessageHandler) (Connection, error)
 	String() string
