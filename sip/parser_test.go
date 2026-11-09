@@ -66,6 +66,18 @@ func TestParseHeaders(t *testing.T) {
 			assert.Equal(t, "UDP", via.Transport)
 		})
 
+		t.Run("folded after port", func(t *testing.T) {
+			// Folding joins the lines with a space, so whitespace follows the port.
+			header := "Via: SIP/2.0/UDP 192.0.2.2:31623\r\n ;received=192.0.2.2;branch=z9hG4bK-folded;rport=31623"
+			h := testParseHeader(t, parser, header)
+
+			via := h.(*ViaHeader)
+			assert.Equal(t, "192.0.2.2", via.Host)
+			assert.Equal(t, 31623, via.Port)
+			assert.Equal(t, "z9hG4bK-folded", via.Params.GetOr("branch", ""))
+			assert.Equal(t, "Via: SIP/2.0/UDP 192.0.2.2:31623;received=192.0.2.2;branch=z9hG4bK-folded;rport=31623", h.String())
+		})
+
 		t.Run("IPv6", func(t *testing.T) {
 			// Issue surfaced as livekit/sip#640: viaStateHost previously
 			// walked colons greedily and confused IPv6 separators with the
