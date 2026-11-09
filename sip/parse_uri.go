@@ -81,6 +81,16 @@ func uriStateUser(uri *Uri, s string) (uriFSM, string, error) {
 		}
 
 		if c == '@' {
+			// RFC 3261 requires '@' in the user part to be escaped, but some UAs send it raw,
+			// e.g. "sip:user@domain@host". A host never contains '@', so if the host part still
+			// has one, the user part ends at its last '@'.
+			host := s[i+1:]
+			if end := strings.IndexAny(host, ":;?"); end >= 0 {
+				host = host[:end]
+			}
+			if j := strings.LastIndexByte(host, '@'); j >= 0 {
+				i += 1 + j
+			}
 			if userend > 0 {
 				uri.User = s[:userend]
 				uri.Password = s[userend+1 : i]

@@ -197,6 +197,29 @@ func TestParseUriRaw(t *testing.T) {
 
 }
 
+func TestParseUriRawAtInUser(t *testing.T) {
+	for _, c := range []struct {
+		str, user, password, host string
+		port                      int
+	}{
+		{str: "sip:user@domain.com@192.0.2.4:5060", user: "user@domain.com", host: "192.0.2.4", port: 5060},
+		{str: "sip:user@domain.com@192.0.2.4;transport=udp", user: "user@domain.com", host: "192.0.2.4"},
+		{str: "sip:user:secret@domain.com@192.0.2.4", user: "user", password: "secret@domain.com", host: "192.0.2.4"},
+		// An '@' after the host is not part of the user.
+		{str: "sip:alice@atlanta.com;foo=a@b", user: "alice", host: "atlanta.com"},
+		{str: "sip:alice@atlanta.com?subject=a@b", user: "alice", host: "atlanta.com"},
+	} {
+		t.Run(c.str, func(t *testing.T) {
+			var uri Uri
+			require.NoError(t, ParseUri(c.str, &uri))
+			assert.Equal(t, c.user, uri.User)
+			assert.Equal(t, c.password, uri.Password)
+			assert.Equal(t, c.host, uri.Host)
+			assert.Equal(t, c.port, uri.Port)
+		})
+	}
+}
+
 func TestParseUriBad(t *testing.T) {
 	t.Run("double ports", func(t *testing.T) {
 		str := "sip:127.0.0.1:5060:5060;lr;transport=udp"
