@@ -18,7 +18,7 @@ func TestTransportLayerWSCRLFKeepAlive(t *testing.T) {
 	defer client.Close()
 	require.NoError(t, client.SetDeadline(time.Now().Add(2*time.Second)))
 
-	tran.initConnection(server, server.RemoteAddr().String(), false, func(Message) {})
+	go tran.initConnection(server, server.RemoteAddr().String(), false, func(Message) {})
 
 	require.NoError(t, wsutil.WriteClientText(client, []byte("\r\n\r\n")))
 	pong, err := wsutil.ReadServerText(client)

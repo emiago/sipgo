@@ -159,16 +159,26 @@ func (t *TransportWS) Serve(l net.Listener, handler MessageHandler) error {
 
 		log.Debug("New connection accept", "addr", raddr)
 
-		_, err = u.Upgrade(conn)
-		if err != nil {
-			log.Error("Fail to upgrade", "error", err)
-			if err := conn.Close(); err != nil {
-				log.Error("Closing connection failed", "error", err)
+		// A slow TLS or WebSocket handshake must not block further accepts.
+		go func() {
+			err := conn.SetDeadline(time.Now().Add(10 * time.Second))
+			if err == nil {
+				_, err = u.Upgrade(conn)
 			}
-			continue
-		}
+			if err == nil {
+				// Established connections use their own frame timeouts.
+				err = conn.SetDeadline(time.Time{})
+			}
+			if err != nil {
+				log.Error("Fail to upgrade", "error", err)
+				if err := conn.Close(); err != nil {
+					log.Error("Closing connection failed", "error", err)
+				}
+				return
+			}
 
-		t.initConnection(conn, raddr, false, handler)
+			t.initConnection(conn, raddr, false, handler)
+		}()
 	}
 }
 
@@ -180,7 +190,7 @@ func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	c := t.newConnection(conn, 1+TransportIdleConnection, clientSide)
 	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
-	go t.readConnection(c, laddr, raddr, handler)
+	t.readConnection(c, laddr, raddr, handler)
 	return c
 }
 
