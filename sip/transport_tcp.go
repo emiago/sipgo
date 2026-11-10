@@ -19,6 +19,7 @@ type TransportTCP struct {
 	log             *slog.Logger
 	connectionReuse bool
 	readFilter      TransportReadFilter
+	writeFilter     TransportWriteFilter
 
 	// ReadTimeout limits how long a TCP or TLS connection may block waiting
 	// for data. It is copied when the connection is created. A non-positive
@@ -43,6 +44,8 @@ func (t *TransportTCP) newConnection(conn net.Conn, refcount int) *TCPConnection
 		readTimeout:  t.ReadTimeout,
 		writeTimeout: t.WriteTimeout,
 		refcount:     refcount,
+		writeFilter:  t.writeFilter,
+		transport:    t.transport,
 	}
 }
 
@@ -264,6 +267,8 @@ type TCPConnection struct {
 
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	writeFilter  TransportWriteFilter
+	transport    string
 
 	mu       sync.RWMutex
 	refcount int
@@ -341,6 +346,14 @@ func (c *TCPConnection) WriteMsg(msg Message) error {
 	buf.Reset()
 	msg.StringWrite(buf)
 	data := buf.Bytes()
+
+	if c.writeFilter != nil {
+		var err error
+		data, err = c.writeFilter(TransportWriteProps{Transport: c.transport, LocalAddr: c.LocalAddr(), RemoteAddr: c.RemoteAddr()}, data)
+		if err != nil {
+			return err
+		}
+	}
 
 	n, err := c.Write(data)
 	if err != nil {
