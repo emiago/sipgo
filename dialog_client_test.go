@@ -162,13 +162,16 @@ func TestDialogClientMultiResponses(t *testing.T) {
 		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
 		require.NoError(t, err)
 		go func() {
-			// Receive more provisional
-			for i := 0; i < 10; i++ {
-				d.inviteTx.(*sip.ClientTx).Receive(sip.NewResponseFromRequest(d.InviteRequest, 100, "Trying", nil))
+			// Carriers may resend 180/183 many times before answering.
+			// Provisional responses must not count towards the loop limit.
+			for i := 0; i < 30; i++ {
+				d.inviteTx.(*sip.ClientTx).Receive(sip.NewResponseFromRequest(d.InviteRequest, 180, "Ringing", nil))
 			}
+			d.inviteTx.(*sip.ClientTx).Receive(sip.NewResponseFromRequest(d.InviteRequest, 200, "OK", nil))
 		}()
 		err = d.WaitAnswer(context.TODO(), AnswerOptions{})
-		require.Error(t, err)
+		require.NoError(t, err)
+		assert.Equal(t, 200, d.InviteResponse.StatusCode)
 	})
 	t.Run("ProxyAuthLoop", func(t *testing.T) {
 		var sentReq *sip.Request
