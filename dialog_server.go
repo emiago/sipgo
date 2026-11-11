@@ -20,14 +20,23 @@ type DialogServerSession struct {
 	onClose func()
 }
 
-// ReadAck changes dialog state to confiremed
+// ReadAck changes dialog state to confirmed
 func (s *DialogServerSession) ReadAck(req *sip.Request, tx sip.ServerTransaction) error {
-	// cseq must match to our last dialog cseq
-	if req.CSeq().SeqNo != s.remoteCSeqNo.Load() {
+	// The ACK carries the CSeq of the INVITE it acknowledges (RFC 3261 13.2.2.4);
+	// a re-INVITE handled before the initial ACK has already advanced remoteCSeqNo.
+	seq := req.CSeq().SeqNo
+	if seq != s.remoteCSeqNo.Load() && seq != s.inviteCSeqNo() {
 		return ErrDialogInvalidCseq
 	}
 	s.setState(sip.DialogStateConfirmed)
 	return nil
+}
+
+func (s *DialogServerSession) inviteCSeqNo() uint32 {
+	if s.InviteRequest == nil || s.InviteRequest.CSeq() == nil {
+		return 0
+	}
+	return s.InviteRequest.CSeq().SeqNo
 }
 
 func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction) error {
