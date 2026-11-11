@@ -133,7 +133,8 @@ loop:
 	}
 
 	if colonInd > 0 {
-		h.Port, err = strconv.Atoi(s[colonInd+1 : endIndex])
+		// Whitespace may follow the port, e.g. "host:5060 ;branch=..." after header folding.
+		h.Port, err = strconv.Atoi(strings.TrimSpace(s[colonInd+1 : endIndex]))
 		if err != nil {
 			return nil, 0, nil
 		}
