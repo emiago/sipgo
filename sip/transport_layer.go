@@ -41,6 +41,7 @@ type TransportLayer struct {
 	// connectionReuse will force connection reuse when passing request
 	connectionReuse bool
 	readFilter      TransportReadFilter
+	forceRport      bool
 
 	// dnsPreferSRV does always SRV lookup first
 	dnsPreferSRV bool
@@ -60,6 +61,16 @@ func WithTransportLayerLogger(logger *slog.Logger) TransportLayerOption {
 func WithTransportLayerConnectionReuse(f bool) TransportLayerOption {
 	return func(l *TransportLayer) {
 		l.connectionReuse = f
+	}
+}
+
+// WithTransportLayerForceRport treats received UDP requests as if their top Via
+// requested rport (RFC 3581). Responses use the observed source IP and port,
+// including when a NATed client omits rport. It is disabled by default and does
+// not change reliable transports or received responses.
+func WithTransportLayerForceRport(enabled bool) TransportLayerOption {
+	return func(l *TransportLayer) {
+		l.forceRport = enabled
 	}
 }
 
@@ -225,6 +236,10 @@ func (l *TransportLayer) OnMessage(h MessageHandler) {
 
 // handleMessage is transport layer for handling messages
 func (l *TransportLayer) handleMessage(msg Message) {
+	if l.forceRport {
+		l.forceRequestRport(msg)
+	}
+
 	// We have to consider
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-18.2.1 for some message editing
 	// Proxy further to other
@@ -234,6 +249,19 @@ func (l *TransportLayer) handleMessage(msg Message) {
 	// l.handler(msg)
 	for _, h := range l.handlers {
 		h(msg)
+	}
+}
+
+// Normalize before transaction handling so automatic replies (including CANCEL
+// and stateless errors) and cached retransmissions use the same response route.
+func (l *TransportLayer) forceRequestRport(msg Message) {
+	req, ok := msg.(*Request)
+	if !ok || NetworkToLower(req.Transport()) != "udp" || req.MessageData.Source() == "" {
+		return
+	}
+
+	if via := req.Via(); via != nil {
+		via.Params.Add("rport", "")
 	}
 }
 

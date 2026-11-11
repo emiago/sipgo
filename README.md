@@ -101,6 +101,24 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
 
+### UDP responses behind NAT
+
+By default, UDP responses use the source IP and the top Via's port, unless
+the client requests `rport` (RFC 3581). Clients behind port-translating NAT
+that omit `rport` may therefore never receive a response. To always reply
+to the observed UDP source IP and port:
+
+```go
+ua, err := sipgo.NewUA(sipgo.WithUserAgentTransportLayerOptions(
+    sip.WithTransportLayerForceRport(true),
+))
+```
+
+This opt-in policy treats the top Via of received UDP requests as if it
+requested `rport`. Responses include the observed `received` and `rport`
+values, including automatic responses and retransmissions. Reliable
+transports and received responses are unchanged.
+
 ### TLS transports
 ```go 
 // TLS
