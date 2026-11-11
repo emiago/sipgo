@@ -71,7 +71,18 @@ func (txl *Layer) handleMessage(msg sip.Message) {
 }
 
 func (txl *Layer) handleRequest(req *sip.Request) {
-	key, err := MakeServerTxKey(req)
+	// ACK and CANCEL belong to the INVITE transaction when the branch and sent-by match
+	// (RFC 3261 §17.2.3, §9.2). Otherwise each is its own transaction, keyed by its own
+	// method, and the server hands it to OnAck or OnCancel.
+	// CANCEL handling is ported from upstream sipgo v1.6.0. Upstream still keys an
+	// unmatched ACK as INVITE; we key it as ACK so it cannot collide with an INVITE tx.
+	if req.IsAck() || req.IsCancel() {
+		if txl.matchInviteTransaction(req) {
+			return
+		}
+	}
+
+	key, err := makeServerTxKey(req, "")
 	if err != nil {
 		// Any remote peer can send a request with missing or broken headers,
 		// internet scanners in particular, so this is not a server error.
@@ -84,11 +95,6 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 		if err := tx.Receive(req); err != nil {
 			txl.log.Error("Server tx failed to receive req", "err", err)
 		}
-		return
-	}
-
-	if req.IsCancel() {
-		// transaction for CANCEL already completed and terminated
 		return
 	}
 
@@ -111,6 +117,34 @@ func (txl *Layer) handleRequest(req *sip.Request) {
 	tx.OnTerminate(txl.serverTxTerminate)
 
 	txl.reqHandler(tx.log, req, tx)
+}
+
+// matchInviteTransaction delivers an ACK or CANCEL to its INVITE server transaction.
+// It reports whether that transaction exists. A matching CANCEL is answered with 200
+// on the INVITE's connection; the INVITE itself moves to 487 from its state machine.
+func (txl *Layer) matchInviteTransaction(req *sip.Request) bool {
+	key, err := makeServerTxKey(req, sip.INVITE)
+	if err != nil {
+		txl.log.Warn("Server tx make key failed", "err", err)
+		return true
+	}
+	tx, exists := txl.getServerTx(key)
+	if !exists {
+		return false
+	}
+	if req.IsCancel() {
+		// 200 before the 487, as upstream does: it stops the UAC's CANCEL
+		// retransmissions first.
+		res := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
+		if err := tx.conn.WriteMsg(res); err != nil {
+			txl.log.Error("send '200 OK' for CANCEL failed", "err", err)
+			return true
+		}
+	}
+	if err := tx.Receive(req); err != nil {
+		txl.log.Error("Server tx failed to receive req", "err", err)
+	}
+	return true
 }
 
 func (txl *Layer) handleResponse(res *sip.Response) {

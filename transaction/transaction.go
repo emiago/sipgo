@@ -51,7 +51,15 @@ func wrapTimeoutError(err error) error {
 type FnTxTerminate func(key string)
 
 // MakeServerTxKey creates server key for matching retransmitting requests - RFC 3261 17.2.3.
+// ACK and CANCEL keep their own method. Match them to an INVITE with makeServerTxKey(msg, sip.INVITE).
 func MakeServerTxKey(msg sip.Message) (string, error) {
+	return makeServerTxKey(msg, "")
+}
+
+// makeServerTxKey is MakeServerTxKey, but asMethod replaces the CSeq method when set.
+// ACK and CANCEL are the INVITE's transaction when the branch and sent-by match, and
+// their own transaction otherwise, so the caller chooses which method the key uses.
+func makeServerTxKey(msg sip.Message, asMethod sip.RequestMethod) (string, error) {
 	firstViaHop := msg.Via()
 	if firstViaHop == nil {
 		return "", fmt.Errorf("'Via' header not found or empty in message '%s'", sip.MessageShortString(msg))
@@ -62,8 +70,8 @@ func MakeServerTxKey(msg sip.Message) (string, error) {
 		return "", fmt.Errorf("'CSeq' header not found in message '%s'", sip.MessageShortString(msg))
 	}
 	method := cseq.MethodName
-	if method == sip.ACK || method == sip.CANCEL {
-		method = sip.INVITE
+	if asMethod != "" {
+		method = asMethod
 	}
 
 	var isRFC3261 bool

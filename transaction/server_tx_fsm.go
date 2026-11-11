@@ -3,6 +3,8 @@ package transaction
 
 import (
 	"time"
+
+	"github.com/livekit/sipgo/sip"
 )
 
 // invite state machine https://datatracker.ietf.org/doc/html/rfc3261#section-17.1.1.2
@@ -317,5 +319,11 @@ func (tx *ServerTx) actConfirm() FsmInput {
 
 func (tx *ServerTx) actCancel() FsmInput {
 	tx.passCancel()
-	return FsmInputNone
+	// 487 ends the INVITE. The 200 for the CANCEL is written by the transaction layer,
+	// on the CANCEL itself; this response is to the INVITE.
+	res := sip.NewResponseFromRequest(tx.Origin(), sip.StatusRequestTerminated, "Request Terminated", nil)
+	tx.mu.Lock()
+	tx.lastResp = res
+	tx.mu.Unlock()
+	return server_input_user_300_plus
 }
