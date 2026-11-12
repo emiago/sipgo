@@ -40,6 +40,7 @@ type TransportTCP struct {
 func (t *TransportTCP) newConnection(conn net.Conn, refcount int) *TCPConnection {
 	return &TCPConnection{
 		Conn:         conn,
+		pool:         t.pool,
 		readTimeout:  t.ReadTimeout,
 		writeTimeout: t.WriteTimeout,
 		refcount:     refcount,
@@ -261,6 +262,7 @@ func (t *TransportTCP) parseStream(par *ParserStream, data []byte, src string, h
 
 type TCPConnection struct {
 	net.Conn
+	pool *ConnectionPool
 
 	readTimeout  time.Duration
 	writeTimeout time.Duration
@@ -343,16 +345,16 @@ func (c *TCPConnection) WriteMsg(msg Message) error {
 	data := buf.Bytes()
 
 	n, err := c.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
 	if err != nil {
+		// A failed write may leave a partial message on the stream.
+		if c.pool != nil {
+			c.pool.deleteExactN([]string{c.LocalAddr().String(), c.RemoteAddr().String()}, c)
+		}
+		_ = c.Conn.Close()
 		return fmt.Errorf("conn %s write err=%w", c.RemoteAddr().String(), err)
-	}
-
-	if n == 0 {
-		return fmt.Errorf("wrote 0 bytes")
-	}
-
-	if n != len(data) {
-		return fmt.Errorf("fail to write full message")
 	}
 	return nil
 }
