@@ -79,10 +79,8 @@ func TestStreamReaderCleanupPreservesSuccessor(t *testing.T) {
 					old, next = conn, transport.newConnection(newSocket, 1, false)
 					read = func() { transport.readConnection(conn, "local", "remote", nil) }
 				}
-				pool.Add("local", old)
 				pool.Add("remote", old)
 				if replace {
-					pool.Add("local", next)
 					pool.Add("remote", next)
 				}
 
@@ -91,7 +89,6 @@ func TestStreamReaderCleanupPreservesSuccessor(t *testing.T) {
 				require.Equal(t, 1, oldSocket.closes)
 				require.Zero(t, newSocket.closes)
 				if replace {
-					require.Same(t, next, pool.getUnref("local"))
 					require.Same(t, next, pool.getUnref("remote"))
 				} else {
 					require.Zero(t, pool.Size())

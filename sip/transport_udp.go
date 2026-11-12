@@ -93,7 +93,7 @@ func (t *TransportUDP) createConnection(ctx context.Context, laddr Addr, raddr A
 	}
 	addr := raddr.String()
 
-	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, true, func() (Connection, error) {
 		udpconn, err := lc.ListenPacket(ctx, protocol, laddrStr)
 		if err != nil {
 			return nil, err

@@ -430,12 +430,15 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 	laddr := req.Laddr
 	req.raddr = raddr
 
-	// This is probably client forcing host:port
-	if laddr.IP != nil && laddr.Port > 0 {
+	fixedLocalAddr := laddr.IP != nil && laddr.Port > 0
+	if fixedLocalAddr && network == "udp" {
 		c = transport.GetConnection(laddr.String())
-	} else if l.connectionReuse {
-		addr := raddr.String()
-		c = transport.GetConnection(addr)
+	} else if fixedLocalAddr || l.connectionReuse {
+		c = transport.GetConnection(raddr.String())
+		if c != nil && fixedLocalAddr && c.LocalAddr().String() != laddr.String() {
+			c.TryClose()
+			c = nil
+		}
 	}
 
 	if c == nil {
