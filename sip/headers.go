@@ -823,7 +823,9 @@ func (h *MaxForwardsHeader) Value() string { return strconv.Itoa(int(*h)) }
 func (h *MaxForwardsHeader) headerClone() Header { return h }
 
 func (h *MaxForwardsHeader) Dec() {
-	*h = MaxForwardsHeader(uint32(*h) - 1)
+	if *h > 0 {
+		*h--
+	}
 }
 
 func (h MaxForwardsHeader) Val() uint32 {

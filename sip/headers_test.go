@@ -102,6 +102,9 @@ func TestMaxForwardIncDec(t *testing.T) {
 	maxfwd := MaxForwardsHeader(70)
 	maxfwd.Dec()
 	assert.Equal(t, uint32(69), maxfwd.Val(), "Value returned %d", maxfwd.Val())
+	zero := MaxForwardsHeader(0)
+	zero.Dec()
+	assert.Zero(t, zero.Val())
 }
 
 func TestCopyHeaders(t *testing.T) {

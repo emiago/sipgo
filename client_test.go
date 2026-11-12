@@ -20,6 +20,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClientRequestDecreaseMaxForward(t *testing.T) {
+	for _, value := range []uint32{0, 1, 2, 70} {
+		t.Run(fmt.Sprint(value), func(t *testing.T) {
+			req, err := sip.NewParser().ParseSIP([]byte(fmt.Sprintf(
+				"OPTIONS sip:example.com SIP/2.0\r\nMax-Forwards: %d\r\nContent-Length: 0\r\n\r\n", value)))
+			require.NoError(t, err)
+			request := req.(*sip.Request)
+			err = ClientRequestDecreaseMaxForward(nil, request)
+			if value == 0 {
+				require.Error(t, err)
+				require.Zero(t, request.MaxForwards().Val())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, value-1, request.MaxForwards().Val())
+			}
+		})
+	}
+	require.NoError(t, ClientRequestDecreaseMaxForward(nil, sip.NewRequest(sip.OPTIONS, sip.Uri{Host: "example.com"})))
+}
+
 func TestClientRequestBuild(t *testing.T) {
 	// ua, err := NewUA(WithUserAgentIP(net.ParseIP("10.0.0.0")))
 	ua, err := NewUA(

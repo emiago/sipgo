@@ -505,18 +505,17 @@ func ClientRequestAddRecordRoute(c *Client, r *sip.Request) error {
 
 // Based on proxy setup https://www.rfc-editor.org/rfc/rfc3261#section-16
 // ClientRequestDecreaseMaxForward should be used when forwarding request. It decreases max forward
-// in case of 0 it returnes error
+// An incoming value of zero returns an error before decrementing.
 func ClientRequestDecreaseMaxForward(c *Client, r *sip.Request) error {
 	maxfwd := r.MaxForwards()
 	if maxfwd == nil {
 		return nil
 	}
 
-	maxfwd.Dec()
-
-	if maxfwd.Val() <= 0 {
+	if maxfwd.Val() == 0 {
 		return fmt.Errorf("max forwards reached")
 	}
+	maxfwd.Dec()
 	return nil
 }
 
