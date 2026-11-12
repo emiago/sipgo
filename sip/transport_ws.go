@@ -400,6 +400,21 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 	}
 	reader := wsutil.NewReader(c.Conn, state)
 	reader.MaxFrameSize = int64(ParseMaxMessageLength)
+	handleControl := func(header ws.Header, src io.Reader) error {
+		if header.OpCode == ws.OpClose {
+			return net.ErrClosed
+		}
+		data := make([]byte, header.Length)
+		if _, err := io.ReadFull(src, data); err != nil {
+			return err
+		}
+		if header.OpCode == ws.OpPing {
+			_, err := c.writeFrame(ws.OpPong, data)
+			return err
+		}
+		return nil
+	}
+	reader.OnIntermediate = handleControl
 	for {
 		header, err := reader.NextFrame()
 		if err != nil {
@@ -415,8 +430,11 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		}
 
 		if header.OpCode.IsControl() {
-			if header.OpCode == ws.OpClose {
-				return n, net.ErrClosed
+			// NextFrame already handles control frames within fragmented messages.
+			if !reader.State.Fragmented() {
+				if err := handleControl(header, reader); err != nil {
+					return n, err
+				}
 			}
 			continue
 		}
@@ -428,7 +446,7 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		// 	continue
 		// }
 
-		if header.OpCode&ws.OpText == 0 {
+		if header.OpCode != ws.OpText && header.OpCode != ws.OpContinuation {
 			if err := reader.Discard(); err != nil {
 				return 0, err
 			}
@@ -438,19 +456,9 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 		data := make([]byte, header.Length)
 
 		// Read until
-		_, err = io.ReadFull(c.Conn, data)
+		_, err = io.ReadFull(reader, data)
 		if err != nil {
 			return n, err
-		}
-
-		// if header.OpCode == ws.OpPing {
-		// 	f := ws.NewPongFrame(data)
-		// 	ws.WriteFrame(c.Conn, f)
-		// 	continue
-		// }
-
-		if header.Masked {
-			ws.Cipher(data, header.Mask, 0)
 		}
 
 		// header.Masked = false
@@ -469,6 +477,10 @@ func (c *WSConnection) Read(b []byte) (n int, err error) {
 }
 
 func (c *WSConnection) Write(b []byte) (n int, err error) {
+	return c.writeFrame(ws.OpText, b)
+}
+
+func (c *WSConnection) writeFrame(op ws.OpCode, b []byte) (n int, err error) {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
@@ -478,11 +490,11 @@ func (c *WSConnection) Write(b []byte) (n int, err error) {
 		}
 	}
 
-	if SIPDebug {
+	if SIPDebug && op == ws.OpText {
 		logSIPWrite("WS", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b)
 	}
 
-	fs := ws.NewFrame(ws.OpText, true, b)
+	fs := ws.NewFrame(op, true, b)
 	if c.clientSide {
 		fs = ws.MaskFrameInPlace(fs)
 	}
