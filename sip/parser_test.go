@@ -1,6 +1,7 @@
 package sip
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,57 @@ func TestUnmarshalParams(t *testing.T) {
 	assert.Equal(t, 2, len(params))
 	assert.Equal(t, "tls", params.GetOr("transport", ""))
 	assert.Equal(t, "", params.GetOr("lr", "<missing>"))
+}
+
+func TestUnmarshalParamsLimit(t *testing.T) {
+	previous := ParseMaxHeaderParams
+	ParseMaxHeaderParams = 3
+	t.Cleanup(func() { ParseMaxHeaderParams = previous })
+
+	for _, test := range []struct {
+		input string
+		limit bool
+	}{
+		{"aa=1;bb=2;cc=3", false},
+		{"aa=1;bb=2;cc=3;", false},
+		{"aa=1;bb=2;cc=3;dd=4", true},
+		{"aa=1;aa=2;aa=3;aa=4", true},
+		{"aa;bb;cc", false},
+		{"aa;bb;cc;dd", true},
+		{"aa=1;bb=2;cc=3?dd=4;ee=5", false},
+	} {
+		t.Run(test.input, func(t *testing.T) {
+			var params HeaderParams
+			_, err := UnmarshalHeaderParams(test.input, ';', '?', &params)
+			require.Equal(t, test.limit, errors.Is(err, ErrTooManyHeaderParams))
+			require.LessOrEqual(t, len(params), 3)
+		})
+	}
+
+	params := HeaderParams{{K: "aa", V: "old"}}
+	_, err := UnmarshalHeaderParams("aa=new;bb=2;cc=3", ';', 0, &params)
+	require.NoError(t, err)
+	require.Equal(t, HeaderParams{{K: "aa", V: "new"}, {K: "bb", V: "2"}, {K: "cc", V: "3"}}, params)
+
+	ParseMaxHeaderParams = 0
+	var unlimited HeaderParams
+	_, err = UnmarshalHeaderParams("aa;bb;cc;dd", ';', 0, &unlimited)
+	require.NoError(t, err)
+	require.Len(t, unlimited, 4)
+}
+
+func TestParseSIPHeaderParamsLimit(t *testing.T) {
+	previous := ParseMaxHeaderParams
+	ParseMaxHeaderParams = 3
+	t.Cleanup(func() { ParseMaxHeaderParams = previous })
+	for _, raw := range []string{
+		"OPTIONS sip:example.com SIP/2.0\r\nVia: SIP/2.0/UDP 127.0.0.1;branch=z9hG4bK-test;aa=1;bb=2;cc=3\r\nContent-Length: 0\r\n\r\n",
+		"OPTIONS sip:example.com;aa=1;bb=2;cc=3;dd=4 SIP/2.0\r\nContent-Length: 0\r\n\r\n",
+		"OPTIONS sip:example.com?aa=1&bb=2&cc=3&dd=4 SIP/2.0\r\nContent-Length: 0\r\n\r\n",
+	} {
+		_, err := NewParser().ParseSIP([]byte(raw))
+		require.ErrorIs(t, err, ErrTooManyHeaderParams)
+	}
 }
 
 func testParseHeader(t *testing.T, parser *Parser, header string) Header {
