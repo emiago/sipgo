@@ -25,12 +25,17 @@ var (
 	ErrParseSipPartial         = errors.New("SIP partial data")
 	ErrParseReadBodyIncomplete = errors.New("reading body incomplete")
 	ErrMessageTooLarge         = errors.New("Message exceeds ParseMaxMessageLength")
+	ErrTooManyHeaderParams     = errors.New("too many header parameters")
 
 	defaultParser = NewParser()
 )
 
 var (
 	ParseMaxMessageLength = 65535
+
+	// ParseMaxHeaderParams limits parameters parsed in a header or URI parameter
+	// section. Set it before parsing. A non-positive value disables the limit.
+	ParseMaxHeaderParams = 100
 )
 
 func ParseMessage(msgData []byte) (Message, error) {

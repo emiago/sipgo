@@ -14,6 +14,7 @@ const (
 )
 
 func UnmarshalHeaderParams(s string, seperator rune, ending rune, p *HeaderParams) (n int, err error) {
+	count, limit := 0, ParseMaxHeaderParams
 	var start, sep, quote int = 0, 0, -1
 	state := paramsStateKey
 
@@ -27,6 +28,10 @@ func UnmarshalHeaderParams(s string, seperator rune, ending rune, p *HeaderParam
 
 		switch state {
 		case paramsStateKey:
+			if limit > 0 && count >= limit {
+				return i, ErrTooManyHeaderParams
+			}
+			count++
 			sep = 0
 			start = i
 			state = paramsStateEqual
