@@ -70,6 +70,29 @@ To find out more about performance check the latest results:
 
 
 
+# Explicit transport for dialog requests
+
+Dialog requests normally use the initial INVITE's transport. Both client and
+server dialog sessions also provide `TransactionRequestWithOptions`,
+`DoWithOptions`, and `WriteByeWithOptions` for an explicit per-request choice:
+
+```go
+// Use the remote target and port appropriate for this transport.
+bye := sip.NewRequest(sip.BYE, remoteTarget)
+err := dialog.WriteByeWithOptions(ctx, bye, sipgo.WithDialogRequestTransport("UDP"))
+```
+
+`WriteByeWithOptions` retains normal BYE handling, including transitioning the
+dialog to Ended after a 200 OK. `DoWithOptions` can send other in-dialog requests,
+such as REFER, without ending the dialog. Existing methods retain their behavior.
+
+The selected transport applies to one request. Route sets, dialog identifiers,
+ports, and URI parameters are preserved. A destination derived from the INVITE
+source (`RewriteContact`) is not reused; set one with `req.SetDestination` if needed. The caller supplies an appropriate
+remote target and complies with URI transport requirements and local security
+policy. Nonsecure transports are rejected for SIPS dialogs, targets, contacts,
+or routes (RFC 3261 sections 12.1 and 12.2, RFC 5630).
+
 # Usage
 
 Lib allows you to write easily sip servers, clients, stateful proxies, registrars or any sip routing.

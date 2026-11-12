@@ -45,7 +45,12 @@ func (s *DialogClientSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 // It does not provide INVITE CANCEL as it could be REINVITE
 // Use WaitAnswer when creating initial INVITE to have CANCEL sending.
 func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
-	tx, err := s.TransactionRequest(ctx, req)
+	return s.DoWithOptions(ctx, req)
+}
+
+// DoWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogClientSession) DoWithOptions(ctx context.Context, req *sip.Request, options ...DialogRequestOption) (*sip.Response, error) {
+	tx, err := s.TransactionRequestWithOptions(ctx, req, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +76,18 @@ func (s *DialogClientSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
 // This ensures that you have proper request done within dialog. You should avoid setting any Dialog header (cseq, from, to, callid)
 func (s *DialogClientSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	return s.TransactionRequestWithOptions(ctx, req)
+}
+
+// TransactionRequestWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogClientSession) TransactionRequestWithOptions(ctx context.Context, req *sip.Request, options ...DialogRequestOption) (sip.ClientTransaction, error) {
+	if err := validateDialogRequestOptions(s.InviteRequest, s.InviteResponse, req, options); err != nil {
+		return nil, err
+	}
+	// Keep only a destination set by the caller.
+	destination := req.MessageData.Destination()
 	s.buildReq(req)
+	applyDialogRequestOptions(req, destination, options)
 
 	// Passing option to avoid CSEQ apply
 	return s.UA.Client.TransactionRequest(ctx, req, s.requestValidate)
@@ -439,6 +455,11 @@ func (s *DialogClientSession) Bye(ctx context.Context) error {
 }
 
 func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) error {
+	return s.WriteByeWithOptions(ctx, bye)
+}
+
+// WriteByeWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogClientSession) WriteByeWithOptions(ctx context.Context, bye *sip.Request, options ...DialogRequestOption) error {
 	defer s.Close()
 
 	state := s.state.Load()
@@ -453,7 +474,7 @@ func (s *DialogClientSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		return fmt.Errorf("Dialog not confirmed or did not receive yet any response")
 	}
 
-	tx, err := s.TransactionRequest(ctx, bye)
+	tx, err := s.TransactionRequestWithOptions(ctx, bye, options...)
 	if err != nil {
 		return err
 	}
@@ -494,11 +515,11 @@ func newAckRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	ackRequest.SipVersion = inviteRequest.SipVersion
 
 	// ACK to 2xx response should not copy over Route header(s) from original INVITE request.
-	// Instead the ACK should include Route header(s) derived from reversing the order of 
-	// Record-Route header(s) in the 2xx response. 
+	// Instead the ACK should include Route header(s) derived from reversing the order of
+	// Record-Route header(s) in the 2xx response.
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.2
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.2.1.1
-	
+
 	if h := inviteRequest.From(); h != nil {
 		ackRequest.AppendHeader(sip.HeaderClone(h))
 	}
@@ -559,9 +580,9 @@ func newByeRequestUAC(inviteRequest *sip.Request, inviteResponse *sip.Response, 
 	)
 	byeRequest.SipVersion = inviteRequest.SipVersion
 
-	// For the UAC side, the Route header field(s) in the BYE request are constructed from reversing the order 
+	// For the UAC side, the Route header field(s) in the BYE request are constructed from reversing the order
 	// of Record-Route header field(s) in the dialogue-establishing INVITE response such as a 2xx response.
-	// For the UAS side, the dialog route set is the list of Record-Route header fields from the 
+	// For the UAS side, the dialog route set is the list of Record-Route header fields from the
 	// dialogue-establishing INVITE request, taken in the same order.
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.1
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-12.1.2
