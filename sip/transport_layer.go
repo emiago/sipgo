@@ -20,6 +20,7 @@ var (
 
 	// No need yet to expose
 	errTransportConnectionDoesNotExists = errors.New("connection does not exists")
+	errTransportConnect                 = errors.New("connection failed")
 )
 
 // TransportLayer implementation.
@@ -445,7 +446,7 @@ func (l *TransportLayer) ClientRequestConnection(ctx context.Context, req *Reque
 		}
 		c, err = transport.CreateConnection(ctx, laddr, raddr, l.handleMessage)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", errTransportConnect, err)
 		}
 	}
 
