@@ -165,20 +165,14 @@ func (tx *ServerTx) Terminate() {
 	}
 }
 
-// TerminateGracefully leaves finalized unreliable transactions alive for their
-// retransmission timers while allowing the caller to return.
+// TerminateGracefully retains finalized transactions for their ACK or termination timers.
 func (tx *ServerTx) TerminateGracefully() {
-	if tx.reliable {
-		// reliable transports have no retransmission, so it is better just to terminate
-		tx.Terminate()
-		return
-	}
-
-	// Check did we receive final response
 	tx.fsmMu.Lock()
 	finalized := tx.fsmResp != nil && !tx.fsmResp.IsProvisional()
+	awaitingAck := finalized && tx.origin.IsInvite() && tx.fsmResp.StatusCode >= 300
 	tx.fsmMu.Unlock()
-	if !finalized {
+
+	if !finalized || (tx.reliable && !awaitingAck) {
 		tx.Terminate()
 		return
 	}
