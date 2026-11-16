@@ -59,8 +59,12 @@ func (tx *ClientTx) Init() error {
 		tx.timer_a = time.AfterFunc(tx.timer_a_time, func() {
 			tx.spinFsm(client_input_timer_a)
 		})
-		// Timer D is set to 32 seconds for unreliable transports
-		tx.timer_d_time = Timer_D
+		// Completed waits for Timer D on INVITE and Timer K on non-INVITE.
+		if tx.origin.IsInvite() {
+			tx.timer_d_time = Timer_D
+		} else {
+			tx.timer_d_time = Timer_K
+		}
 		tx.mu.Unlock()
 	}
 
