@@ -188,7 +188,6 @@ func (t *TransportWS) initConnection(conn net.Conn, raddr string, clientSide boo
 	laddr := conn.LocalAddr().String()
 	t.log.Debug("New WS connection", "raddr", raddr)
 	c := t.newConnection(conn, 1+TransportIdleConnection, clientSide)
-	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
 	t.readConnection(c, laddr, raddr, handler)
 	return c
@@ -200,7 +199,6 @@ func (t *TransportWS) readConnection(conn *WSConnection, laddr string, raddr str
 	buf := make([]byte, TransportBufferReadSize)
 	// defer conn.Close()
 	// defer t.pool.Del(raddr)
-	defer t.pool.deleteExact(laddr, conn)
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)
@@ -298,7 +296,7 @@ func (t *TransportWS) GetConnection(addr string) Connection {
 }
 
 func (t *TransportWS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
-	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, false, func() (Connection, error) {
 		var tladdr *net.TCPAddr = nil
 		if laddr.IP != nil {
 			tladdr = &net.TCPAddr{

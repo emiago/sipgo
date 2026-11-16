@@ -97,7 +97,7 @@ func TestConnectionPoolSizeDuringConnectionCreation(t *testing.T) {
 			defer writers.Done()
 			_, err := pool.addSingleflight(
 				Addr{IP: net.ParseIP("127.0.0.2"), Port: 5000 + i},
-				Addr{}, false,
+				Addr{}, false, false,
 				func() (Connection, error) { return poolTestConnection(), nil },
 			)
 			if err != nil {
@@ -109,8 +109,8 @@ func TestConnectionPoolSizeDuringConnectionCreation(t *testing.T) {
 	close(done)
 	reader.Wait()
 
-	if got := pool.Size(); got != connections+1 {
-		t.Fatalf("got %d address entries, want %d", got, connections+1)
+	if got := pool.Size(); got != connections {
+		t.Fatalf("got %d address entries, want %d", got, connections)
 	}
 }
 

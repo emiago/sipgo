@@ -102,7 +102,7 @@ func (t *TransportTCP) CreateConnection(ctx context.Context, laddr Addr, raddr A
 	// 	return nil, err
 	// }
 	// We do singleflight if laddr is required or connection reuse
-	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, false, func() (Connection, error) {
 		var tladdr *net.TCPAddr = nil
 		if laddr.IP != nil {
 			tladdr = &net.TCPAddr{
@@ -154,7 +154,6 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 	laddr := conn.LocalAddr().String()
 	t.log.Debug("New connection", "raddr", raddr)
 	c := t.newConnection(conn, 1+TransportIdleConnection)
-	t.pool.Add(laddr, c)
 	t.pool.Add(raddr, c)
 	go t.readConnection(c, laddr, raddr, handler)
 	return c
@@ -163,7 +162,6 @@ func (t *TransportTCP) initConnection(conn net.Conn, raddr string, handler Messa
 // This should performe better to avoid any interface allocation
 func (t *TransportTCP) readConnection(conn *TCPConnection, laddr string, raddr string, handler MessageHandler) {
 	buf := make([]byte, TransportBufferReadSize)
-	defer t.pool.deleteExact(laddr, conn)
 	defer func() {
 		if err := t.pool.CloseAndDelete(conn, raddr); err != nil {
 			t.log.Warn("connection pool not clean cleanup", "error", err)

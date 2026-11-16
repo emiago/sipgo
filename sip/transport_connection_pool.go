@@ -33,8 +33,8 @@ var bufPool = sync.Pool{
 	},
 }
 
-// ConnectionPool stores connections by address. A connection may have multiple
-// address entries. Obtain a transport's live pool through TransportLayer.Pool.
+// ConnectionPool stores connections by remote address. Pools for unconnected
+// sockets can also index by local address. Obtain the live pool through TransportLayer.Pool.
 type ConnectionPool struct {
 	// TODO consider sync.Map way with atomic checks to reduce mutex contention
 	mu sync.RWMutex
@@ -52,7 +52,7 @@ func (p *ConnectionPool) init() {
 	p.m = make(map[string]Connection)
 }
 
-func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do func() (Connection, error)) (Connection, error) {
+func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse, reuseByLocalAddr bool, do func() (Connection, error)) (Connection, error) {
 	a := raddr.String()
 
 	if laddr.Port > 0 || reuse {
@@ -60,14 +60,12 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 		laddrStr := laddr.String()
 		// We create or return existing
 		conn, err, _ := p.sf.Do(laddrStr+a, func() (any, error) {
-			if laddr.Port > 0 {
-				if c := p.getUnref(laddrStr); c != nil {
-					return c, nil
-				}
-			} else {
-				if c := p.getUnref(a); c != nil {
-					return c, nil
-				}
+			key := a
+			if reuseByLocalAddr && laddr.Port > 0 {
+				key = laddrStr
+			}
+			if c := p.getUnref(key); c != nil && (laddr.IP == nil || laddr.Port == 0 || c.LocalAddr().String() == laddrStr) {
+				return c, nil
 			}
 
 			c, err := do()
@@ -82,7 +80,9 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 			defer p.mu.Unlock()
 
 			p.m[a] = c
-			p.m[c.LocalAddr().String()] = c
+			if reuseByLocalAddr {
+				p.m[c.LocalAddr().String()] = c
+			}
 			return c, nil
 		})
 		if err != nil {
@@ -104,7 +104,9 @@ func (p *ConnectionPool) addSingleflight(raddr Addr, laddr Addr, reuse bool, do 
 	}
 	p.mu.Lock()
 	p.m[a] = c
-	p.m[c.LocalAddr().String()] = c
+	if reuseByLocalAddr {
+		p.m[c.LocalAddr().String()] = c
+	}
 	p.mu.Unlock()
 	return c, nil
 }

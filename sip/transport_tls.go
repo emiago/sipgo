@@ -39,7 +39,7 @@ func (t *TransportTLS) String() string {
 // CreateConnection creates TLS connection for TCP transport
 func (t *TransportTLS) CreateConnection(ctx context.Context, laddr Addr, raddr Addr, handler MessageHandler) (Connection, error) {
 	isNew := false
-	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, func() (Connection, error) {
+	conn, err := t.pool.addSingleflight(raddr, laddr, t.connectionReuse, false, func() (Connection, error) {
 		hostname := raddr.Hostname
 		if hostname == "" {
 			hostname = raddr.IP.String()
