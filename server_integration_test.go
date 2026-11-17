@@ -180,17 +180,20 @@ func TestIntegrationServerResponse(t *testing.T) {
 		t.Skip("Use TEST_INTEGRATION env value to run this test")
 		return
 	}
-	// Per rfc 18.2.2 server should
-	// use Headers for unreliable requests while connection addr for reliable
+	// UDP without rport falls back to the observed source port; reliable
+	// transports continue to respond over their existing connection.
 	ua, _ := NewUA()
 	defer ua.Close()
 	srv, _ := NewServer(ua)
 
 	serverResDestination := atomic.Pointer[string]{}
+	serverReqSource := atomic.Pointer[string]{}
 	srv.OnOptions(func(req *sip.Request, tx sip.ServerTransaction) {
 		res := sip.NewResponseFromRequest(req, 200, "", nil)
 		dst := res.Destination()
 		serverResDestination.Store(&dst)
+		src := req.Source()
+		serverReqSource.Store(&src)
 		tx.Respond(res)
 	})
 
@@ -218,15 +221,15 @@ func TestIntegrationServerResponse(t *testing.T) {
 		res, err := cli.Do(context.TODO(), req)
 		require.NoError(t, err)
 		assert.Equal(t, 200, res.StatusCode)
-		// Now this is important that server choosed this addr instead client default
-		// This confirms server is actually sending request over VIA
-		assert.Equal(t, "127.0.0.1:15152", *serverResDestination.Load())
+		// The client advertises 15152 but sends from an ephemeral port.
+		assert.NotEqual(t, "127.0.0.1:15152", *serverReqSource.Load())
+		assert.Equal(t, *serverReqSource.Load(), *serverResDestination.Load())
 	})
 
 	t.Run("TCP", func(t *testing.T) {
 		ua, _ := NewUA()
 		defer ua.Close()
-		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:9999"), WithClientConnectionAddr("127.0.0.1:15000"))
+		cli, _ := NewClient(ua, WithClientAddr("127.0.0.1:9999"), WithClientConnectionAddr("127.0.0.1:0"))
 
 		// TCP should always receive response over same connection and ignoring Via
 		req := sip.NewRequest(sip.OPTIONS, sip.Uri{Scheme: "sip", User: "test", Host: "127.0.0.1", Port: 15151})
@@ -234,7 +237,8 @@ func TestIntegrationServerResponse(t *testing.T) {
 		res, err := cli.Do(context.TODO(), req)
 		require.NoError(t, err)
 		assert.Equal(t, 200, res.StatusCode)
-		assert.Equal(t, "127.0.0.1:15000", *serverResDestination.Load())
+		assert.NotEqual(t, "127.0.0.1:9999", *serverReqSource.Load())
+		assert.Equal(t, *serverReqSource.Load(), *serverResDestination.Load())
 	})
 }
 

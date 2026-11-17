@@ -225,6 +225,8 @@ func (l *TransportLayer) OnMessage(h MessageHandler) {
 
 // handleMessage is transport layer for handling messages
 func (l *TransportLayer) handleMessage(msg Message) {
+	l.applyRportFallback(msg)
+
 	// We have to consider
 	// https://datatracker.ietf.org/doc/html/rfc3261#section-18.2.1 for some message editing
 	// Proxy further to other
@@ -235,6 +237,23 @@ func (l *TransportLayer) handleMessage(msg Message) {
 	for _, h := range l.handlers {
 		h(msg)
 	}
+}
+
+// Clients behind NAT may omit rport. Normalize before transaction handling so
+// automatic replies and retransmissions return to the observed source port.
+// An existing rport keeps its normal handling.
+func (l *TransportLayer) applyRportFallback(msg Message) {
+	req, ok := msg.(*Request)
+	if !ok || NetworkToLower(req.Transport()) != "udp" || req.MessageData.Source() == "" {
+		return
+	}
+
+	via := req.Via()
+	if via == nil || via.Params.Has("rport") {
+		return
+	}
+
+	via.Params.Add("rport", "")
 }
 
 // ServeUDP will listen on udp connection

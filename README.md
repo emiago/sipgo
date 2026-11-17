@@ -101,6 +101,24 @@ go srv.ListenAndServe(ctx, "ws", "127.0.0.1:5080")
 - Client handle allows creating transaction requests [More on client transactions](#client-transaction)
 
 
+### UDP responses behind NAT
+
+Received UDP requests that omit `rport` automatically fall back to the
+observed source IP and port. This lets clients behind port-translating
+NAT receive responses even when their top Via advertises a different port.
+No configuration is required.
+
+The fallback treats the top Via as if it requested `rport` (RFC 3581).
+Responses include the observed `received` and `rport` values, including
+automatic responses and retransmissions. An existing `rport` parameter
+keeps its normal handling. Reliable transports and received responses are
+unchanged.
+
+This is a NAT-interoperability policy: unlike RFC 3261's default Via-port
+routing when `rport` is absent, sipgo uses the observed source port. Peers
+that intentionally send from a different port than they receive on are
+therefore affected.
+
 ### TLS transports
 ```go 
 // TLS
