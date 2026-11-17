@@ -50,7 +50,12 @@ func (s *DialogServerSession) ReadBye(req *sip.Request, tx sip.ServerTransaction
 
 // Do does request response pattern. For more control over transaction use TransactionRequest
 func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Response, error) {
-	tx, err := s.TransactionRequest(ctx, req)
+	return s.DoWithOptions(ctx, req)
+}
+
+// DoWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogServerSession) DoWithOptions(ctx context.Context, req *sip.Request, options ...DialogRequestOption) (*sip.Response, error) {
+	tx, err := s.TransactionRequestWithOptions(ctx, req, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +81,18 @@ func (s *DialogServerSession) Do(ctx context.Context, req *sip.Request) (*sip.Re
 // https://www.rfc-editor.org/rfc/rfc3261#section-12.2.1
 // This ensures that you have proper request done within dialog
 func (s *DialogServerSession) TransactionRequest(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	return s.TransactionRequestWithOptions(ctx, req)
+}
+
+// TransactionRequestWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogServerSession) TransactionRequestWithOptions(ctx context.Context, req *sip.Request, options ...DialogRequestOption) (sip.ClientTransaction, error) {
+	if err := validateDialogRequestOptions(s.InviteRequest, s.InviteResponse, req, options); err != nil {
+		return nil, err
+	}
+	// Keep only a destination set by the caller.
+	destination := req.MessageData.Destination()
 	s.buildReq(req)
+	applyDialogRequestOptions(req, destination, options)
 	// Passing option to avoid CSEQ apply
 	return s.ua.Client.TransactionRequest(ctx, req, func(c *Client, req *sip.Request) error {
 		if req.Via() == nil {
@@ -361,6 +377,11 @@ func (s *DialogServerSession) Bye(ctx context.Context) error {
 }
 
 func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) error {
+	return s.WriteByeWithOptions(ctx, bye)
+}
+
+// WriteByeWithOptions applies explicit transport options to an in-dialog request.
+func (s *DialogServerSession) WriteByeWithOptions(ctx context.Context, bye *sip.Request, options ...DialogRequestOption) error {
 	state := s.state.Load()
 	// In case dialog terminated
 	if sip.DialogState(state) == sip.DialogStateEnded {
@@ -400,7 +421,7 @@ func (s *DialogServerSession) WriteBye(ctx context.Context, bye *sip.Request) er
 		break
 	}
 
-	tx, err := s.TransactionRequest(ctx, bye)
+	tx, err := s.TransactionRequestWithOptions(ctx, bye, options...)
 	if err != nil {
 		return err
 	}
