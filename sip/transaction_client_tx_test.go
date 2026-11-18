@@ -140,3 +140,56 @@ func TestWrapTransportErrorPreservesCause(t *testing.T) {
 	// and the cause is now reachable instead of being flattened into the message
 	require.ErrorIs(t, err, cause)
 }
+
+type writeHook func(p []byte) (int, error)
+
+func (f writeHook) Write(p []byte) (int, error) { return f(p) }
+
+// A final response can be processed while Init is still in WriteMsg, here with
+// Responses already read by the caller. Over UDP the transaction must then wait
+// in Completed for Timer K, not be deleted before Init has set the timer.
+func TestClientTransactionFinalResponseDuringInit(t *testing.T) {
+	req := testCreateNonInvite(t, "REFER", "UDP", "tag")
+	req.raddr = Addr{IP: net.ParseIP("127.0.0.99"), Port: 5060}
+	res := NewResponseFromRequest(req, StatusAccepted, "Accepted", nil)
+
+	var tx *ClientTx
+	var once sync.Once
+	received := make(chan struct{})
+	deletedDuringInit := false
+	write := writeHook(func(p []byte) (int, error) {
+		once.Do(func() {
+			go func() {
+				tx.Receive(res)
+				close(received)
+			}()
+			// Without the FSM held, Receive completes here. With it, Receive waits for Init.
+			select {
+			case <-received:
+			case <-time.After(50 * time.Millisecond):
+			}
+			select {
+			case <-tx.Done():
+				deletedDuringInit = true
+			default:
+			}
+		})
+		return len(p), nil
+	})
+	conn := &UDPConnection{
+		PacketConn: &fakes.UDPConn{
+			Reader:  bytes.NewBuffer(nil),
+			Writers: map[string]io.Writer{"127.0.0.99:5060": write},
+		},
+	}
+	tx = NewClientTx("key", req, conn, slog.Default())
+
+	passedUp := make(chan *Response, 1)
+	go func() { passedUp <- <-tx.Responses() }()
+
+	require.NoError(t, tx.Init())
+	require.False(t, deletedDuringInit, "transaction deleted on a final response processed during Init")
+	require.Equal(t, StatusAccepted, (<-passedUp).StatusCode)
+	<-received
+	tx.Terminate()
+}

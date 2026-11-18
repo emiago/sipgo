@@ -34,6 +34,11 @@ func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logg
 }
 
 func (tx *ClientTx) Init() error {
+	// Hold the FSM until the timers are set. A response can be processed on another
+	// goroutine before WriteMsg returns; a final one would then find Timer D/K unset,
+	// as on a reliable transport, and delete the transaction at once.
+	tx.fsmMu.Lock()
+	defer tx.fsmMu.Unlock()
 	tx.initFSM()
 
 	if err := tx.conn.WriteMsg(tx.origin); err != nil {
@@ -79,11 +84,12 @@ func (tx *ClientTx) Init() error {
 }
 
 // Initialises the correct kind of FSM based on request method.
+// The caller holds fsmMu.
 func (tx *ClientTx) initFSM() {
 	if tx.origin.IsInvite() {
-		tx.baseTx.initFSM(tx.inviteStateCalling)
+		tx.fsmState = tx.inviteStateCalling
 	} else {
-		tx.baseTx.initFSM(tx.stateCalling)
+		tx.fsmState = tx.stateCalling
 	}
 }
 
