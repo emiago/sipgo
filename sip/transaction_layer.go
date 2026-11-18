@@ -2,6 +2,7 @@ package sip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -360,7 +361,12 @@ func (txl *TransactionLayer) NewClientTransaction(ctx context.Context, req *Requ
 func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, key string) (*ClientTx, error) {
 	conn, err := txl.tpl.ClientRequestConnection(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("client transcation failed to request connection: %w", err)
+		err = fmt.Errorf("client transcation failed to request connection: %w", err)
+		// RFC 3261 8.1.3.1: a connection failure is a fatal transport error.
+		if errors.Is(err, errTransportConnect) {
+			return nil, wrapTransportError(err)
+		}
+		return nil, err
 	}
 
 	txl.clientTransactions.lock()

@@ -2,6 +2,7 @@ package sip
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"os"
 	"strings"
@@ -178,4 +179,69 @@ func TestTransactionLayerClientTx(t *testing.T) {
 	require.EqualValues(t, 1, atomic.LoadInt32(&count))
 	require.Equal(t, 2, tp.udp.pool.Size())
 	assert.True(t, tp.udp.pool.Get("127.0.0.1:9876") != nil)
+}
+
+// A failure to open the connection is a fatal transport error (RFC 3261 8.1.3.1).
+func TestTransactionLayerRequestConnectionFailureIsTransportError(t *testing.T) {
+	refused, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	refusedAddr := refused.Addr().String()
+	require.NoError(t, refused.Close())
+
+	notTLS, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer notTLS.Close()
+	go func() {
+		for {
+			conn, err := notTLS.Accept()
+			if err != nil {
+				return
+			}
+			conn.Write([]byte("not a tls server\r\n"))
+			conn.Close()
+		}
+	}()
+
+	cases := []struct {
+		name             string
+		uri              string
+		transport        string
+		wantTransportErr bool
+	}{
+		{
+			name:             "refused tcp connection is a transport error",
+			uri:              "sip:bob@" + refusedAddr + ";transport=tcp",
+			transport:        "TCP",
+			wantTransportErr: true,
+		},
+		{
+			name:             "failed tls handshake is a transport error",
+			uri:              "sip:bob@" + notTLS.Addr().String() + ";transport=tls",
+			transport:        "TLS",
+			wantTransportErr: true,
+		},
+		{
+			name:      "unsupported transport is not a transport error",
+			uri:       "sip:bob@" + refusedAddr + ";transport=sctp",
+			transport: "SCTP",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tp := NewTransportLayer(net.DefaultResolver, NewParser(), &tls.Config{InsecureSkipVerify: true})
+			txl := NewTransactionLayer(tp)
+			defer txl.Close()
+
+			req := testCreateRequest(t, "OPTIONS", tc.uri, tc.transport, "127.0.0.1:5060")
+
+			_, err := txl.Request(context.TODO(), req)
+			require.Error(t, err)
+			if tc.wantTransportErr {
+				require.ErrorIs(t, err, ErrTransactionTransport)
+			} else {
+				require.NotErrorIs(t, err, ErrTransactionTransport)
+			}
+		})
+	}
 }
