@@ -233,9 +233,9 @@ func (hs *headers) Headers() []Header {
 // Headers are pointers, always Clone them for change
 func (hs *headers) GetHeaders(name string) []Header {
 	var hds []Header
-	nameLower := HeaderToLower(name)
+	nameLower := expandCompactHeader(HeaderToLower(name))
 	for _, h := range hs.headerOrder {
-		if HeaderToLower(h.Name()) == nameLower {
+		if expandCompactHeader(HeaderToLower(h.Name())) == nameLower {
 			hds = append(hds, h)
 		}
 	}
@@ -252,13 +252,51 @@ func (hs *headers) GetHeader(name string) Header {
 
 // getHeader is direct access, name must be lowercase
 func (hs *headers) getHeader(nameLower string) Header {
+	nameLower = expandCompactHeader(nameLower)
 	for _, h := range hs.headerOrder {
-		if HeaderToLower(h.Name()) == nameLower {
+		if expandCompactHeader(HeaderToLower(h.Name())) == nameLower {
 			return h
 		}
 	}
 
 	return nil
+}
+
+func expandCompactHeader(name string) string {
+	switch name {
+	case "a":
+		return "accept-contact"
+	case "b":
+		return "referred-by"
+	case "c":
+		return "content-type"
+	case "e":
+		return "content-encoding"
+	case "f":
+		return "from"
+	case "i":
+		return "call-id"
+	case "k":
+		return "supported"
+	case "l":
+		return "content-length"
+	case "m":
+		return "contact"
+	case "o":
+		return "event"
+	case "r":
+		return "refer-to"
+	case "s":
+		return "subject"
+	case "t":
+		return "to"
+	case "u":
+		return "allow-events"
+	case "v":
+		return "via"
+	default:
+		return name
+	}
 }
 
 // RemoveHeader removes header by name
