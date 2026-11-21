@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	"github.com/icholy/digest"
@@ -30,6 +31,11 @@ type Client struct {
 	log   *slog.Logger
 
 	connAddr sip.Addr
+
+	// outboundProxy, when non-nil, is auto-prepended as a loose Route on
+	// out-of-dialog requests built by this client. Stored atomically so
+	// SetOutboundProxy can race safely against in-flight requests.
+	outboundProxy atomic.Pointer[sip.Uri]
 
 	// TxRequester allows you to use your transaction requester instead default from transaction layer
 	// Useful only for testing
@@ -90,6 +96,68 @@ func WithClientNAT() ClientOption {
 		s.rport = true
 		return nil
 	}
+}
+
+// WithClientOutboundProxy sets a default outbound proxy for the client.
+// hostPort uses the standard "<host>:<port>" form, e.g.
+// "proxy.example.com:5080". transport is the SIP transport to reach the
+// proxy (e.g. "udp", "tcp", "tls", "ws"); pass "" to leave the transport
+// unset, in which case the request inherits the existing per-request
+// selection (Via / Recipient / UDP default).
+//
+// Each new request built by this client gets a loose-routing Route header
+// (RFC 3261 §16.12.1) pointing at this proxy when no Route header is already
+// present. That makes Request.Destination() resolve to the proxy host while
+// the Request-URI is left untouched. When transport is non-empty it is added
+// as a ;transport= URI param on the Route, so Request.Transport() and the
+// stamped Via reflect the proxy's transport. In-dialog requests already
+// carrying a Route from Record-Route are not modified.
+func WithClientOutboundProxy(hostPort, transport string) ClientOption {
+	return func(s *Client) error {
+		return s.SetOutboundProxy(hostPort, transport)
+	}
+}
+
+// SetOutboundProxy updates the client's outbound proxy at runtime. Pass an
+// empty hostPort to clear it. transport is normalized to lowercase and
+// stamped as a ;transport= URI param on the auto-injected Route; pass ""
+// to omit. Safe to call concurrently with in-flight requests; a swap is
+// observed by subsequent build calls only.
+func (c *Client) SetOutboundProxy(hostPort, transport string) error {
+	if hostPort == "" {
+		c.outboundProxy.Store(nil)
+		return nil
+	}
+	host, port, err := sip.ParseAddr(hostPort)
+	if err != nil {
+		return err
+	}
+	uri := &sip.Uri{Host: host, Port: port}
+	if transport != "" {
+		uri.UriParams = sip.NewParams()
+		uri.UriParams.Add("transport", sip.NetworkToLower(transport))
+	}
+	c.outboundProxy.Store(uri)
+	return nil
+}
+
+// OutboundProxy returns the configured outbound proxy as ("host:port",
+// transport). Both values are empty strings when no proxy is set; transport
+// alone may be empty when only host:port was configured.
+func (c *Client) OutboundProxy() (hostPort, transport string) {
+	p := c.outboundProxy.Load()
+	if p == nil {
+		return "", ""
+	}
+	if p.Port > 0 {
+		hostPort = fmt.Sprintf("%s:%d", p.Host, p.Port)
+	} else {
+		hostPort = p.Host
+	}
+	if p.UriParams != nil {
+		transport, _ = p.UriParams.Get("transport")
+	}
+	return hostPort, transport
 }
 
 // WithClientAddr is merge of WithClientHostname and WithClientPort
@@ -337,6 +405,20 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	// the following header fields: To, From, CSeq, Call-ID, Max-Forwards,
 	// and Via;
 
+	proxy := c.outboundProxy.Load()
+	addProxyRoute := proxy != nil && req.Route() == nil
+
+	// When the proxy declares an explicit transport, surface it on the
+	// request before Via is stamped so Via and the connection picked by
+	// the transport layer agree with the proxy. When the proxy carries
+	// no transport, leave selection alone so Recipient ;transport= and
+	// any prior req.SetTransport call still drive the Via build.
+	if addProxyRoute && proxy.UriParams != nil && req.MessageData.Transport() == "" {
+		if t, ok := proxy.UriParams.Get("transport"); ok && t != "" {
+			req.SetTransport(sip.NetworkToUpper(t))
+		}
+	}
+
 	mustHeader := make([]sip.Header, 0, 6)
 	if v := req.Via(); v == nil {
 		// Multi VIA value must be manually added
@@ -400,6 +482,13 @@ func clientRequestBuildReq(c *Client, req *sip.Request) error {
 	}
 
 	req.PrependHeader(mustHeader...)
+
+	// Prepend the outbound proxy Route after Via so it does not shadow
+	// the Recipient transport hint at Via build time. Destination still
+	// follows the Route because Request.Destination() inspects it.
+	if addProxyRoute {
+		req.PrependHeader(buildLooseRoute(*proxy))
+	}
 
 	if req.Body() == nil {
 		req.SetBody(nil)
@@ -478,6 +567,40 @@ func clientRequestCreateVia(c *Client, r *sip.Request) *sip.ViaHeader {
 		}
 	}
 	return newvia
+}
+
+// ClientRequestAddRoute returns a ClientRequestOption that prepends a Route
+// header pointing at the given URI. This is the standard loose-routing
+// mechanism (RFC 3261 §16.12.1) for sending requests through an outbound
+// proxy: the Request-URI is left untouched, but Request.Destination() returns
+// the top Route URI when present, so the transport layer dispatches to the
+// proxy host instead of the Request-URI host.
+//
+// The "lr" parameter is added if not already set, marking the proxy as a
+// loose router. The caller-provided URI is cloned, so subsequent mutations to
+// the passed value do not leak into the request.
+//
+// For a client-wide default that auto-applies to every out-of-dialog
+// request, see WithClientOutboundProxy.
+func ClientRequestAddRoute(routeURI sip.Uri) ClientRequestOption {
+	return func(c *Client, r *sip.Request) error {
+		r.PrependHeader(buildLooseRoute(routeURI))
+		return nil
+	}
+}
+
+// buildLooseRoute clones uri and ensures it carries the "lr" param, then
+// wraps it in a RouteHeader. Used by both the per-request option and the
+// client-wide outbound proxy auto-injection.
+func buildLooseRoute(routeURI sip.Uri) *sip.RouteHeader {
+	uri := *routeURI.Clone()
+	if uri.UriParams == nil {
+		uri.UriParams = sip.NewParams()
+	}
+	if !uri.UriParams.Has("lr") {
+		uri.UriParams.Add("lr", "")
+	}
+	return &sip.RouteHeader{Address: uri}
 }
 
 // ClientRequestAddRecordRoute is option for adding record route header
