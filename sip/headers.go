@@ -261,14 +261,13 @@ func (hs *headers) getHeader(nameLower string) Header {
 	return nil
 }
 
-// RemoveHeader removes header by name
+// RemoveHeader removes the first header with the given name.
+// Names are compared case-insensitively, the same as in GetHeader.
 func (hs *headers) RemoveHeader(name string) (removed bool) {
-	// name = HeaderToLower(name)
-	// delete(hs.headers, name)
-	// update order slice
+	nameLower := HeaderToLower(name)
 	foundIdx := -1
 	for idx, entry := range hs.headerOrder {
-		if entry.Name() == name {
+		if HeaderToLower(entry.Name()) == nameLower {
 			foundIdx = idx
 			hs.headerOrder = append(hs.headerOrder[:idx], hs.headerOrder[idx+1:]...)
 			hs.unref(entry)
@@ -280,7 +279,7 @@ func (hs *headers) RemoveHeader(name string) (removed bool) {
 	// Update refs
 	if removed {
 		for _, entry := range hs.headerOrder[foundIdx:] {
-			if entry.Name() == name {
+			if HeaderToLower(entry.Name()) == nameLower {
 				hs.setHeaderRef(entry)
 				break
 			}

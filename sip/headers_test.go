@@ -22,6 +22,33 @@ func TestPrependHeader(t *testing.T) {
 	assert.Equal(t, v, hs.GetHeader("via"))
 }
 
+func TestRemoveHeaderCaseInsensitive(t *testing.T) {
+	hs := headers{}
+	hs.AppendHeader(NewHeader("x-custom", "1"))
+	hs.AppendHeader(NewHeader("X-CUSTOM", "2"))
+	hs.AppendHeader(NewHeader("X-Custom", "3"))
+	hs.AppendHeader(NewHeader("X-Other", "4"))
+
+	// GetHeader ignores case, so RemoveHeader must also ignore case.
+	require.Len(t, hs.GetHeaders("X-Custom"), 3)
+	for hs.RemoveHeader("X-Custom") {
+	}
+	assert.Nil(t, hs.GetHeader("X-Custom"))
+	assert.Empty(t, hs.GetHeaders("x-custom"))
+	require.Len(t, hs.Headers(), 1)
+	assert.Equal(t, "4", hs.GetHeader("X-Other").Value())
+}
+
+func TestRemoveHeaderUpdatesRef(t *testing.T) {
+	hs := headers{}
+	hs.AppendHeader(&ContactHeader{Address: Uri{User: "first", Host: "example.com"}})
+	second := &ContactHeader{Address: Uri{User: "second", Host: "example.com"}}
+	hs.AppendHeader(second)
+
+	require.True(t, hs.RemoveHeader("contact"))
+	assert.Equal(t, second, hs.Contact())
+}
+
 func BenchmarkHeadersPrepend(b *testing.B) {
 	callID := CallIDHeader("aaaa")
 	hs := headers{
