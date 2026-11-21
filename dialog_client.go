@@ -242,10 +242,14 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	var r *sip.Response
 	var err error
 	authAttempts := 0
-	for i := 0; ; i++ {
-		if i > 10 {
+	// Count only final responses. Provisional (1xx) responses are not
+	// counted: some carriers resend 180/183 many times while ringing, and
+	// the ringing phase is already bounded by ctx and the tx timers.
+	finalResponses := 0
+	for {
+		if finalResponses > 10 {
 			// Preventing some long loops
-			return fmt.Errorf("more than 10 responses received")
+			return fmt.Errorf("more than 10 final responses received")
 		}
 		select {
 		case r = <-tx.Responses():
@@ -277,6 +281,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 		if r.IsProvisional() {
 			continue
 		}
+		finalResponses++
 
 		var proxyAuth bool
 		var hasChallenge bool
