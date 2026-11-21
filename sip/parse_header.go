@@ -138,6 +138,42 @@ func parseMaxForwardsHeader(headerText string, maxfwd *MaxForwardsHeader) error 
 	return err
 }
 
+// parseSessionExpiresHeader parses Session-Expires header
+func parseSessionExpiresHeader(headerText string, h *SessionExpiresHeader) error {
+	deltaText := headerText
+	paramsText := ""
+	if ind := strings.IndexByte(headerText, ';'); ind >= 0 {
+		deltaText = headerText[:ind]
+		paramsText = headerText[ind+1:]
+	}
+
+	delta, err := strconv.ParseUint(strings.TrimSpace(deltaText), 10, 32)
+	if err != nil {
+		return fmt.Errorf("session-expires delta: %w", err)
+	}
+	h.Delta = uint32(delta)
+
+	if strings.TrimSpace(paramsText) == "" {
+		return nil
+	}
+
+	h.Params = NewParams()
+	if _, err := UnmarshalHeaderParams(paramsText, ';', 0, &h.Params); err != nil {
+		return fmt.Errorf("session-expires params: %w", err)
+	}
+	return nil
+}
+
+// parseMinSEHeader parses Min-SE header
+func parseMinSEHeader(headerText string, h *MinSEHeader) error {
+	delta, err := strconv.ParseUint(strings.TrimSpace(headerText), 10, 32)
+	if err != nil {
+		return fmt.Errorf("min-se delta: %w", err)
+	}
+	*h = MinSEHeader(delta)
+	return nil
+}
+
 func headerParserCSeq(headerName []byte, headerText string) (headers Header, err error) {
 	var cseq CSeqHeader
 	return &cseq, parseCSeqHeader(headerText, &cseq)
