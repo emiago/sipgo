@@ -109,6 +109,18 @@ func (d *Dialog) setState(s sip.DialogState) {
 	}
 }
 
+// compareAndSetState changes the state to s only when it is old.
+func (d *Dialog) compareAndSetState(old, s sip.DialogState) bool {
+	if !d.state.CompareAndSwap(int32(old), int32(s)) {
+		return false
+	}
+	if f := d.onStatePointer.Load(); f != nil {
+		cb := *f
+		cb(s)
+	}
+	return true
+}
+
 // endWithCause sets dialog state ended and place context cause error
 // Experimental
 func (d *Dialog) endWithCause(err error) {

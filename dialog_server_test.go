@@ -181,6 +181,38 @@ func TestDialogServerRequestsWithinDialog(t *testing.T) {
 	})
 }
 
+func TestDialogServerAckAfterBye(t *testing.T) {
+	ua, _ := NewUA()
+	defer ua.Close()
+	cli, _ := NewClient(ua)
+	dialogSrv := NewDialogServerCache(cli, sip.ContactHeader{
+		Address: sip.Uri{User: "test", Host: "127.0.0.200", Port: 5099},
+	})
+
+	invite, _, _ := createTestInvite(t, "sip:uas@127.0.0.1", "udp", "127.0.0.1:5090")
+	invite.AppendHeader(&sip.ContactHeader{Address: sip.Uri{Host: "uas", Port: 1234}})
+	tx := siptest.NewServerTxRecorder(invite)
+	d, err := dialogSrv.ReadInvite(invite, tx)
+	require.NoError(t, err)
+	res := sip.NewResponseFromRequest(d.InviteRequest, 200, "OK", nil)
+	d.Dialog.InviteResponse = res
+	d.setState(sip.DialogStateEstablished)
+
+	// The ACK and BYE were sent back to back and the BYE is handled first.
+	bye := newByeRequestUAC(d.InviteRequest, res, nil)
+	conn := &sip.UDPConnection{PacketConn: &fakes.UDPConn{
+		Writers: map[string]io.Writer{"127.0.0.1:5090": bytes.NewBuffer(nil)},
+	}}
+	byeTx := sip.NewServerTx("test-bye", bye, conn, slog.Default())
+	require.NoError(t, byeTx.Init())
+	require.NoError(t, d.ReadBye(bye, byeTx))
+	require.NoError(t, d.ReadAck(newAckRequestUAC(d.InviteRequest, res, nil), tx))
+
+	assert.Equal(t, sip.DialogStateEnded, d.LoadState())
+	// Ended: Hangup must not send a second BYE.
+	require.NoError(t, d.Bye(context.Background()))
+}
+
 func TestDialogServer2xxRetransmission(t *testing.T) {
 	// sip.T1 = 1
 	ua, _ := NewUA()

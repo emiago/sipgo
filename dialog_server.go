@@ -26,7 +26,10 @@ func (s *DialogServerSession) ReadAck(req *sip.Request, tx sip.ServerTransaction
 	if req.CSeq().SeqNo != s.remoteCSeqNo.Load() {
 		return ErrDialogInvalidCseq
 	}
-	s.setState(sip.DialogStateConfirmed)
+	// Only from Established. ACK and BYE may be handled concurrently: an ACK
+	// read after the BYE must not bring the ended dialog back to Confirmed, or
+	// a later Hangup sends a second BYE that gets 481.
+	s.compareAndSetState(sip.DialogStateEstablished, sip.DialogStateConfirmed)
 	return nil
 }
 
