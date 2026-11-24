@@ -174,3 +174,17 @@ func (d *Dialog) ReadRequest(req *sip.Request, tx sip.ServerTransaction) error {
 
 	return nil
 }
+
+// contactAllowed reports whether a request of this method may carry a
+// Contact header. RFC 3261 (Table 2) rules Contact out of BYE and CANCEL,
+// and the RFCs defining MESSAGE (RFC 3428), PRACK (RFC 3262) and INFO
+// (RFC 6086) rule it out of theirs, so a dialog adds its default Contact
+// only to other requests. A Contact the caller sets is left as it is.
+func contactAllowed(method sip.RequestMethod) bool {
+	switch method {
+	case sip.BYE, sip.CANCEL, sip.MESSAGE, sip.PRACK, sip.INFO:
+		return false
+	}
+
+	return true
+}

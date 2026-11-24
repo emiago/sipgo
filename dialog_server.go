@@ -169,7 +169,7 @@ func (s *DialogServerSession) buildReq(req *sip.Request) {
 
 	s.lastCSeqNo.Store(cseq.SeqNo)
 
-	if h := req.Contact(); h == nil {
+	if h := req.Contact(); h == nil && contactAllowed(req.Method) {
 		req.AppendHeader(sip.HeaderClone(&s.ua.ContactHDR))
 	}
 

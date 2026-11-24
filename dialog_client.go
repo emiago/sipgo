@@ -157,7 +157,7 @@ func (s *DialogClientSession) buildReq(req *sip.Request) {
 		}
 	}
 
-	if h := req.Contact(); h == nil {
+	if h := req.Contact(); h == nil && contactAllowed(req.Method) {
 		req.AppendHeader(sip.HeaderClone(&s.UA.ContactHDR))
 	}
 
