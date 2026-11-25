@@ -261,7 +261,7 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 				return ctx.Err()
 			}
 			if s.InviteResponse != nil && s.InviteResponse.IsProvisional() {
-				return s.inviteCancel(ctx, tx, true)
+				return errors.Join(ctx.Err(), s.inviteCancel(tx))
 			}
 
 			// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
@@ -270,8 +270,9 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 			d := &DialogClientSession{Dialog: Dialog{InviteRequest: inviteRequest}, UA: s.UA, inviteTx: tx}
 			d.Init()
 			go func() {
-				err := d.inviteCancel(ctx, tx, false)
-				s.UA.Client.log.Debug("INVITE canceled in background", "error", err)
+				if err := d.inviteCancel(tx); err != nil {
+					s.UA.Client.log.Warn("Background INVITE cancel failed", "error", err)
+				}
 			}()
 			return ctx.Err()
 		case <-tx.Done():
@@ -352,9 +353,10 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 // inviteCancel sends CANCEL once a provisional response is received and waits for the final response.
 // No CANCEL is sent if a final response arrives first. A 2xx means the callee answered anyway,
 // so it is ACKed and the call is ended with BYE.
-func (s *DialogClientSession) inviteCancel(ctx context.Context, tx sip.ClientTransaction, provisional bool) error {
+func (s *DialogClientSession) inviteCancel(tx sip.ClientTransaction) error {
 	defer tx.Terminate()
 
+	provisional := s.InviteResponse != nil && s.InviteResponse.IsProvisional()
 	var cancelErr error
 	var timeout <-chan time.Time
 	for {
@@ -382,13 +384,13 @@ func (s *DialogClientSession) inviteCancel(ctx context.Context, tx sip.ClientTra
 			}
 			if r.IsSuccess() {
 				// 2xx raced our CANCEL; ignore the CANCEL failure (likely 481) and end the call.
-				return errors.Join(ctx.Err(), s.Ack(context.Background()), s.Bye(context.Background()))
+				return errors.Join(s.Ack(context.Background()), s.Bye(context.Background()))
 			}
-			return errors.Join(ctx.Err(), cancelErr)
+			return cancelErr
 		case <-tx.Done():
-			return errors.Join(ctx.Err(), cancelErr, tx.Err())
+			return errors.Join(cancelErr, tx.Err())
 		case <-timeout:
-			return errors.Join(ctx.Err(), cancelErr)
+			return cancelErr
 		}
 	}
 }
