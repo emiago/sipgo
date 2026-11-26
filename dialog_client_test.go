@@ -305,6 +305,117 @@ func TestDialogClientACKRetransmission(t *testing.T) {
 	assert.EqualValues(t, 3, atomic.LoadInt32(&acks))
 }
 
+// testCancelUAS fakes a callee: it answers CANCEL with cancelStatus and then the INVITE with finalAfterCancel,
+// BYE with 200, and reports every non-INVITE request it receives.
+func testCancelUAS(t *testing.T, cancelStatus, finalAfterCancel int) (*Client, <-chan *siptest.ClientTxResponder, func() *sip.Request) {
+	invites := make(chan *siptest.ClientTxResponder, 1)
+	reqs := make(chan *sip.Request, 10)
+	var invite atomic.Pointer[sip.Request]
+	var inviteW atomic.Pointer[siptest.ClientTxResponder]
+	client := testClientResponder(t, func(req *sip.Request, w *siptest.ClientTxResponder) {
+		switch req.Method {
+		case sip.INVITE:
+			invite.Store(req)
+			inviteW.Store(w)
+			invites <- w
+			return
+		case sip.CANCEL:
+			reqs <- req
+			w.Receive(sip.NewResponseFromRequest(req, cancelStatus, "", nil))
+			inviteW.Load().Receive(sip.NewResponseFromRequest(invite.Load(), finalAfterCancel, "", nil))
+		case sip.BYE:
+			reqs <- req
+			w.Receive(sip.NewResponseFromRequest(req, 200, "OK", nil))
+		default:
+			reqs <- req
+		}
+	})
+
+	next := func() *sip.Request {
+		select {
+		case req := <-reqs:
+			return req
+		case <-time.After(2 * sip.T1):
+			return nil
+		}
+	}
+	return client, invites, next
+}
+
+func TestDialogClientInviteCancel(t *testing.T) {
+	invite := func(t *testing.T, client *Client) *DialogClientSession {
+		dua := DialogUA{Client: client}
+		d, err := dua.Invite(context.TODO(), sip.Uri{User: "test", Host: "localhost"}, nil)
+		require.NoError(t, err)
+		return d
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	t.Run("BeforeProvisional", func(t *testing.T) {
+		client, invites, next := testCancelUAS(t, sip.StatusOK, sip.StatusRequestTerminated)
+		d := invite(t, client)
+		w := <-invites
+
+		start := time.Now()
+		require.ErrorIs(t, d.WaitAnswer(canceled, AnswerOptions{}), context.Canceled)
+		assert.Less(t, time.Since(start), sip.T1, "must not wait for a provisional response")
+
+		// CANCEL goes out only once a provisional response arrives.
+		w.Receive(sip.NewResponseFromRequest(d.InviteRequest, sip.StatusRinging, "Ringing", nil))
+		assert.Equal(t, sip.CANCEL, next().Method)
+	})
+
+	t.Run("FinalBeforeProvisional", func(t *testing.T) {
+		client, invites, next := testCancelUAS(t, sip.StatusOK, sip.StatusRequestTerminated)
+		d := invite(t, client)
+		w := <-invites
+
+		require.ErrorIs(t, d.WaitAnswer(canceled, AnswerOptions{}), context.Canceled)
+
+		// No CANCEL for an INVITE that already has a final response; a 2xx is ACKed and ended.
+		// The fake delivers each request on its own goroutine, so ACK and BYE may arrive in any order.
+		w.Receive(sip.NewResponseFromRequest(d.InviteRequest, sip.StatusOK, "OK", nil))
+		assert.ElementsMatch(t, []sip.RequestMethod{sip.ACK, sip.BYE}, []sip.RequestMethod{next().Method, next().Method})
+		assert.Nil(t, next())
+	})
+
+	t.Run("AfterRinging", func(t *testing.T) {
+		client, invites, next := testCancelUAS(t, sip.StatusOK, sip.StatusRequestTerminated)
+		d := invite(t, client)
+		w := <-invites
+		go w.Receive(sip.NewResponseFromRequest(d.InviteRequest, sip.StatusRinging, "Ringing", nil))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		err := d.WaitAnswer(ctx, AnswerOptions{OnResponse: func(res *sip.Response) error {
+			cancel()
+			return nil
+		}})
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, sip.StatusRequestTerminated, d.InviteResponse.StatusCode)
+		assert.Equal(t, sip.CANCEL, next().Method)
+		assert.Nil(t, next())
+	})
+
+	t.Run("2xxRacesCancel", func(t *testing.T) {
+		// The callee answered before it saw the CANCEL, so the CANCEL gets 481 and the 200 must still be ended.
+		client, invites, next := testCancelUAS(t, sip.StatusCallTransactionDoesNotExists, sip.StatusOK)
+		d := invite(t, client)
+		w := <-invites
+		go w.Receive(sip.NewResponseFromRequest(d.InviteRequest, sip.StatusRinging, "Ringing", nil))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		err := d.WaitAnswer(ctx, AnswerOptions{OnResponse: func(res *sip.Response) error {
+			cancel()
+			return nil
+		}})
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, sip.CANCEL, next().Method)
+		assert.ElementsMatch(t, []sip.RequestMethod{sip.ACK, sip.BYE}, []sip.RequestMethod{next().Method, next().Method})
+		assert.Equal(t, sip.DialogStateEnded, d.LoadState())
+	})
+}
+
 func BenchmarkDialogDo(b *testing.B) {
 	ua, _ := NewUA()
 	cli, _ := NewClient(ua)

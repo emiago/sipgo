@@ -232,7 +232,9 @@ var (
 const maxAuthAttempts = 2
 
 // WaitAnswer waits for success response or returns ErrDialogResponse in case non 2xx
-// Canceling context while waiting 2xx will send Cancel request. It will block until 1xx provisional is not received
+// Canceling context while waiting 2xx will send Cancel request and wait for the final response.
+// If no provisional response was received yet, it returns at once and CANCEL is sent in the background
+// as soon as one arrives. A 2xx received after canceling is ACKed and then ended with BYE.
 // If Canceling succesfull context.Canceled error is returned
 // Returns errors:
 // - ErrDialogResponse in case non 2xx response
@@ -253,12 +255,26 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 
 			// just pass
 		case <-ctx.Done():
-			// Send cancel
+			if context.Cause(ctx) == WaitAnswerForceCancelErr {
+				// In case caller wants to force cancelation exit.
+				tx.Terminate()
+				return ctx.Err()
+			}
+			if s.InviteResponse != nil && s.InviteResponse.IsProvisional() {
+				return errors.Join(ctx.Err(), s.inviteCancel(tx))
+			}
+
 			// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
-			// Cancel can only be sent when provisional is received
-			// We will wait until transaction timeous out (TimerB)
-			defer tx.Terminate()
-			return s.inviteCancel(ctx, tx)
+			// CANCEL must wait for a provisional response, so do not block the caller on it.
+			// A detached session finishes the transaction without racing on this session's fields.
+			d := &DialogClientSession{Dialog: Dialog{InviteRequest: inviteRequest}, UA: s.UA, inviteTx: tx}
+			d.Init()
+			go func() {
+				if err := d.inviteCancel(tx); err != nil {
+					s.UA.Client.log.Warn("Background INVITE cancel failed", "error", err)
+				}
+			}()
+			return ctx.Err()
 		case <-tx.Done():
 			// tx.Err() can be empty
 			return errors.Join(fmt.Errorf("transaction terminated"), tx.Err())
@@ -334,58 +350,49 @@ func (s *DialogClientSession) WaitAnswer(ctx context.Context, opts AnswerOptions
 	return nil
 }
 
-func (s *DialogClientSession) inviteCancel(ctx context.Context, tx sip.ClientTransaction) error {
-	if err := context.Cause(ctx); err == WaitAnswerForceCancelErr {
-		// In case caller wants to force cancelation exit.
-		return ctx.Err()
-	}
+// inviteCancel sends CANCEL once a provisional response is received and waits for the final response.
+// No CANCEL is sent if a final response arrives first. A 2xx means the callee answered anyway,
+// so it is ACKed and the call is ended with BYE.
+func (s *DialogClientSession) inviteCancel(tx sip.ClientTransaction) error {
+	defer tx.Terminate()
 
-	var r *sip.Response
-	if s.InviteResponse == nil {
-		select {
-		case r = <-tx.Responses():
-			s.InviteResponse = r
-			if !r.IsProvisional() {
-				// Maybe consider sending BYE
-				return fmt.Errorf("non provisional response received during CANCEL. resp=%s", r.String())
-			}
-		case <-tx.Done():
-			return errors.Join(fmt.Errorf("transaction terminated"), tx.Err())
-		}
-	}
-
-	cancelReq := newCancelRequest(s.InviteRequest)
-	res, err := s.Do(context.Background(), cancelReq) // Cancel should grab same connection underhood
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != 200 {
-		return fmt.Errorf("cancel failed with non 200. code=%d", res.StatusCode)
-	}
-
-	// Wait for 487 or just timeout
-	// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
-	// UAC canceling a request cannot rely on receiving a 487 (Request
-	// Terminated) response for the original request, as an RFC 2543-
-	// compliant UAS will not generate such a response.  If there is no
-	// final response for the original request in 64*T1 seconds
-loop_487:
+	provisional := s.InviteResponse != nil && s.InviteResponse.IsProvisional()
+	var cancelErr error
+	var timeout <-chan time.Time
 	for {
+		if provisional && timeout == nil {
+			// https://datatracker.ietf.org/doc/html/rfc3261#section-9.1
+			// UAC canceling a request cannot rely on receiving a 487 (Request
+			// Terminated) response for the original request, as an RFC 2543-
+			// compliant UAS will not generate such a response.  If there is no
+			// final response for the original request in 64*T1 seconds
+			timeout = time.After(64 * sip.T1)
+
+			res, err := s.Do(context.Background(), newCancelRequest(s.InviteRequest)) // Cancel should grab same connection underhood
+			if err == nil && res.StatusCode != 200 {
+				err = fmt.Errorf("cancel failed with non 200. code=%d", res.StatusCode)
+			}
+			cancelErr = err
+		}
+
 		select {
-		case r = <-tx.Responses():
+		case r := <-tx.Responses():
+			s.InviteResponse = r
 			if r.IsProvisional() {
+				provisional = true
 				continue
 			}
-			s.InviteResponse = r
-			break loop_487
+			if r.IsSuccess() {
+				// 2xx raced our CANCEL; ignore the CANCEL failure (likely 481) and end the call.
+				return errors.Join(s.Ack(context.Background()), s.Bye(context.Background()))
+			}
+			return cancelErr
 		case <-tx.Done():
-			return tx.Err()
-		case <-time.After(64 * sip.T1):
-			break loop_487
+			return errors.Join(cancelErr, tx.Err())
+		case <-timeout:
+			return cancelErr
 		}
 	}
-
-	return ctx.Err()
 }
 
 // Ack sends ack. Use WriteAck for more customizing
