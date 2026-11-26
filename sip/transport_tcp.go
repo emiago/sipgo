@@ -25,9 +25,9 @@ type TransportTCP struct {
 	// value disables the timeout.
 	ReadTimeout time.Duration
 
-	// WriteTimeout limits how long a TCP or TLS connection may block writing
-	// data. It is copied when the connection is created. A non-positive value
-	// disables the timeout.
+	// WriteTimeout limits an active socket write on a TCP or TLS connection.
+	// The timeout starts after earlier writes finish. It is copied when the
+	// connection is created. A non-positive value disables the timeout.
 	WriteTimeout time.Duration
 
 	pool *ConnectionPool
@@ -262,6 +262,7 @@ type TCPConnection struct {
 
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	writeMu      sync.Mutex
 
 	mu       sync.RWMutex
 	refcount int
@@ -320,13 +321,19 @@ func (c *TCPConnection) Read(b []byte) (n int, err error) {
 
 func (c *TCPConnection) Write(b []byte) (n int, err error) {
 	if c.writeTimeout > 0 {
+		// A socket deadline applies to all writes on the connection.
+		c.writeMu.Lock()
 		if err := c.Conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+			c.writeMu.Unlock()
 			return 0, err
 		}
+		n, err = c.Conn.Write(b)
+		c.writeMu.Unlock()
+	} else {
+		n, err = c.Conn.Write(b)
 	}
 
 	// Some debug hook. TODO move to proper way
-	n, err = c.Conn.Write(b)
 	if SIPDebug {
 		logSIPWrite("TCP", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String(), b[:n])
 	}

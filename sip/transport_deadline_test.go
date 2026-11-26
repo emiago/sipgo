@@ -2,6 +2,7 @@ package sip
 
 import (
 	"errors"
+	"io"
 	"net"
 	"os"
 	"testing"
@@ -150,6 +151,86 @@ func TestStreamConnectionWriteTimeout(t *testing.T) {
 				t.Fatal("write did not stop at its configured timeout")
 			}
 		})
+	}
+}
+
+type writeDeadlineObserver struct {
+	net.Conn
+	deadlines chan time.Time
+	writes    chan struct{}
+}
+
+func (c *writeDeadlineObserver) SetWriteDeadline(deadline time.Time) error {
+	err := c.Conn.SetWriteDeadline(deadline)
+	c.deadlines <- deadline
+	return err
+}
+
+func (c *writeDeadlineObserver) Write(p []byte) (int, error) {
+	c.writes <- struct{}{}
+	return c.Conn.Write(p)
+}
+
+func TestTCPConcurrentWriteKeepsActiveDeadline(t *testing.T) {
+	local, peer := net.Pipe()
+	defer local.Close()
+	defer peer.Close()
+
+	observed := &writeDeadlineObserver{
+		Conn:      local,
+		deadlines: make(chan time.Time, 2),
+		writes:    make(chan struct{}, 2),
+	}
+	conn := (&TransportTCP{WriteTimeout: 5 * time.Second}).newConnection(observed, 1)
+	written := make(chan error, 2)
+	write := func(payload string) {
+		_, err := conn.Write([]byte(payload))
+		written <- err
+	}
+	go write("a")
+	select {
+	case <-observed.deadlines:
+	case <-time.After(time.Second):
+		t.Fatal("first write did not set a deadline")
+	}
+	select {
+	case <-observed.writes:
+	case <-time.After(time.Second):
+		t.Fatal("first write did not start")
+	}
+
+	secondStarted := make(chan struct{})
+	go func() {
+		close(secondStarted)
+		write("b")
+	}()
+	<-secondStarted
+	// The first write is still blocked because the peer has not read.
+	select {
+	case <-observed.deadlines:
+		t.Fatal("second writer replaced the deadline of the active write")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	if err := peer.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var received [2]byte
+	if _, err := io.ReadFull(peer, received[:]); err != nil {
+		t.Fatal(err)
+	}
+	if string(received[:]) != "ab" {
+		t.Fatalf("received %q, want ab", received)
+	}
+	for range 2 {
+		select {
+		case err := <-written:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("write did not return after the peer read")
+		}
 	}
 }
 
