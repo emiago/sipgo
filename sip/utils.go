@@ -389,7 +389,7 @@ func compareFunctions(fsm1 any, fsm2 any) error {
 
 func isIPV6(host string) bool {
 	// Quick reject (has dot)
-	for c := range host {
+	for _, c := range host {
 		if c == '.' {
 			return false
 		}
